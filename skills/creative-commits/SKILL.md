@@ -23,7 +23,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ## Emoji Selection
 Emphasise the **human story** behind each change — why someone made it, who it serves, what it enables — not just what changed mechanically.
 ### Process
-1. Run `uv run --project "$(cat $HOME/.claude/plugins/data/phx-claude-siat.root)/skills/creative-commits" emoji-seed` — this prints your **seed emoji** and the off-limits list. The seed is off-limits as a final selection — its role is to constrain the scene, not become the commit emoji
+1. Run `uv run --project "$(cat $HOME/.claude/plugins/data/phx.root)/skills/creative-commits" emoji-seed` — this prints your **seed emoji** and the off-limits list. The seed is off-limits as a final selection — its role is to constrain the scene, not become the commit emoji
 2. Stage the files to commit with `git add`, then run `git diff --staged` — grasp the high-level change. Also run `git status` and check for any remaining unstaged or untracked files that belong in this commit (e.g. lock files after `uv add`/`npm install`, generated files, configs updated alongside code). Stage and include them before proceeding — do not leave related files behind.
 3. Ask: what **human intent or impact** does this change represent?
 4. Translate that intent into a **concrete, everyday human scene** that places the seed emoji at its centre — it should be the central image, symbol, or prop. If the first angle feels forced, reframe from a different angle until it clicks; do not abandon the seed

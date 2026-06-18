@@ -6,7 +6,7 @@
   },
   "plugins": [
     {
-      "name": "phx-claude-siat",
+      "name": "phx",
       "description": "PHX+Claude sittin' in a tree",
       "version": "1.0.0",
       "source": "./",

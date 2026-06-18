@@ -20,7 +20,7 @@ A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) c
 
 **`writing-plans`** is a wrapper around `superpowers:writing-plans` (from the [superpowers marketplace](https://github.com/obra/superpowers-marketplace)) that adds project-specific conventions on top of the base skill. This improves stability when plan execution is split across multiple sessions, since the wrapper's additional conventions are always applied consistently regardless of which session picks up the work.
 
-**`creative-commits`** produces narrative, emoji-adorned commit messages — a deliberate style choice that trades extra token usage (the skill runs `emoji-seed`, stages files, and reasons about human intent) for the entertainment value of reading AI-generated stories in your git log. It may not suit projects where terse, conventional commit messages are expected. The skill also includes a small Python package (`seed.py`) that generates a random emoji seed; it requires [uv](https://docs.astral.sh/uv/) to be installed. The plugin's `SessionStart` hook writes the plugin root path to `~/.claude/plugins/data/phx-claude-siat.root` so the skill can locate the package regardless of where the plugin is cached.
+**`creative-commits`** produces narrative, emoji-adorned commit messages — a deliberate style choice that trades extra token usage (the skill runs `emoji-seed`, stages files, and reasons about human intent) for the entertainment value of reading AI-generated stories in your git log. It may not suit projects where terse, conventional commit messages are expected. The skill also includes a small Python package (`seed.py`) that generates a random emoji seed; it requires [uv](https://docs.astral.sh/uv/) to be installed. The plugin's `SessionStart` hook writes the plugin root path to `~/.claude/plugins/data/phx.root` so the skill can locate the package regardless of where the plugin is cached.
 
 ## Installation
 
@@ -30,7 +30,7 @@ Install once; skills are available in every project.
 
 ```
 /plugin marketplace add todofixthis/phx-claude-siat
-/plugin install phx-claude-siat@todofixthis
+/plugin install phx@todofixthis
 ```
 
 Then restart Claude Code.
@@ -50,7 +50,7 @@ To activate the plugin for a specific project only, add the following to the pro
     }
   },
   "enabledPlugins": {
-    "phx-claude-siat@todofixthis": true
+    "phx@todofixthis": true
   }
 }
 ```
@@ -61,7 +61,7 @@ When someone opens the project in Claude Code and trusts the folder, they will b
 
 ```
 /plugin marketplace add /path/to/phx-claude-siat
-/plugin install phx-claude-siat@todofixthis
+/plugin install phx@todofixthis
 ```
 
 Then restart Claude Code.
@@ -73,11 +73,11 @@ Some skills require explicit instructions in `~/.claude/CLAUDE.md` to ensure Cla
 ```markdown
 # Skill resolution
 
-When asked to write an implementation plan, invoke `phx-claude-siat:writing-plans`, not `superpowers:writing-plans`.
+When asked to write an implementation plan, invoke `phx:writing-plans`, not `superpowers:writing-plans`.
 
 # Git commits
 
-**Always** use the `phx-claude-siat:creative-commits` skill when creating Git commits.
+**Always** use the `phx:creative-commits` skill when creating Git commits.
 ```
 
 ## Licence

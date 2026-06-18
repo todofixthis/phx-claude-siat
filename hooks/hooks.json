@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "mkdir -p $HOME/.claude/plugins/data && printf '%s' \"${CLAUDE_PLUGIN_ROOT}\" > $HOME/.claude/plugins/data/phx-claude-siat.root"
+            "command": "mkdir -p $HOME/.claude/plugins/data && printf '%s' \"${CLAUDE_PLUGIN_ROOT}\" > $HOME/.claude/plugins/data/phx.root"
           }
         ]
       }
