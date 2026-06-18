@@ -1,0 +1,14 @@
+{
+  "name": "phx-claude-siat",
+  "version": "1.0.0",
+  "description": "PHX+Claude sittin' in a tree",
+  "author": {
+    "name": "Phoenix Zerin",
+    "email": "phx@phx.nz",
+    "url": "https://github.com/todofixthis"
+  },
+  "homepage": "https://github.com/todofixthis/phx-claude-siat",
+  "repository": "https://github.com/todofixthis/phx-claude-siat",
+  "license": "MIT",
+  "keywords": ["accessibility", "commits", "adr", "nz-english", "reflection"]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "phx-claude-siat-dev",
+  "description": "Development marketplace for phx-claude-siat",
+  "owner": {
+    "name": "Phoenix Zerin"
+  },
+  "plugins": [
+    {
+      "name": "phx-claude-siat",
+      "description": "PHX+Claude sittin' in a tree",
+      "version": "1.0.0",
+      "source": "./",
+      "author": {
+        "name": "Phoenix Zerin"
+      }
+    }
+  ]
+}

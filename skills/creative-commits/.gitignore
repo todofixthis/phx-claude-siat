@@ -1,0 +1,13 @@
+# Build artefacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+
+# Test cache
+.pytest_cache/
+
+# Ruff cache
+.ruff_cache/

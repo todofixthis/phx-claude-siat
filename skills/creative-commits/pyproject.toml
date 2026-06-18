@@ -1,0 +1,44 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[project]
+authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
+description = "Emoji seed generator for creative-commits"
+license = "MIT"
+name = "creative-commits"
+requires-python = ">=3.12, <4"
+version = "1.0.0"
+dependencies = [
+    "emoji>=2,<3",
+    "regex>=2026,<2027",
+]
+
+[project.scripts]
+emoji-seed = "seed:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["seed.py"]
+
+[tool.autohooks]
+mode = "pythonpath"
+pre-commit = [
+    "autohooks.plugins.black",
+    "autohooks.plugins.pytest",
+    "autohooks.plugins.ruff",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "autohooks>=26,<27",
+    "autohooks-plugin-black>=23,<24",
+    "autohooks-plugin-pytest>=23,<24",
+    "autohooks-plugin-ruff>=25,<26",
+    "black>=26,<27",
+    "pytest>=9,<10",
+    "ruff>=0,<1",
+]
