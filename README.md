@@ -1,6 +1,8 @@
 # phx-claude-siat
 
-> *sittin' in a tree* — Phoenix Zerin's personal Claude Code skills plugin.
+> *PHX and Claude sittin' in a tree*
+> *tokenmaxxin' for all to see*
+> Welcome to my personal Claude Code skills plugin.
 
 A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) containing reusable skills for coding agents. Skills are general enough to drop into any project; they encode conventions around commit messages, architecture decisions, accessibility, documentation, and more.
 
@@ -65,6 +67,11 @@ When someone opens the project in Claude Code and trusts the folder, they will b
 ```
 
 Then restart Claude Code.
+
+> [!NOTE]
+> When working with Claude Code inside a container (e.g. using
+> [paddock](https://pypi.org/project/phx-paddock/)), make sure the plugin directory is
+> mounted in the container at the same path as on the host system.
 
 ## Required CLAUDE.md entries
 
