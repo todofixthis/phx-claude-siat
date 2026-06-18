@@ -20,7 +20,7 @@ A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) c
 
 **`writing-plans`** is a wrapper around `superpowers:writing-plans` (from the [superpowers marketplace](https://github.com/obra/superpowers-marketplace)) that adds project-specific conventions on top of the base skill. This improves stability when plan execution is split across multiple sessions, since the wrapper's additional conventions are always applied consistently regardless of which session picks up the work.
 
-**`creative-commits`** includes a small Python package (`seed.py`) that generates a random emoji seed for each commit. It requires [uv](https://docs.astral.sh/uv/) to be installed. The plugin's `SessionStart` hook writes the plugin root path to `~/.claude/plugins/data/phx-claude-siat.root` so the skill can locate the package regardless of where the plugin is cached.
+**`creative-commits`** produces narrative, emoji-adorned commit messages — a deliberate style choice that trades extra token usage (the skill runs `emoji-seed`, stages files, and reasons about human intent) for the entertainment value of reading AI-generated stories in your git log. It may not suit projects where terse, conventional commit messages are expected. The skill also includes a small Python package (`seed.py`) that generates a random emoji seed; it requires [uv](https://docs.astral.sh/uv/) to be installed. The plugin's `SessionStart` hook writes the plugin root path to `~/.claude/plugins/data/phx-claude-siat.root` so the skill can locate the package regardless of where the plugin is cached.
 
 ## Installation
 
@@ -73,11 +73,11 @@ Some skills require explicit instructions in `~/.claude/CLAUDE.md` to ensure Cla
 ```markdown
 # Skill resolution
 
-When asked to write an implementation plan, invoke `writing-plans`, not `superpowers:writing-plans`.
+When asked to write an implementation plan, invoke `phx-claude-siat:writing-plans`, not `superpowers:writing-plans`.
 
 # Git commits
 
-**Always** use the `creative-commits` skill when creating Git commits.
+**Always** use the `phx-claude-siat:creative-commits` skill when creating Git commits.
 ```
 
 ## Licence
