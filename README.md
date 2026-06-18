@@ -61,7 +61,7 @@ When someone opens the project in Claude Code and trusts the folder, they will b
 
 ```
 /plugin marketplace add /path/to/phx-claude-siat
-/plugin install phx-claude-siat@phx-claude-siat-dev
+/plugin install phx-claude-siat@todofixthis
 ```
 
 Then restart Claude Code.
