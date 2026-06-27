@@ -61,12 +61,26 @@ When someone opens the project in Claude Code and trusts the folder, they will b
 
 ### Local development
 
+To test working-tree changes, launch Claude Code with the plugin loaded live from
+this directory:
+
 ```
-/plugin marketplace add /path/to/phx-claude-siat
-/plugin install phx@todofixthis
+claude --plugin-dir ./
 ```
 
-Then restart Claude Code.
+This loads the skills, hooks, and commands directly from the working tree (taking
+precedence over any installed copy for the session), so edits take effect after
+`/reload-plugins` without reinstalling or clearing the cache. Installing from a
+local marketplace instead (`/plugin marketplace add` + `/plugin install`) copies
+the plugin into `~/.claude/plugins/cache/`, so working-tree edits would *not* be
+picked up — use `--plugin-dir` for active development.
+
+To confirm which copy a running session is using, check that the plugin root
+resolves to this repo rather than the cache:
+
+```bash
+cat ~/.claude/plugins/data/phx.root   # the repo path → live; a .../plugins/cache/... path → cached
+```
 
 > [!NOTE]
 > When working with Claude Code inside a container (e.g. using
