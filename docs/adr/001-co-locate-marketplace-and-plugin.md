@@ -94,13 +94,13 @@ marketplace, or stable-vs-latest channels are needed.
 - One catalog now serves both development and published distribution, so the
   marketplace `description` (currently "Development marketplace…") is corrected to
   describe that published role, lest users adding it be misled.
-- Installed copies update only when `plugin.json`'s version changes, so work
-  accumulates on the default branch and reaches existing users only on a deliberate
-  bump — the batched cadence is enforced by the version field. But a fresh install
-  pulls default-branch HEAD, so a new installer and an existing updater can both
-  report `1.0.0` while running different commits. Tag each release commit to restore a
-  version→commit mapping for support and bisection; a tag needs no ref pin or repo
-  split.
+- Installed copies update only when `plugin.json`'s version changes, so a release
+  reaches existing users only when a bumped version lands on the default branch — the
+  batched cadence is enforced by the version field, not by every merge. But a fresh
+  install pulls default-branch HEAD, so a new installer and an existing updater can
+  both report `1.0.0` while running different commits. Tag each release commit to
+  restore a version→commit mapping for support and bisection; a tag needs no ref pin or
+  repo split.
 - The split trigger is recorded, so the bet is reversible: migration later is bounded
   — create the new repository, move the marketplace manifest, update the install docs,
   and users re-add the marketplace once.
