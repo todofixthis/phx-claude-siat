@@ -17,6 +17,20 @@ with `--plugin-dir ./` (then `/reload-plugins` after edits).
 Don't judge this from `~/.claude/plugins/data/phx.root` — it locates the
 `creative-commits` seed script and points at the cache even when the tree is live.
 
+## Testing skills
+
+When RED/GREEN-testing a skill with subagents (see `superpowers:writing-skills`):
+
+- **Reload before re-testing.** Test subagents load the *registered* skill, not your
+  working-tree edit — run `/reload-plugins` after each change before the next run.
+- **Brief the subagent on the fixture.** Fresh subagents flag intentional test states
+  (a pinned/detached checkout, a deliberately odd spec) as errors and try to "fix"
+  them; tell them the state is intentional, and have them work in a scratchpad rather
+  than writing into the repo.
+- **Make sure RED can fail.** Confirm the no-skill control genuinely falls short
+  before trusting GREEN, and that the fixture doesn't leak the answer (e.g. a past
+  release whose PR body already holds the notes you're asking for).
+
 ## Architecture Decision Records
 
 Before proposing architectural or tooling changes, read `docs/adr/INDEX.md` and don't
