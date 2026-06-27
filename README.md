@@ -75,12 +75,12 @@ local marketplace instead (`/plugin marketplace add` + `/plugin install`) copies
 the plugin into `~/.claude/plugins/cache/`, so working-tree edits would *not* be
 picked up — use `--plugin-dir` for active development.
 
-To confirm which copy a running session is using, check that the plugin root
-resolves to this repo rather than the cache:
-
-```bash
-cat ~/.claude/plugins/data/phx.root   # the repo path → live; a .../plugins/cache/... path → cached
-```
+You can tell which copy a session is using from the **base directory** Claude
+reports whenever a `phx:` skill loads: a path under this repo means the working
+tree is live; a `.../plugins/cache/...` path means the published copy is active.
+(Don't use `~/.claude/plugins/data/phx.root` for this — it locates the
+`creative-commits` seed script and points at the cached copy even under
+`--plugin-dir`.)
 
 > [!NOTE]
 > When working with Claude Code inside a container (e.g. using

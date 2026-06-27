@@ -4,31 +4,24 @@ This repo **is** the `phx` Claude Code plugin. Skills live in `skills/`, hooks i
 `hooks/`, and the plugin/marketplace manifests in `.claude-plugin/`. Skills are
 invoked as `phx:<skill-name>`.
 
-## Dogfooding: confirm the working tree is live before editing skills
+## Dogfooding: notice when the working tree isn't live
 
-By default Claude loads the **published, cached** copy of the plugin, so edits to
-`skills/` in the working tree have no effect — and the skills you are editing may
-not resolve at all. The working-tree version is only active when Claude was
-launched with `--plugin-dir ./`.
+By default Claude loads the **published, cached** copy of the plugin; the
+working-tree version is active only when Claude was launched with `--plugin-dir ./`.
+When it isn't, edits and tests in this repo don't take effect.
 
-Before editing or testing any skill, check which copy is active:
+Don't probe for this proactively. Instead, the first time you reach for a `phx:`
+skill in the normal course of work, let the load itself tell you. The working tree
+is **not** live if either:
 
-```bash
-root="$(cat ~/.claude/plugins/data/phx.root 2>/dev/null)"
-repo="$(git rev-parse --show-toplevel 2>/dev/null)"
-case "$root" in
-  "$repo")            echo "live — working-tree skills active" ;;
-  */plugins/cache/*)  echo "cached — relaunch with: claude --plugin-dir ./" ;;
-  *)                  echo "unknown/stale phx.root" ;;
-esac
-```
+- the skill is unavailable (`Unknown skill`), or
+- it loads from a `…/plugins/cache/…` base directory rather than this repo.
 
-`phx.root` is written each session by the plugin's `SessionStart` hook to
-`${CLAUDE_PLUGIN_ROOT}` — the root of the plugin as actually loaded. A match
-against the repo root is a trustworthy positive; treat anything else as not live,
-since the file can be stale if the plugin is disabled.
+In that case, stop and confirm with the user whether that's intended before
+continuing — they may want to relaunch with `claude --plugin-dir ./` (then
+`/reload-plugins` after later edits) so the work actually exercises the working
+tree.
 
-If the working tree is **not** live, advise the user to relaunch with
-`claude --plugin-dir ./` (and run `/reload-plugins` after subsequent edits). Do not
-silently drive the cached copy — its skills are the last published release, not the
-working tree.
+(Ignore `~/.claude/plugins/data/phx.root` as a signal — it locates the
+`creative-commits` seed script and points at the cached copy even under
+`--plugin-dir`.)
