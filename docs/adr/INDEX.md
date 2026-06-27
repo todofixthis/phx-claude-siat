@@ -5,3 +5,4 @@
 | # | Status | Title | Tags | Summary |
 |---|--------|-------|------|---------|
 | [001](001-co-locate-marketplace-and-plugin.md) | Accepted | Co-locate the marketplace and plugin in one repository | marketplace, plugin, repository-structure, versioning, releases, single-source-of-truth | Keep the marketplace and plugin in one repository; the plugin version lives only in plugin.json, never duplicated in the marketplace entry. |
+| [002](002-generate-changelog-at-release.md) | Accepted | Generate the changelog at release time, not a running [Unreleased] | changelog, release-notes, releases, unreleased, keep-a-changelog, single-source-of-truth | Generate each CHANGELOG entry from history at release time; do not maintain a hand-written [Unreleased] section. |
