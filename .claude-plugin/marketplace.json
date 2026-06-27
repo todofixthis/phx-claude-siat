@@ -1,6 +1,6 @@
 {
   "name": "todofixthis",
-  "description": "Development marketplace for phx-claude-siat",
+  "description": "Claude Code plugins by Phoenix Zerin",
   "owner": {
     "name": "Phoenix Zerin"
   },
@@ -8,7 +8,6 @@
     {
       "name": "phx",
       "description": "PHX+Claude sittin' in a tree",
-      "version": "1.0.0",
       "source": "./",
       "author": {
         "name": "Phoenix Zerin"

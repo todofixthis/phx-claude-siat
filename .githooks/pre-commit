@@ -1,0 +1,16 @@
+#!/bin/sh
+# Regenerate the ADR index when any ADR file is staged, then re-stage it so the
+# refreshed index lands in the same commit. This is the adr-index hook the
+# writing-adrs skill assumes. Activate per clone with:
+#   git config core.hooksPath .githooks
+adr_staged=0
+for path in $(git diff --cached --name-only --diff-filter=ACMR); do
+    case "$path" in
+        docs/adr/[0-9]*-*.md) adr_staged=1 ;;
+    esac
+done
+
+[ "$adr_staged" -eq 1 ] || exit 0
+
+python3 scripts/adr/generate_index.py || exit 1
+git add docs/adr/INDEX.md

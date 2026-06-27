@@ -87,6 +87,24 @@ tree is live; a `.../plugins/cache/...` path means the published copy is active.
 > [paddock](https://pypi.org/project/phx-paddock/)), make sure the plugin directory is
 > mounted in the container at the same path as on the host system.
 
+### Git hooks
+
+Hooks live in `.githooks/` (tracked), but git does not install hooks on clone.
+Activate them once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The `pre-commit` hook regenerates `docs/adr/INDEX.md` from ADR frontmatter whenever
+an ADR is staged. The setting lives in the clone's shared config and the path is
+relative, so a single activation also covers every worktree. To regenerate the index
+by hand:
+
+```bash
+python3 scripts/adr/generate_index.py
+```
+
 ## Required CLAUDE.md entries
 
 Some skills require explicit instructions in `~/.claude/CLAUDE.md` to ensure Claude invokes them consistently. Add the following sections:
