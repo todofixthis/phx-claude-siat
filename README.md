@@ -17,6 +17,7 @@ A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) c
 | `reflection` | Reviewing a session for friction and improving ecosystem files |
 | `writing-adrs` | Documenting significant architectural or tooling decisions |
 | `writing-plans` | Writing implementation plans for multi-step tasks |
+| `writing-release-notes` | Generating release notes or a changelog entry for a new version |
 
 ### Notes on specific skills
 
