@@ -5,6 +5,17 @@
 This repo **is** the `phx` Claude Code plugin (skills, hooks, and `.claude-plugin/`
 manifests); its skills are invoked as `phx:<skill-name>`.
 
+## Branches
+
+- `main` — releases only; merge from `develop` via PR
+- `develop` — main development branch
+- Feature branches off `develop` for all new work
+
+## Language and Style
+
+NZ English throughout — spelling, not just prose. Place comments on the line
+preceding the code they document, not as trailing comments.
+
 ## Dogfooding: is the working tree live?
 
 Claude loads the **published, cached** plugin unless launched with `--plugin-dir ./`;
