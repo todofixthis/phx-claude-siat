@@ -62,30 +62,49 @@ it. Err toward inclusion.
 
 ### 4. Draft
 
-Write to the template below: high-level, grouped logically. Flag security-sensitive or
-embargoed material (CVE details, undisclosed advisories) for human decision rather than
-publishing it unreviewed.
+**Classify every entry by audience first: user-facing or maintainer-facing.**
+User-facing changes affect someone *consuming* the project (installing it, calling its
+API, invoking its skills/commands). Maintainer-facing changes affect someone
+*contributing to* the project (its build, tests, contributor workflow, internal
+tooling, or repo-local dev-environment setup) without changing what a consumer
+installs or calls. A change touching both gets one entry per affected audience — don't
+force a single framing. When genuinely unclear which audience a change belongs to,
+default to user-facing (the more visible, harder-to-miss placement).
+
+Write to the template below: high-level, grouped logically within each audience. Flag
+security-sensitive or embargoed material (CVE details, undisclosed advisories) for
+human decision rather than publishing it unreviewed.
 
 **Breaking changes — flag, don't dismiss.** "Breaking" is broader than runtime API
-breaks. Treat all of these as breaking: changed or removed public API or behaviour;
-**type-surface** changes (altered public signatures, or removed base classes/protocols
-that typed consumers may depend on); **build- or contributor-workflow** changes (renamed
-dependency groups, changed install/build/test commands); and **dropped runtime or
-version support**. When a change is plausibly breaking, or a commit/PR/issue signals it
-— even if you can argue it still works at runtime — put it under **Breaking changes**
-with migration steps and let the human decide. Do not reason a flagged break out of the
-notes.
+breaks, and applies independently within *each* audience. The test: **if the consumer
+or contributor does nothing differently, does anything — not just compile-time or
+runtime behaviour — end up broken, stale, or silently out of sync?** That covers
+changed or removed public API or behaviour; **type-surface** changes (altered public
+signatures, or removed base classes/protocols that typed consumers may depend on);
+**build- or contributor-workflow** changes (renamed dependency groups, changed
+install/build/test commands, a new opt-in step like a hook that must be activated or
+its output silently goes stale); and **dropped runtime or version support**. When a
+change is plausibly breaking under this test, or a commit/PR/issue signals it — even if
+you can argue it still works at runtime — put it under that audience's **Breaking
+changes** with migration steps and let the human decide. Do not reason a flagged break
+out of the notes.
 
 ### 5. Audience-surrogate review
 
-Dispatch a subagent **on the main model** (a reasoning task, not a cheap one) that
-reads the draft as the release's audience and critiques it for clarity, gaps, and
-jargon. It must also check **breaking-change completeness**: would a consumer be caught
-out by a change that isn't under Breaking changes — an altered contract, type surface,
-build/test workflow, or dropped version support? Anything missing or under-called gets
-flagged. Infer the audience from the README / package manifest / repo description;
-default to "a downstream developer consuming this project"; ask if genuinely ambiguous.
-Address the feedback.
+Dispatch one subagent **on the main model** (a reasoning task, not a cheap one) per
+**non-empty** audience block from step 4, each reading only that block and critiquing
+it for clarity, gaps, and jargon from that audience's perspective:
+
+- **User block reviewer:** infer the specific user audience from the README / package
+  manifest / repo description; default to "a downstream developer consuming this
+  project"; ask if genuinely ambiguous.
+- **Maintainer block reviewer:** read as "a contributor to this project."
+
+Each reviewer must also check **breaking-change completeness** for its block: would
+someone in that audience be caught out by a change that isn't under that block's
+Breaking changes — an altered contract, type surface, build/test/contributor workflow,
+or dropped version support? Anything missing, under-called, or misclassified into the
+wrong audience gets flagged. Address the feedback from both reviewers before continuing.
 
 ### 6. Quality pass
 
@@ -109,19 +128,25 @@ caller's responsibility.
 
 ## Template
 
-Keep-a-Changelog sections, emitted only when non-empty: **Added, Changed, Deprecated,
-Removed, Fixed, Security.** Above them, a dedicated **Breaking changes** block listing
-each breaking change with its migration steps. (This block is a deliberate, opinionated
-deviation from Keep-a-Changelog's `**breaking**` prefix.) Entries are high-level and
-grouped — never a per-commit dump. The caller adds any version heading.
+Two top-level audience blocks, **each emitted only when it has content**: a heading for
+users (e.g. "For \<project\> users") and one for maintainers (e.g. "For contributors").
+Within each block, Keep-a-Changelog sections, emitted only when non-empty: **Added,
+Changed, Deprecated, Removed, Fixed, Security.** Above those, a dedicated **Breaking
+changes** block listing that audience's breaking changes with migration steps. (This
+block is a deliberate, opinionated deviation from Keep-a-Changelog's `**breaking**`
+prefix.) A single-audience release omits the other block entirely rather than emitting
+it empty. Entries are high-level and grouped — never a per-commit dump. The caller adds
+any version heading.
 
 ## Edge cases
 
 - **First release (no `base`):** review the full history; initial-release framing; no
   semver recommendation.
-- **`gh` unavailable or unauthenticated, or a non-GitHub remote:** skip the PR/issue
-  gather; rely on the diff and commit bodies; **state what you skipped** — never imply
-  coverage a missing source could not provide.
+- **`gh` unavailable or unauthenticated:** likely unintentional — **stop and tell the
+  human**, rather than silently degrading coverage by skipping the PR/issue gather.
+  Proceed without it only if the human explicitly confirms.
+- **Non-GitHub remote:** there is nothing for `gh` to fetch — skip the PR/issue gather,
+  rely on the diff and commit bodies, and **state what you skipped** in the output.
 - **`base` unresolvable or not an ancestor of `HEAD`:** stop with an error.
 - **Empty range (no changes since `base`):** report that there is nothing to release
   and stop.
