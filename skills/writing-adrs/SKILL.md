@@ -81,6 +81,38 @@ What follows — positive and negative.
   - _Decision_ — why this option over others; don't re-describe the chosen option (Options already did that)
   - _Consequences_ — what changes or must be managed downstream; not a restatement of the accepted option's pros/cons
 
+## Linking references
+
+Link every reference to something outside the ADR's own prose — GitHub issues/PRs, web
+pages, and code symbols (files, skills, functions, classes). If you name it as a source
+of context, link it.
+
+- **Mechanism** — reference-style Markdown links using the named/shortcut form, so the
+  label *is* the anchor (`[#100]`, `` [`ClassRegistry`] ``). Collect definitions in one
+  block at the very bottom of the file, after Consequences.
+- **First mention only** — link the first occurrence of a given reference; later
+  mentions stay plain (a code span for symbols, plain text for issues), so a repeated
+  code symbol doesn't pepper the document with links.
+- **Symbols link to the file, not the line** — use a relative repo path (e.g.
+  `skills/writing-adrs/SKILL.md`). No line numbers or commit SHAs — both go stale and
+  are not worth keeping in sync.
+- **Targets by type** — GitHub issue/PR → the full issue/PR URL; web page → its
+  canonical URL; code symbol → the relative repo path to the defining file.
+- **Order definitions alphabetically by label**, ignoring surrounding markup (so
+  `` [`ClassRegistry`] `` sorts under C) — consistent with the repo-wide convention to
+  alphabetise unordered collections.
+
+### Worked example
+
+```markdown
+Following [#100][], we adopted the registry pattern from [`ClassRegistry`][].
+See the [PEP 8 naming guidance][] for the convention.
+
+[#100]: https://github.com/todofixthis/class-registry/issues/100
+[`ClassRegistry`]: src/class_registry/registry.py
+[PEP 8 naming guidance]: https://peps.python.org/pep-0008/#naming-conventions
+```
+
 ## Review
 
 After drafting an ADR — and before committing it — run two review passes, in order. Both apply to new ADRs and to any ADR you substantially edit.
