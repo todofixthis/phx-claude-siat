@@ -78,8 +78,11 @@ gh pr list --base main --head develop --state all --json number,state,mergeCommi
    `develop`; push, and verify the push succeeded before continuing.
 7. **Open the PR** `develop`→`main` with the notes as the body
    (`gh pr create --base main --head develop`). If an open `develop`→`main` PR already
-   exists (a prior aborted run), update its body rather than creating a duplicate. Report
-   the PR URL and stop — the maintainer reviews and merges.
+   exists (a prior aborted run), update its body rather than creating a duplicate. Tell
+   the maintainer to **merge via a merge commit, not squash or rebase** — a squash/rebase
+   merge leaves `main`'s new commit without `develop` as an ancestor, which trips the
+   validation gate's divergence check on the *next* release. Report the PR URL and
+   stop — the maintainer reviews and merges.
 
 ## Phase 2 — publish (after the PR is merged to `main`)
 
@@ -88,6 +91,11 @@ gh pr list --base main --head develop --state all --json number,state,mergeCommi
    either of which a squash/rebase merge or a later commit would get wrong. Push the tag.
 9. Publish the GitHub Release for that tag with the same notes
    (`gh release create X.Y.Z`). No artefacts, checksums, or signing.
+10. **Close referenced issues.** Extract every `#NNN` reference from the published
+    notes and close each with a comment linking to the release
+    (`gh issue close NNN --comment "Implemented in [X.Y.Z](<release URL>)."`). Skip
+    references that don't belong to this repo (e.g. a dependency-bump entry citing an
+    upstream project's issue number).
 
 ## Validation gate
 
