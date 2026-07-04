@@ -11,3 +11,6 @@ __pycache__/
 .venv/
 .venv.leash/
 .venv.local/
+
+# Worktrees
+.worktrees/
