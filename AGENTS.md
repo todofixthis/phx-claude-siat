@@ -16,6 +16,13 @@ manifests); its skills are invoked as `phx:<skill-name>`.
 NZ English throughout — spelling, not just prose. Place comments on the line
 preceding the code they document, not as trailing comments.
 
+## Skill layout
+
+Published skills live in `skills/<name>/` and ship with the plugin and marketplace,
+invoked as `phx:<name>`. Project-local skills live in `.claude/skills/<name>/` — loaded
+in this repo but shipped with neither the plugin nor the marketplace, and invoked
+unprefixed. Releases are cut by the project-local `releasing` skill.
+
 ## Dogfooding: is the working tree live?
 
 Claude loads the **published, cached** plugin unless launched with `--plugin-dir ./`;
