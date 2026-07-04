@@ -54,6 +54,8 @@ State the decision and summarise the key reasons.
 ## Consequences
 
 What follows — positive and negative.
+
+<!-- Reference-style link definitions, alphabetised by label, go here -->
 ```
 
 ## Frontmatter Fields
@@ -139,6 +141,14 @@ Edit the ADR yourself for redundancy and consolidation. The rule: each point liv
 When you cut or relocate a point, remove it cleanly — do not leave a note explaining the edit (e.g. "(see Decision)", "moved from Context", "covered above"). Such pointers re-add the words you just saved and read as edit history the reader does not need.
 
 Target the shortest version that preserves all reasoning and flow — don't strip the Options comparison so far that the accepted option loses its profile. Stop when no sentence can be cut or moved without losing reasoning.
+
+Reference-style links have one weak spot: a missing or mismatched definition renders as
+literal text rather than erroring. Also verify:
+
+- Every reference label used has a matching definition, and every definition is used —
+  no orphans. A conciseness pass can remove a reference's last usage but leave its
+  definition behind; watch for that specifically.
+- Each target resolves — the issue/PR exists, the path exists, the URL is valid.
 
 ## Supersession Workflow
 
