@@ -120,6 +120,34 @@ to a single module.
 [PEP 8 naming guidance]: https://peps.python.org/pep-0008/#naming-conventions
 ```
 
+### Common mistake
+
+**Don't** re-link a reference just because it resurfaces in a later section —
+the first link already spent it, no matter how far away or how many sections
+apart the repeat is:
+
+```markdown
+## Context
+
+Following [#100][], we adopted the registry pattern from [`ClassRegistry`][].
+
+## Decision
+
+<!-- Wrong: #100 was already linked above, in Context -->
+We chose this approach because [#100][] specifically called out the need for
+lazy registration.
+```
+
+The corrected form keeps `#100` plain text in Decision, since Context already
+linked it:
+
+```markdown
+## Decision
+
+We chose this approach because #100 specifically called out the need for
+lazy registration.
+```
+
 ## Review
 
 After drafting an ADR — and before committing it — run two review passes, in order. Both apply to new ADRs and to any ADR you substantially edit.
