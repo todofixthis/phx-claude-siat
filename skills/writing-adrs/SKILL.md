@@ -182,6 +182,9 @@ literal text rather than erroring. Also verify:
   no orphans. A conciseness pass can remove a reference's last usage but leave its
   definition behind; watch for that specifically.
 - Each target resolves — the issue/PR exists, the path exists, the URL is valid.
+- Scan the whole draft for any reference whose link syntax (`[label][]`) appears more
+  than once — keep the first occurrence linked and convert every later occurrence of
+  the same reference to plain text (or a code span, for symbols).
 
 ## Supersession Workflow
 
