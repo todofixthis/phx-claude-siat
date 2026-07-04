@@ -7,24 +7,33 @@ description: Use when you have a spec or requirements for a multi-step task, bef
 
 **REQUIRED SUB-SKILL:** Use `superpowers:writing-plans` to build the plan, then apply the additional conventions below before finalising.
 
+## Before Writing the Plan File
+
+The main agent performs these two steps **first**, before writing any of the plan, and in this order. They put the branch and any agent-facing guidance in place so that subagents executing the plan inherit a correct workspace from their very first task.
+
+### Step 1: Create the worktree and branch now
+
+Create the isolated workspace **before** writing the plan — do not defer it. **REQUIRED SUB-SKILL:** Use `superpowers:using-git-worktrees` to create (or detect) an isolated worktree on a new feature branch.
+
+This overrides the base skill's note that the worktree is created at execution time: the main agent creates it now, so by the time the plan is written the worktree already exists. The branch is needed immediately for the documentation commit in Step 2. (If the user has declined a worktree, still create a feature branch so that commit — and later implementation — never lands on `main`.)
+
+### Step 2: Commit coding-agent documentation first
+
+If the planned work would change documentation that coding agents read as guidance — `AGENTS.md`, `CLAUDE.md`, ADRs, skills, or similar — make those changes and commit them on the branch **now**, before writing the plan. Use the `creative-commits` skill for the commit.
+
+Subagents that execute the plan read this guidance at the start of their work. Committing it first means it is already in place for every task; fold it into the plan instead and the earlier tasks run without it.
+
+Do **not** add these documentation changes as tasks in the plan — they are already done. Record them in the plan's Architecture section as completed pre-work, so the self-review's spec-coverage check accounts for them.
+
 ## Additional Convention: Worktree Name in Plan Header
 
-After the worktree is created (by the brainstorming skill), add a `**Worktree:**` field to the plan header so executing agents know where to work:
+The worktree exists by now (from Step 1 above), so populate a `**Worktree:**` field in the plan header directly so executing agents know where to work:
 
 ```markdown
 **Worktree:** `path/to/worktree` (branch: `feature/branch-name`)
 ```
 
-If the plan is written before the worktree exists, add a first step to the first task:
-
-```markdown
-- [ ] **Step 1: Record worktree path**
-
-Run: `git worktree list`
-Update the `**Worktree:**` field in this plan's header with the path and branch name, then save.
-```
-
-Add this to every task in the self-review checklist too: "Does the plan header include a `**Worktree:**` field?"
+Add this to every task in the self-review checklist too: "Does the plan header include a `**Worktree:**` field naming the existing worktree and branch?"
 
 ## Additional Convention: Commit Step
 

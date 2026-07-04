@@ -17,6 +17,7 @@ A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) c
 | `reflection` | Reviewing a session for friction and improving ecosystem files |
 | `writing-adrs` | Documenting significant architectural or tooling decisions |
 | `writing-plans` | Writing implementation plans for multi-step tasks |
+| `writing-release-notes` | Generating release notes or a changelog entry for a new version |
 
 ### Notes on specific skills
 
@@ -61,17 +62,49 @@ When someone opens the project in Claude Code and trusts the folder, they will b
 
 ### Local development
 
+To test working-tree changes, launch Claude Code with the plugin loaded live from
+this directory:
+
 ```
-/plugin marketplace add /path/to/phx-claude-siat
-/plugin install phx@todofixthis
+claude --plugin-dir ./
 ```
 
-Then restart Claude Code.
+This loads the skills, hooks, and commands directly from the working tree (taking
+precedence over any installed copy for the session), so edits take effect after
+`/reload-plugins` without reinstalling or clearing the cache. Installing from a
+local marketplace instead (`/plugin marketplace add` + `/plugin install`) copies
+the plugin into `~/.claude/plugins/cache/`, so working-tree edits would *not* be
+picked up — use `--plugin-dir` for active development.
+
+You can tell which copy a session is using from the **base directory** Claude
+reports whenever a `phx:` skill loads: a path under this repo means the working
+tree is live; a `.../plugins/cache/...` path means the published copy is active.
+(Don't use `~/.claude/plugins/data/phx.root` for this — it locates the
+`creative-commits` seed script and points at the cached copy even under
+`--plugin-dir`.)
 
 > [!NOTE]
 > When working with Claude Code inside a container (e.g. using
 > [paddock](https://pypi.org/project/phx-paddock/)), make sure the plugin directory is
 > mounted in the container at the same path as on the host system.
+
+### Git hooks
+
+Hooks live in `.githooks/` (tracked), but git does not install hooks on clone.
+Activate them once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The `pre-commit` hook regenerates `docs/adr/INDEX.md` from ADR frontmatter whenever
+an ADR is staged. The setting lives in the clone's shared config and the path is
+relative, so a single activation also covers every worktree. To regenerate the index
+by hand:
+
+```bash
+python3 scripts/adr/generate_index.py
+```
 
 ## Required CLAUDE.md entries
 
