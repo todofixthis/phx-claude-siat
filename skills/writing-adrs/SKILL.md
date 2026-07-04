@@ -108,7 +108,8 @@ of context, link it.
 
 ```markdown
 Following [#100][], we adopted the registry pattern from [`ClassRegistry`][].
-See the [PEP 8 naming guidance][] for the convention.
+See the [PEP 8 naming guidance][] for the convention. This revisits the approach
+proposed in #100, this time scoped to a single module.
 
 [#100]: https://github.com/todofixthis/class-registry/issues/100
 [`ClassRegistry`]: src/class_registry/registry.py
