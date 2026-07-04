@@ -94,7 +94,9 @@ of context, link it.
   block at the very bottom of the file, after Consequences.
 - **First mention only** — link the first occurrence of a given reference; later
   mentions stay plain (a code span for symbols, plain text for issues), so a repeated
-  code symbol doesn't pepper the document with links.
+  code symbol doesn't pepper the document with links. This tracks the reference itself,
+  not its position, so it applies across sections too — a repeat in Decision stays
+  plain even if the first mention was back in Context.
 - **Symbols link to the file, not the line** — use a relative repo path (e.g.
   `skills/writing-adrs/SKILL.md`). No line numbers or commit SHAs — both go stale and
   are not worth keeping in sync.
@@ -108,8 +110,10 @@ of context, link it.
 
 ```markdown
 Following [#100][], we adopted the registry pattern from [`ClassRegistry`][].
-See the [PEP 8 naming guidance][] for the convention. This revisits the approach
-proposed in #100, this time scoped to a single module.
+See the [PEP 8 naming guidance][] for the convention.
+
+We decided to implement `ClassRegistry` as proposed in #100, this time scoped
+to a single module.
 
 [#100]: https://github.com/todofixthis/class-registry/issues/100
 [`ClassRegistry`]: src/class_registry/registry.py
