@@ -175,8 +175,8 @@ When you cut or relocate a point, remove it cleanly — do not leave a note expl
 
 Target the shortest version that preserves all reasoning and flow — don't strip the Options comparison so far that the accepted option loses its profile. Stop when no sentence can be cut or moved without losing reasoning.
 
-Reference-style links have one weak spot: a missing or mismatched definition renders as
-literal text rather than erroring. Also verify:
+Reference-style links are easy to get subtly wrong: a missing or mismatched definition
+renders as literal text rather than erroring, and over-linking is easy to miss. Verify:
 
 - Every reference label used has a matching definition, and every definition is used —
   no orphans. A conciseness pass can remove a reference's last usage but leave its
