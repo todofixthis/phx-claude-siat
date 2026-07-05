@@ -54,6 +54,8 @@ State the decision and summarise the key reasons.
 ## Consequences
 
 What follows — positive and negative.
+
+<!-- Reference-style link definitions, alphabetised by label, go here -->
 ```
 
 ## Frontmatter Fields
@@ -81,6 +83,71 @@ What follows — positive and negative.
   - _Decision_ — why this option over others; don't re-describe the chosen option (Options already did that)
   - _Consequences_ — what changes or must be managed downstream; not a restatement of the accepted option's pros/cons
 
+## Linking references
+
+Link every reference to something outside the ADR's own prose — GitHub issues/PRs, web
+pages, and code symbols (files, skills, functions, classes). If you name it as a source
+of context, link it.
+
+- **Mechanism** — reference-style Markdown links using the named/shortcut form, so the
+  label *is* the anchor (`[#100]`, `` [`ClassRegistry`] ``). Collect definitions in one
+  block at the very bottom of the file, after Consequences.
+- **First mention only** — link the first occurrence of a given reference; later
+  mentions stay plain (a code span for symbols, plain text for issues), so a repeated
+  code symbol doesn't pepper the document with links. This tracks the reference itself,
+  not its position, so it applies across sections too — a repeat in Decision stays
+  plain even if the first mention was back in Context.
+- **Symbols link to the file, not the line** — use a relative repo path (e.g.
+  `skills/writing-adrs/SKILL.md`). No line numbers or commit SHAs — both go stale and
+  are not worth keeping in sync.
+- **Targets by type** — GitHub issue/PR → the full issue/PR URL; web page → its
+  canonical URL; code symbol → the relative repo path to the defining file.
+- **Order definitions alphabetically by label**, ignoring surrounding markup (so
+  `` [`ClassRegistry`] `` sorts under C) — consistent with the repo-wide convention to
+  alphabetise unordered collections.
+
+### Worked example
+
+```markdown
+Following [#100][], we adopted the registry pattern from [`ClassRegistry`][].
+See the [PEP 8 naming guidance][] for the convention.
+
+We decided to implement `ClassRegistry` as proposed in #100, this time scoped
+to a single module.
+
+[#100]: https://github.com/todofixthis/class-registry/issues/100
+[`ClassRegistry`]: src/class_registry/registry.py
+[PEP 8 naming guidance]: https://peps.python.org/pep-0008/#naming-conventions
+```
+
+### Common mistake
+
+**Don't** re-link a reference just because it resurfaces in a later section —
+the first link already spent it, no matter how far away or how many sections
+apart the repeat is:
+
+```markdown
+## Context
+
+Following [#100][], we adopted the registry pattern from [`ClassRegistry`][].
+
+## Decision
+
+<!-- Wrong: #100 was already linked above, in Context -->
+We chose this approach because [#100][] specifically called out the need for
+lazy registration.
+```
+
+The corrected form keeps `#100` plain text in Decision, since Context already
+linked it:
+
+```markdown
+## Decision
+
+We chose this approach because #100 specifically called out the need for
+lazy registration.
+```
+
 ## Review
 
 After drafting an ADR — and before committing it — run two review passes, in order. Both apply to new ADRs and to any ADR you substantially edit.
@@ -107,6 +174,17 @@ Edit the ADR yourself for redundancy and consolidation. The rule: each point liv
 When you cut or relocate a point, remove it cleanly — do not leave a note explaining the edit (e.g. "(see Decision)", "moved from Context", "covered above"). Such pointers re-add the words you just saved and read as edit history the reader does not need.
 
 Target the shortest version that preserves all reasoning and flow — don't strip the Options comparison so far that the accepted option loses its profile. Stop when no sentence can be cut or moved without losing reasoning.
+
+Reference-style links are easy to get subtly wrong: a missing or mismatched definition
+renders as literal text rather than erroring, and over-linking is easy to miss. Verify:
+
+- Every reference label used has a matching definition, and every definition is used —
+  no orphans. A conciseness pass can remove a reference's last usage but leave its
+  definition behind; watch for that specifically.
+- Each target resolves — the issue/PR exists, the path exists, the URL is valid.
+- Scan the whole draft for any reference whose link syntax (`[label][]`) appears more
+  than once — keep the first occurrence linked and convert every later occurrence of
+  the same reference to plain text (or a code span, for symbols).
 
 ## Supersession Workflow
 

@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.1.0 - 2026-07-05
+
+### For phx plugin users
+
+#### Added
+
+- **`phx:writing-adrs`: new reference-linking guidance for ADRs.** Link GitHub
+  issues/PRs, web references, and code symbols on first mention using reference-style
+  Markdown links, with a worked example, documented anti-patterns, and stronger checks
+  for orphaned or duplicate links during the skill's own review pass. The ADR template
+  also gained a one-line addition showing where the link-definition block belongs.
+
+#### Changed
+
+- **`phx:creative-commits`: commit-message drafting now runs in an isolated,
+  lightweight (Haiku) subagent** instead of the calling session, for lower cost and
+  cleaner context — it only falls back to drafting in the current session if subagent
+  dispatch isn't available (e.g. nested too deep). Commit message format and quality
+  are unchanged; wording may vary slightly run-to-run since a fresh model instance now
+  drafts each message.
+
+### For phx-claude-siat contributors
+
+#### Changed
+
+- **Project-local skills relocated from `.claude/skills/` to `.agents/skills/`**, to
+  keep the directory agent-agnostic (matching the repo's existing
+  `AGENTS.md`/`CLAUDE.md`-symlink convention rather than being Claude-specific).
+  `.claude/skills` is kept as a **symlink** (not a directory) pointing at the new
+  location, so normal file reads/edits still work. Tooling that doesn't follow
+  symlinks (`tar`/`zip` archiving, Docker `COPY`, `find -type d`) will see an empty or
+  literal-text result at the old path, and checkouts on Windows without
+  `core.symlinks=true` will get a plain text file instead of a working directory.
+- **`.gitignore` now excludes `.worktrees/`**, so isolated git-worktree workspaces
+  created by the `superpowers:using-git-worktrees` workflow no longer show up in
+  `git status`.
+
 ## 1.0.0 - 2026-07-03
 
 ### For phx plugin users

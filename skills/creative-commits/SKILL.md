@@ -4,6 +4,15 @@ description: Use when creating Git commits — produces distinctive emoji-adorne
 ---
 # Creative Commits
 Craft Git commits with distinctive, metaphorical emoji and concise messages.
+## Execution Model
+Always runs in a small-model subagent, to cut cost and keep Haiku's context clean.
+- **Dispatch first, always** — via Agent tool, `model: "haiku"`, non-fork
+  `subagent_type` (fork ignores `model`). Do this even if the current session is
+  already Haiku; there's no way to detect that from inside a skill.
+- **Brief it fully** — the subagent starts with no context: pass what to commit, why,
+  and any relevant detail, then let it run the whole skill and report back.
+- **Fallback** — if dispatch is unavailable (e.g. max subagent depth), run inline
+  instead of failing.
 ## Rules
 - Title <= 50 chars, emoji at **end** of title line
 - Commit via HEREDOC with three parts separated by blank lines: title, body, co-authored-by
