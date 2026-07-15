@@ -23,7 +23,7 @@ A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) c
 
 **`writing-plans`** is a wrapper around `superpowers:writing-plans` (from the [superpowers marketplace](https://github.com/obra/superpowers-marketplace)) that adds project-specific conventions on top of the base skill. This improves stability when plan execution is split across multiple sessions, since the wrapper's additional conventions are always applied consistently regardless of which session picks up the work.
 
-**`creative-commits`** produces narrative, emoji-adorned commit messages — a deliberate style choice that trades extra token usage (the skill runs `emoji-seed`, stages files, and reasons about human intent) for the entertainment value of reading AI-generated stories in your git log. It may not suit projects where terse, conventional commit messages are expected. The skill also includes a small Python package (`seed.py`) that generates a random emoji seed; it requires [uv](https://docs.astral.sh/uv/) to be installed. The plugin's `SessionStart` hook writes the plugin root path to `~/.claude/plugins/data/phx.root` so the skill can locate the package regardless of where the plugin is cached.
+**`creative-commits`** produces narrative, emoji-adorned commit messages — a deliberate style choice that trades extra token usage (the skill runs `emoji-seed`, stages files, and reasons about human intent) for the entertainment value of reading AI-generated stories in your git log. It may not suit projects where terse, conventional commit messages are expected. The skill also includes a small Python package (`seed.py`) that generates a random emoji seed; it requires [uv](https://docs.astral.sh/uv/) to be installed. The skill locates the package relative to its own directory, so it always runs the copy that ships with the version being served.
 
 ## Installation
 
@@ -69,7 +69,7 @@ this directory:
 claude --plugin-dir ./
 ```
 
-This loads the skills, hooks, and commands directly from the working tree (taking
+This loads the skills and commands directly from the working tree (taking
 precedence over any installed copy for the session), so edits take effect after
 `/reload-plugins` without reinstalling or clearing the cache. Installing from a
 local marketplace instead (`/plugin marketplace add` + `/plugin install`) copies
@@ -79,9 +79,6 @@ picked up — use `--plugin-dir` for active development.
 You can tell which copy a session is using from the **base directory** Claude
 reports whenever a `phx:` skill loads: a path under this repo means the working
 tree is live; a `.../plugins/cache/...` path means the published copy is active.
-(Don't use `~/.claude/plugins/data/phx.root` for this — it locates the
-`creative-commits` seed script and points at the cached copy even under
-`--plugin-dir`.)
 
 > [!NOTE]
 > When working with Claude Code inside a container (e.g. using

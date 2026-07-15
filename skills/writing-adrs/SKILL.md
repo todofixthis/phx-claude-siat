@@ -97,11 +97,14 @@ of context, link it.
   code symbol doesn't pepper the document with links. This tracks the reference itself,
   not its position, so it applies across sections too — a repeat in Decision stays
   plain even if the first mention was back in Context.
-- **Symbols link to the file, not the line** — use a relative repo path (e.g.
-  `skills/writing-adrs/SKILL.md`). No line numbers or commit SHAs — both go stale and
-  are not worth keeping in sync.
+- **Symbols link to the file, not the line** — no line numbers or commit SHAs; both go
+  stale and are not worth keeping in sync.
+- **Paths resolve from the ADR, not the repo root** — the ADR lives in `docs/adr/`, so a
+  path from the repo root needs the `../../` prefix (e.g.
+  `../../skills/writing-adrs/SKILL.md`), and a peer ADR is bare (`001-some-decision.md`).
+  A repo-root-relative path renders as a broken link.
 - **Targets by type** — GitHub issue/PR → the full issue/PR URL; web page → its
-  canonical URL; code symbol → the relative repo path to the defining file.
+  canonical URL; code symbol → the path to the defining file; peer ADR → its filename.
 - **Order definitions alphabetically by label**, ignoring surrounding markup (so
   `` [`ClassRegistry`] `` sorts under C) — consistent with the repo-wide convention to
   alphabetise unordered collections.
@@ -116,7 +119,7 @@ We decided to implement `ClassRegistry` as proposed in #100, this time scoped
 to a single module.
 
 [#100]: https://github.com/todofixthis/class-registry/issues/100
-[`ClassRegistry`]: src/class_registry/registry.py
+[`ClassRegistry`]: ../../src/class_registry/registry.py
 [PEP 8 naming guidance]: https://peps.python.org/pep-0008/#naming-conventions
 ```
 

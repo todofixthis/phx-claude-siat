@@ -2,7 +2,7 @@
 
 > `CLAUDE.md` is a symlink to this file — edit `AGENTS.md` only.
 
-This repo **is** the `phx` Claude Code plugin (skills, hooks, and `.claude-plugin/`
+This repo **is** the `phx` Claude Code plugin (skills and `.claude-plugin/`
 manifests); its skills are invoked as `phx:<skill-name>`.
 
 ## Branches
@@ -33,9 +33,6 @@ first `phx:` skill you load reveal it: the working tree is **not** live if the s
 is unavailable (`Unknown skill`) or loads from a `…/plugins/cache/…` base directory.
 If so, stop and ask whether that's intended before continuing; the user may relaunch
 with `--plugin-dir ./` (then `/reload-plugins` after edits).
-
-Don't judge this from `~/.claude/plugins/data/phx.root` — it locates the
-`creative-commits` seed script and points at the cache even when the tree is live.
 
 ## Testing skills
 
