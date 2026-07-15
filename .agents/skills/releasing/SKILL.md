@@ -42,9 +42,10 @@ flow never checks out, builds from, or commits to `main`; it only reads it as a 
 point, so local `main` sits wherever an earlier release left it. A stale local `main`
 fails silently in both directions: the divergence check passes when it should fail, and
 the notes range widens back over released commits and re-reports them as new. Reading
-`origin/main` also keeps the gate side-effect-free and works in fresh clones and
-worktrees, where a local `main` may not exist. Leave local `main` alone — it is unused,
-not broken.
+`origin/main` also means no gate check ever checks out or updates a local branch, and it
+works in fresh clones and worktrees, where a local `main` may not exist at all and the
+check would error outright rather than pass. Leave local `main` alone — it is unused, not
+broken.
 
 ## Phase detection
 
@@ -113,9 +114,12 @@ gh pr list --base main --head develop --state all --json number,state,mergeCommi
     Merging the PR puts a merge commit on `main` that `develop` does not have, so
     `origin/main` stops being an ancestor of `develop` the moment the PR lands; this
     step is what restores that, and the *next* release's gate hard-fails until it is
-    done. It carries no content — the merge commit's tree already matches `develop` —
-    so expect an empty diff, and treat any conflict as a sign the PR was squashed or
-    rebased rather than merged.
+    done. It carries no content — the release merge commit's tree already matches
+    `develop` — so expect an empty diff either way, but note it fast-forwards (creating
+    no merge commit) if `develop` has not moved since the PR was opened, and only
+    creates one if it has. A conflict means the PR was squashed or rebased rather than
+    merged: resolve in favour of `develop` and commit, since the gate only needs
+    `origin/main` reachable from `develop`.
 
 ## Validation gate
 
