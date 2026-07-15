@@ -4,18 +4,10 @@ description: Use when creating Git commits — produces distinctive emoji-adorne
 ---
 # Creative Commits
 Craft Git commits with distinctive, metaphorical emoji and concise messages.
-## Execution Model
-Always runs in a small-model subagent, to cut cost and keep Haiku's context clean.
-- **Dispatch first, always** — via Agent tool, `model: "haiku"`, non-fork
-  `subagent_type` (fork ignores `model`). Do this even if the current session is
-  already Haiku; there's no way to detect that from inside a skill.
-- **Brief it fully** — the subagent starts with no context: pass what to commit, why,
-  and any relevant detail, then let it run the whole skill and report back.
-- **Fallback** — if dispatch is unavailable (e.g. max subagent depth), run inline
-  instead of failing.
 ## Rules
 - Title <= 50 chars, emoji at **end** of title line
 - Commit via HEREDOC with three parts separated by blank lines: title, body, co-authored-by. Git treats the whole first paragraph as the subject, so a missing blank line after the title swallows the body into it and leaves the trailer unparsed
+- `Co-Authored-By` names the model authoring the commit — your own identity, stated in full. Never copy a model name from this file or from Git history: both name whoever ran last, not you
 - Check project docs for commit invocation; run commands sequentially
 ## Commit Body
 Bullet the logical changes — what shifted and why. No file paths or function names; keep it conceptual.
@@ -29,7 +21,7 @@ Lay the foundation stones 🧱
 - Add shared path aliases so imports stay clean across packages
 - Set strict compiler options to catch errors at build time
 
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude <your model> <noreply@anthropic.com>
 ```
 ## Emoji Selection
 Emphasise the **human story** behind each change — why someone made it, who it serves, what it enables — not just what changed mechanically.
