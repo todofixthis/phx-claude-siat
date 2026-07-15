@@ -1,5 +1,79 @@
 # Changelog
 
+## 1.1.1 - 2026-07-15
+
+### For phx plugin users
+
+#### Fixed
+
+- **`phx:creative-commits` no longer produces commit messages with a run-together
+  subject line.** Messages came out with no blank line between title and body, so git —
+  which treats the first paragraph as the subject — absorbed the bullets into it, and
+  `git log --oneline` showed one 250–350 character subject instead of a ~50 character
+  title. The skill's worked example contradicted the formatting rule it sits under, and
+  agents followed the example. The two now agree, and the rule names the failure mode
+  itself. (The example also dropped the blank line before the `Co-Authored-By` trailer —
+  a layout git cannot parse as a trailer at all — though agents kept that line in
+  practice, so co-author attribution generally survived. Its trailer also named a
+  superseded model, which is cosmetic since agents name their own.)
+
+  **Existing commits are not corrected retroactively.** Anything already written this way
+  keeps its long subject line; list them with `git log --oneline | awk 'length > 72'`.
+  Repairing them rewrites history and changes SHAs, so confine it to branches you have
+  not shared. Tooling tuned to the old output — commit-subject linting, changelog
+  generators, PR titles taken from the first commit — now sees standard formatting.
+
+### For phx-claude-siat contributors
+
+#### Breaking changes
+
+- **The release gate now reads the real `origin/main`, and hard-fails when `develop` is
+  behind it.** The divergence check tested the *local* `main`, a branch the release flow
+  never checks out, so a `main` left behind by an earlier release silently passed. The
+  same stale reference set the release-notes range: this release would have been the
+  first to re-report 1.1.0's work as new. No published release notes were affected, as
+  local `main` only went stale when 1.1.0 landed, after 1.1.0's own notes had been
+  generated. Every check now fetches and reads `origin/main`, so the gate touches no
+  local branch and works in fresh clones and worktrees, where the old check errored
+  outright.
+
+  Merging a release PR leaves a merge commit on `main` that `develop` lacks, so
+  `origin/main` stops being an ancestor of `develop` the moment any release lands. The
+  `releasing` skill now back-merges as its final step, so this resolves itself from here
+  on. But a release cut *before* this version left `develop` behind, and the gate will
+  refuse the next release until you repair it.
+
+  **Migration.** Check whether this affects you:
+
+  ```
+  git fetch origin && git merge-base --is-ancestor origin/main develop && echo "up to date"
+  ```
+
+  If that prints nothing, back-merge by hand:
+
+  ```
+  git switch develop && git merge --no-edit origin/main && git push
+  ```
+
+  It carries no content, so expect an empty diff — a fast-forward if `develop` has not
+  moved since the release, a merge commit if it has. A conflict means the release PR was
+  squashed or rebased rather than merged: resolve in favour of `develop` and commit,
+  since the gate only needs `origin/main` reachable from `develop`. This repo's `develop`
+  was repaired as part of this release, so it needs nothing.
+
+#### Fixed
+
+- **The documented reason for requiring a merge commit had the ancestry backwards**, and
+  so never explained the rule it justified. The gate needs `origin/main` reachable from
+  `develop`: a merge commit keeps `develop`'s tip as a parent of `main`, so the
+  back-merge applies cleanly, whereas a squash or rebase replays the work under new SHAs
+  and the back-merge then conflicts against its own duplicated changes. (Documentation
+  only — the rule and the check are unchanged.)
+- **Maintainer docs pointed at the old project-local skills path.** They now describe
+  project-local skills at `.agents/skills/<name>/`, with `.claude/skills` retained as a
+  symlink for tooling that still expects the old path. (Documentation only; the move
+  itself shipped in 1.1.0.)
+
 ## 1.1.0 - 2026-07-05
 
 ### For phx plugin users

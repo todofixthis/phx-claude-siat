@@ -19,9 +19,11 @@ preceding the code they document, not as trailing comments.
 ## Skill layout
 
 Published skills live in `skills/<name>/` and ship with the plugin and marketplace,
-invoked as `phx:<name>`. Project-local skills live in `.claude/skills/<name>/` — loaded
-in this repo but shipped with neither the plugin nor the marketplace, and invoked
-unprefixed. Releases are cut by the project-local `releasing` skill.
+invoked as `phx:<name>`. Project-local skills live in `.agents/skills/<name>/` (with
+`.claude/skills` kept as a symlink to that directory, for tooling that still expects
+the old path) — loaded in this repo but shipped with neither the plugin nor the
+marketplace, and invoked unprefixed. Releases are cut by the project-local `releasing`
+skill.
 
 ## Dogfooding: is the working tree live?
 

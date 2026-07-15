@@ -15,7 +15,7 @@ Always runs in a small-model subagent, to cut cost and keep Haiku's context clea
   instead of failing.
 ## Rules
 - Title <= 50 chars, emoji at **end** of title line
-- Commit via HEREDOC with three parts separated by blank lines: title, body, co-authored-by
+- Commit via HEREDOC with three parts separated by blank lines: title, body, co-authored-by. Git treats the whole first paragraph as the subject, so a missing blank line after the title swallows the body into it and leaves the trailer unparsed
 - Check project docs for commit invocation; run commands sequentially
 ## Commit Body
 Bullet the logical changes — what shifted and why. No file paths or function names; keep it conceptual.
@@ -25,9 +25,11 @@ Bullet the logical changes — what shifted and why. No file paths or function n
 ### Example
 ```
 Lay the foundation stones 🧱
+
 - Add shared path aliases so imports stay clean across packages
 - Set strict compiler options to catch errors at build time
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
 ```
 ## Emoji Selection
 Emphasise the **human story** behind each change — why someone made it, who it serves, what it enables — not just what changed mechanically.
