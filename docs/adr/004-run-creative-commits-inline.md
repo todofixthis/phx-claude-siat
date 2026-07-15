@@ -148,8 +148,9 @@ measurement that reopens this, not the intuition that produced 1.1.0.
   pick is judgement, and the ban targets recurring scenes and metaphor habits, which a list
   of glyphs cannot see anyway. A fresh instance per commit had no prior scenes to echo; an
   inline session accumulates an explicit transcript of every scene it has built. Binding
-  the final pick to the off-limits list would recover part of the mechanism, and is worth
-  considering separately.
+  the final pick to the off-limits list, done alongside this change, recovers the
+  mechanical half; the judgement half stays exposed, since no list of glyphs can carry a
+  scene.
 - The worked example's `Co-Authored-By` literal is replaced by the rule it was standing in
   for. This is neither a cost of the change nor a defect it repairs, but a standing one this
   is a convenient moment to clear. The literal predates dispatch and was never right: it
@@ -164,12 +165,11 @@ measurement that reopens this, not the intuition that produced 1.1.0.
   003 puts a maintainer's machine, holding every copy at once, as where it is most exposed,
   and that is unaffected. 003's requirement is retained for future dispatching skills;
   `creative-commits` was the only skill bundling runnable assets, so today it binds nothing.
-- `writing-release-notes` carries a small wording debt against the rule above. Its gather
-  step is headed for parallelism and fans out genuinely, so the design conforms; but the
-  sentence beneath bundles a dispatch benefit and a model benefit into a single purpose
-  clause — subagents "run on the cheap `model` to save context and cost" — which now reads
-  as ambiguous about which of the two earns the delegation. Worth separating when that skill
-  is next touched.
+- `writing-release-notes` carried a small wording debt against the rule above. Its gather
+  step is headed for parallelism and fans out genuinely, so the design always conformed; but
+  the sentence beneath bundled a dispatch benefit and a model benefit into a single purpose
+  clause, reading as ambiguous about which of the two earned the delegation. It is separated
+  alongside this change, so the rule lands with its first example already honouring it.
 - [`CHANGELOG.md`][]'s 1.1.0 entry, which documents the dispatch behaviour and its
   per-commit freshness, stays as written. It accurately records what shipped, and per
   [002][] the reversal is described in the entry generated for the release that carries it.

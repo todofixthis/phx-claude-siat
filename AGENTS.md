@@ -34,6 +34,12 @@ is unavailable (`Unknown skill`) or loads from a `…/plugins/cache/…` base di
 If so, stop and ask whether that's intended before continuing; the user may relaunch
 with `--plugin-dir ./` (then `/reload-plugins` after edits).
 
+A live base directory means the plugin is served from the working tree — not that the
+skill text is current. Skills register at session start, so one you edit keeps serving
+its pre-edit text until `/reload-plugins`, in your own invocations as much as in test
+subagents. Reload after editing a skill you intend to invoke, and confirm the loaded
+text carries your edit before following it.
+
 ## Testing skills
 
 When RED/GREEN-testing a skill with subagents (see `superpowers:writing-skills`):
