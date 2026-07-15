@@ -4,18 +4,10 @@ description: Use when creating Git commits — produces distinctive emoji-adorne
 ---
 # Creative Commits
 Craft Git commits with distinctive, metaphorical emoji and concise messages.
-## Execution Model
-Always runs in a small-model subagent, to cut cost and keep Haiku's context clean.
-- **Dispatch first, always** — via Agent tool, `model: "haiku"`, non-fork
-  `subagent_type` (fork ignores `model`). Do this even if the current session is
-  already Haiku; there's no way to detect that from inside a skill.
-- **Brief it fully** — the subagent starts with no context: pass what to commit, why,
-  and any relevant detail, then let it run the whole skill and report back.
-- **Fallback** — if dispatch is unavailable (e.g. max subagent depth), run inline
-  instead of failing.
 ## Rules
 - Title <= 50 chars, emoji at **end** of title line
 - Commit via HEREDOC with three parts separated by blank lines: title, body, co-authored-by. Git treats the whole first paragraph as the subject, so a missing blank line after the title swallows the body into it and leaves the trailer unparsed
+- `Co-Authored-By` names the model authoring the commit — your own identity, stated in full. Never copy a model name from this file or from Git history: both name whoever ran last, not you
 - Check project docs for commit invocation; run commands sequentially
 ## Commit Body
 Bullet the logical changes — what shifted and why. No file paths or function names; keep it conceptual.
@@ -29,16 +21,16 @@ Lay the foundation stones 🧱
 - Add shared path aliases so imports stay clean across packages
 - Set strict compiler options to catch errors at build time
 
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude <your model> <noreply@anthropic.com>
 ```
 ## Emoji Selection
 Emphasise the **human story** behind each change — why someone made it, who it serves, what it enables — not just what changed mechanically.
 ### Process
-1. Run `uv run --project "$(cat $HOME/.claude/plugins/data/phx.root)/skills/creative-commits" emoji-seed` — this prints your **seed emoji** and the off-limits list. The seed is off-limits as a final selection — its role is to constrain the scene, not become the commit emoji
+1. Run `uv run --project <this skill's directory> emoji-seed` — substitute the base directory reported when this skill loaded. This prints your **seed emoji** and the off-limits list — the emoji recent commits already used. The seed is off-limits as a final selection too; its role is to constrain the scene, not become the commit emoji
 2. Stage the files to commit with `git add`, then run `git diff --staged` — grasp the high-level change. Also run `git status` and check for any remaining unstaged or untracked files that belong in this commit (e.g. lock files after `uv add`/`npm install`, generated files, configs updated alongside code). Stage and include them before proceeding — do not leave related files behind.
 3. Ask: what **human intent or impact** does this change represent?
 4. Translate that intent into a **concrete, everyday human scene** that places the seed emoji at its centre — it should be the central image, symbol, or prop. If the first angle feels forced, reframe from a different angle until it clicks; do not abandon the seed
-5. From the scene in step 4, pick the single emoji — other than the seed — with the strongest narrative link to the commit; run it through the three-stage filter:
+5. From the scene in step 4, pick the single emoji — excluding the seed and everything on the off-limits list — with the strongest narrative link to the commit; run it through the three-stage filter:
 | Stage | Verdict | Action |
 |-------|---------|--------|
 | **Too safe** — predictable, cliché, category-label (🐛 for bug, 📝 for docs, ✨ for feature), or literal echo of a word in the message | Drop | Always discard |

@@ -35,8 +35,9 @@ range before continuing.
 
 ### 2. Gather (parallel subagents on the cheap `model`)
 
-Dispatch three subagents, each returning a structured summary, run on the cheap
-`model` to save context and cost:
+Dispatch three subagents, each returning a structured summary. The three gathers are
+independent, which is what earns the fan-out; the cheap `model` only chooses what runs
+it, and keeps the context each gather reads out of this session:
 
 - **What:** read `git diff --stat <range>` to map changed areas, then read full diffs
   per area in bounded chunks — fan out per area if the diffstat is large, so the cheap
