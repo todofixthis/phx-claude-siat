@@ -5,7 +5,7 @@ import sys
 import emoji
 import regex
 
-_EMOJI_RE = regex.compile(r'\p{Emoji_Presentation}|\p{Emoji}\uFE0F')
+_EMOJI_RE = regex.compile(r"\p{Emoji_Presentation}|\p{Emoji}\uFE0F")
 
 
 def main() -> None:

@@ -1,0 +1,147 @@
+name: PR
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+# Least privilege: nothing here writes to the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Which checks does this PR need? Mirrors the `case` glob idiom in
+  # .githooks/pre-commit, which keeps the workflow free of a third-party action.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      adr: ${{ steps.filter.outputs.adr }}
+      manifests: ${{ steps.filter.outputs.manifests }}
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          adr=false
+          manifests=false
+          python=false
+
+          changed=$(git diff --name-only "$(git merge-base "$BASE_SHA" "$HEAD_SHA")" "$HEAD_SHA")
+          echo "Changed files:"
+          echo "$changed" | sed 's/^/  /'
+
+          # Unquoted on purpose, to split the list into one path per iteration —
+          # which also means a path containing whitespace would split into two and
+          # match nothing. No such path exists here, and .githooks/pre-commit has
+          # the same characteristic; if one is ever added, both need a null-
+          # delimited read (git diff -z) rather than word splitting.
+          for path in $changed; do
+              case "$path" in
+                  skills/creative-commits/*)
+                      python=true ;;
+              esac
+              case "$path" in
+                  docs/adr/*|scripts/adr/*)
+                      adr=true ;;
+              esac
+              case "$path" in
+                  .claude-plugin/*|skills/*/SKILL.md|.agents/skills/*/SKILL.md|scripts/ci/*)
+                      manifests=true ;;
+              esac
+              # A change to the workflow itself re-runs everything it gates.
+              case "$path" in
+                  .github/workflows/*)
+                      adr=true; manifests=true; python=true ;;
+              esac
+          done
+
+          echo "adr=$adr" >> "$GITHUB_OUTPUT"
+          echo "manifests=$manifests" >> "$GITHUB_OUTPUT"
+          echo "python=$python" >> "$GITHUB_OUTPUT"
+          echo "Selected checks: adr=$adr manifests=$manifests python=$python"
+
+  # The pre-commit hook regenerates INDEX.md, but hooks are not installed on
+  # clone — this is the backstop for a contributor who never set core.hooksPath.
+  adr:
+    needs: changes
+    if: needs.changes.outputs.adr == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Regenerate the ADR index
+        run: python3 scripts/adr/generate_index.py
+
+      - name: Check the ADR index is up to date
+        run: |
+          if ! git diff --exit-code docs/adr/INDEX.md; then
+              echo "::error::docs/adr/INDEX.md is stale. Run: git config core.hooksPath .githooks"
+              exit 1
+          fi
+
+  manifests:
+    needs: changes
+    if: needs.changes.outputs.manifests == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate the manifests and skill frontmatter
+        run: python3 scripts/ci/validate_manifests.py
+
+  # Mirrors the tooling skills/creative-commits/pyproject.toml already declares.
+  python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: skills/creative-commits
+    steps:
+      - uses: actions/checkout@v7
+
+      # 3.12 is the requires-python floor, so CI catches syntax newer than the
+      # version the package claims to support.
+      # Pinned to an exact release: the v8 line publishes no floating major tag.
+      # Renovate's github-actions manager keeps this current.
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          cache-dependency-glob: skills/creative-commits/uv.lock
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Check uv.lock matches pyproject.toml
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Check formatting
+        run: uv run black --check .
+
+      - name: Test
+        run: uv run pytest
+
+  # The single required status check. Path-filtered jobs report as "skipped"
+  # rather than "success", which would deadlock branch protection if each were
+  # required directly; depending on them here collapses that into one result.
+  gate:
+    needs: [adr, changes, manifests, python]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any check failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
