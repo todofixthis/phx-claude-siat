@@ -103,7 +103,8 @@ gh pr list --base main --head develop --state all --json number,state,mergeCommi
    `mergeCommit.oid` as `X.Y.Z` — **not** `main` HEAD and not "the merge commit" by name,
    either of which a squash/rebase merge or a later commit would get wrong. Push the tag.
 9. Publish the GitHub Release for that tag with the same notes
-   (`gh release create X.Y.Z`). No artefacts, checksums, or signing.
+   (`gh release create X.Y.Z`). No artefacts, checksums, or signed assets — this is
+   about what the Release carries, not the tag, which is signed per **Defaults**.
 10. **Close referenced issues.** Extract every `#NNN` reference from the published
     notes and close each with a comment linking to the release
     (`gh issue close NNN --comment "Implemented in [X.Y.Z](<release URL>)."`). Skip
@@ -121,6 +122,15 @@ gh pr list --base main --head develop --state all --json number,state,mergeCommi
     merged: resolve in favour of `develop` and commit, since the gate only needs
     `origin/main` reachable from `develop`.
 
+    **Verify the back-merge landed** — `git fetch origin`, then
+    `git merge-base --is-ancestor origin/main origin/develop`. Compare those two
+    *remote* refs: the merge has already moved local `develop`, so a check against it
+    passes even when the push was rejected outright and reports a finished release over
+    a remote that is still diverged. The push is the step most likely to be refused
+    (branch protections, rulesets), and this is the last chance to catch it — the cost
+    lands on the *next* release, whose gate hard-fails for reasons that point nowhere
+    near here.
+
 ## Validation gate
 
 Run before Phase 1 mutates anything; **any** failure stops the release. Start with
@@ -128,6 +138,11 @@ Run before Phase 1 mutates anything; **any** failure stops the release. Start wi
 only way it is current:
 
 - on `develop`, with a clean working tree;
+- local `develop` matches `origin/develop`. Fast-forward it if it is merely behind —
+  someone pushed from elsewhere — and stop if the two have diverged. Left unchecked, a
+  stale local `develop` silently narrows the notes range, so the CHANGELOG entry is
+  written missing those commits and the step 6 push then fails *after* the entry is
+  committed;
 - `origin/main` is an ancestor of `develop`
   (`git merge-base --is-ancestor origin/main develop`) **and** `develop` has commits
   beyond `origin/main`. The usual cause of failure is a skipped step 11 back-merge; the
@@ -146,6 +161,11 @@ only way it is current:
 ## Defaults
 
 - **Tag format:** `X.Y.Z`, no `v` prefix — matches the `plugin.json` version string.
+  Annotated, with the message `Release X.Y.Z`:
+  `git tag -m "Release X.Y.Z" X.Y.Z <oid>`. The repo sets `tag.gpgsign`, so this signs
+  the tag automatically and a bare `git tag X.Y.Z <oid>` instead fails with
+  "no tag message" — every release tag is annotated and signed, so don't reach for a
+  lightweight tag to get past that error.
 - **CHANGELOG.md:** repo root; released versions only; each entry generated fresh at
   release; no `[Unreleased]` section (ADR 002).
 
