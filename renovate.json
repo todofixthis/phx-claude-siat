@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "enabledManagers": ["pep621"],
+  "enabledManagers": ["github-actions", "pep621"],
   "extends": ["config:recommended"],
   "lockFileMaintenance": {
     "enabled": true
