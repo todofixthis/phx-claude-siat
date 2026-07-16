@@ -29,8 +29,6 @@ Why is this a problem? Why now? What forces are at play?
 
 ### Option 1: Do nothing
 
-_Establishes the stakes — what happens if we decide nothing._
-
 **Pros:** ...
 **Cons:** ...
 **Risks:** ...
@@ -68,7 +66,7 @@ What follows — positive and negative.
 
 ## Conventions
 
-- **Option 1 is always "Do nothing"** — sets the stakes
+- **Option 1 is always "Do nothing"** — sets the stakes. Describe the status quo and let its Pros/Cons/Risks show what deciding nothing costs; don't explain the option's purpose in the ADR — that's guidance to you, not content.
 - **Option 2 is always the accepted option** — exception: for `Deprecated` ADRs, "Do nothing" (Option 1) is the accepted option, because the investigation concluded that no change was warranted. Rejected alternatives appear as Options 2, 3, etc. Trivial mitigations (e.g. adding a comment) are implementation details of the "do nothing" choice and do not warrant their own option.
 - **Options must be mutually exclusive** — each must represent a fundamentally different approach. Test: could any two options be combined without contradiction? If yes, they aren't mutually exclusive. Two failure modes:
   - _Implementation details as options_ — if two options share the same core approach but differ in implementation, the variant belongs as a sub-heading within the parent option, not a top-level option

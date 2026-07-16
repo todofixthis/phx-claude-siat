@@ -32,8 +32,6 @@ byte-identical across every version released to date.
 
 ### Option 1: Do nothing
 
-_Establishes the stakes — what happens if we decide nothing._
-
 **Pros:** No work, and no change to a mechanism that has not yet visibly broken.
 **Cons:** Skill text and skill code can come from different versions.
 **Risks:** The first change to `seed.py` makes the drift observable, as an old

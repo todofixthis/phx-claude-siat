@@ -41,8 +41,6 @@ about work it can already see, and that briefing grows with the change.
 
 ### Option 1: Do nothing
 
-_Establishes the stakes — what happens if we decide nothing._
-
 Keep dispatching. Two patches are available for the trailer and neither survives
 inspection. Briefing the subagent with the calling model's identity has it sign on
 another's behalf. Emitting two trailers — one per model, which Git permits — reads as an
