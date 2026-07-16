@@ -18,6 +18,10 @@ from pathlib import Path
 MARKETPLACE_FILE = Path(".claude-plugin/marketplace.json")
 PLUGIN_FILE = Path(".claude-plugin/plugin.json")
 SKILL_ROOTS = (Path("skills"), Path(".agents/skills"))
+WORKFLOW_FILE = Path(".github/workflows/pr.yml")
+
+# Files whose presence means a skill ships tooling something has to run.
+TOOLING_MARKERS = ("package.json", "pyproject.toml")
 
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 # The official grammar, from https://semver.org/
@@ -122,12 +126,38 @@ def check_skills(errors: list) -> None:
                 errors.append(f"{path} has no description")
 
 
+def check_skill_tooling(errors: list) -> None:
+    """A skill that ships tooling must be gated by the PR workflow — see docs/adr/005.
+
+    The workflow mirrors each skill's declared tooling by hand, so it would otherwise
+    fail open: tooling nobody wired a job for simply never runs, with no signal. This
+    catches the missing job, not a job that runs the wrong tools.
+    """
+    if not WORKFLOW_FILE.exists():
+        errors.append(f"{WORKFLOW_FILE} is missing")
+        return
+
+    workflow = WORKFLOW_FILE.read_text(encoding="utf-8")
+    for root in SKILL_ROOTS:
+        if not root.is_dir():
+            continue
+
+        for skill_dir in sorted(d for d in root.iterdir() if d.is_dir()):
+            markers = [m for m in TOOLING_MARKERS if (skill_dir / m).exists()]
+            if markers and skill_dir.as_posix() not in workflow:
+                errors.append(
+                    f"{skill_dir} ships tooling ({', '.join(markers)}) but nothing in "
+                    f"{WORKFLOW_FILE} references it; add a check for it (see docs/adr/005)"
+                )
+
+
 def validate() -> int:
     """Validate every manifest invariant. Return 0 on success, 1 on error."""
     errors: list = []
     check_plugin(errors)
     check_marketplace(errors)
     check_skills(errors)
+    check_skill_tooling(errors)
 
     for error in errors:
         print(f"Error: {error}", file=sys.stderr)

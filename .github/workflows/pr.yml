@@ -39,6 +39,11 @@ jobs:
           echo "Changed files:"
           echo "$changed" | sed 's/^/  /'
 
+          # Unquoted on purpose, to split the list into one path per iteration —
+          # which also means a path containing whitespace would split into two and
+          # match nothing. No such path exists here, and .githooks/pre-commit has
+          # the same characteristic; if one is ever added, both need a null-
+          # delimited read (git diff -z) rather than word splitting.
           for path in $changed; do
               case "$path" in
                   skills/creative-commits/*)

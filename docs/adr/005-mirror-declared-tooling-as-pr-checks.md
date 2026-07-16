@@ -53,8 +53,9 @@ job, the only required status check.
 **Cons:** A rule lives both in a skill's config and in the workflow, and the two can fall
 out of step. The path filters are hand-rolled globs needing a new arm per skill.
 
-**Risks:** The mirror fails open. A tool added to a skill's config but not to the workflow
-does not fail the build — it silently never runs, which is the inert block's exact shape.
+**Risks:** The mirror is held by hand, so it drifts from the declaration it mirrors — a tool
+added to a skill the workflow already gates simply never runs. That is the inert block's
+shape, one layer up, and only its crudest form is cheap to detect.
 
 #### Sub-option: derive the checks from the declaration
 
@@ -98,15 +99,17 @@ CI wins over release-time validation because a check is worth most at the moment
 is authored, not at the moment it ships.
 
 The sub-option is refused on cost, not principle: a parser and codegen to serve one package
-is machinery in search of a use. This trades away closure of the fails-open risk, and that
-trade should be revisited at the second package with tooling — sooner if a mirror gap ever
-reaches `main`.
+is machinery in search of a use. Refusing it, however, need not mean accepting the gap it
+was for. The rule this ADR creates would otherwise be one more declaration nothing executes —
+the very pathology named above — so CI asserts the half that is cheap to assert: every
+skill shipping tooling must be referenced by the workflow, or the build fails, naming this
+ADR. Adding a skill with tooling and no check is now an error rather than a silence.
 
-That leaves this decision reproducing, in miniature, the pathology it indicts: the standing
-rule is itself a declaration nothing executes. The mitigation is placement, not mechanism —
-the obligation lives in the `summary` and `tags` above, where an agent meets it while
-deciding whether this ADR is relevant, rather than in a workflow file it would have no
-reason to open.
+That check is deliberately shallow. It cannot tell whether a job runs the *right* tools,
+only that some job claims the skill, so the mirror can still hold the wrong shape — quietly
+running `ruff` for a package that has since added `mypy`. Closing that needs the sub-option,
+and the trade should be revisited at the second package with tooling, sooner if a wrong
+mirror ever reaches `main`.
 
 ## Consequences
 
@@ -121,7 +124,7 @@ reason to open.
   [`validate_manifests.py`][], runnable locally. That skill still describes them, so the two
   can diverge until it is rewired to call the script.
 - Adding a skill with tooling means a new `case` arm in the workflow as well as a new job.
-  Omitting the arm is silent — the job simply never runs.
+  Forgetting entirely fails the build; wiring the arm but gating the wrong tools does not.
 - `validate_manifests.py` duplicates the frontmatter parser from [`generate_index.py`][],
   the same duplication this ADR indicts elsewhere, accepted for the same reason the
   sub-option was: coupling two sibling scripts costs more than the copy.
