@@ -2,7 +2,7 @@
 status: Accepted
 date: 2026-07-16
 tags: [autohooks, branch-protection, ci, github-actions, hooks, linting, pull-requests, python, releases, renovate, skills, testing, tooling, uv]
-summary: Gate every pull request in CI with checks mirroring the tooling each skill declares — a skill that gains tooling gains matching checks in the same change — with branch protection requiring only the aggregate gate job.
+summary: Gate every pull request in CI with checks mirroring the tooling each skill declares — not in local git hooks, and not at release time — so a skill that gains tooling gains matching checks in the same change, with branch protection requiring only the aggregate gate job.
 ---
 
 # 005: Mirror each skill's declared tooling as a pull-request check
@@ -55,17 +55,7 @@ out of step. The path filters are hand-rolled globs needing a new arm per skill.
 
 **Risks:** The mirror is held by hand, so it drifts from the declaration it mirrors — a tool
 added to a skill the workflow already gates simply never runs. That is the inert block's
-shape, one layer up, and only its crudest form is cheap to detect.
-
-#### Sub-option: derive the checks from the declaration
-
-Rather than hand-writing jobs, parse `[tool.autohooks]` and generate them.
-
-**Pros:** One source of truth; cannot fail open.
-
-**Cons:** A parser and a codegen step, plus a schema mapping tools to runners.
-
-**Risks:** Machinery outliving its justification — one package does not exercise it.
+shape, one layer up.
 
 ### Option 3: Make local hooks the enforcement layer
 
@@ -98,18 +88,10 @@ simply finds out sooner, and nothing depends on them doing so.
 CI wins over release-time validation because a check is worth most at the moment the fault
 is authored, not at the moment it ships.
 
-The sub-option is refused on cost, not principle: a parser and codegen to serve one package
-is machinery in search of a use. Refusing it, however, need not mean accepting the gap it
-was for. The rule this ADR creates would otherwise be one more declaration nothing executes —
-the very pathology named above — so CI asserts the half that is cheap to assert: every
-skill shipping tooling must be referenced by the workflow, or the build fails, naming this
-ADR. Adding a skill with tooling and no check is now an error rather than a silence.
-
-That check is deliberately shallow. It cannot tell whether a job runs the *right* tools,
-only that some job claims the skill, so the mirror can still hold the wrong shape — quietly
-running `ruff` for a package that has since added `mypy`. Closing that needs the sub-option,
-and the trade should be revisited at the second package with tooling, sooner if a wrong
-mirror ever reaches `main`.
+This leaves the standing rule as prose, and Option 2's drift risk unanswered — a mirror held
+by hand can fall out of step with what it mirrors, which is the pathology this ADR indicts
+wearing a different hat. Whether and how to detect that drift is a second question, with its
+own options and its own costs; [ADR 006][] settles it.
 
 ## Consequences
 
@@ -121,13 +103,13 @@ mirror ever reaches `main`.
   Until a maintainer configures it on `develop` and `main`, every check below is advisory
   and this decision delivers none of what it claims.
 - Manifest rules the `releasing` skill enforced in prose now execute in
-  [`validate_manifests.py`][], runnable locally. That skill still describes them, so the two
-  can diverge until it is rewired to call the script.
-- Adding a skill with tooling means a new `case` arm in the workflow as well as a new job.
-  Forgetting entirely fails the build; wiring the arm but gating the wrong tools does not.
+  [`validate_manifests.py`][], which that skill calls rather than restates — one rule, one
+  place, checked before the release mutates anything and again on the release PR.
+- Adding a skill with tooling means a new `case` arm in the workflow as well as a new job;
+  ADR 006 decides what happens when someone forgets.
 - `validate_manifests.py` duplicates the frontmatter parser from [`generate_index.py`][],
-  the same duplication this ADR indicts elsewhere, accepted for the same reason the
-  sub-option was: coupling two sibling scripts costs more than the copy.
+  the same duplication this ADR indicts elsewhere, accepted because coupling two sibling
+  scripts costs more than the copy.
 - `[tool.autohooks]` remains declaration-only. It reads as though autohooks runs on commit;
   it does not, and now the workflow is what actually enforces those tools.
 - Actions are tag-pinned rather than SHA-pinned, so a tag could be moved under us;
@@ -135,6 +117,7 @@ mirror ever reaches `main`.
   manager keeps the pins current.
 
 [ADR 001]: 001-co-locate-marketplace-and-plugin.md
+[ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [`AGENTS.md`]: ../../AGENTS.md
 [autohooks]: https://github.com/greenbone/autohooks
 [`generate_index.py`]: ../../scripts/adr/generate_index.py
