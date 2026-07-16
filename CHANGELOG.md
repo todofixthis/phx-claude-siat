@@ -21,7 +21,7 @@
   [ADR 004](docs/adr/004-run-creative-commits-inline.md).
 
 - **The first commit after each upgrade installs the skill's Python dependencies** — a few
-  seconds, once per version, and it needs network access on a cold `uv` cache.
+  seconds, once per version.
 
 - **`phx:writing-adrs` no longer copies the "do nothing" option's purpose note into
   records.** The note is guidance to the drafter, not content for the ADR.
