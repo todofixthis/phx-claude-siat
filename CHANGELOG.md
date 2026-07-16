@@ -1,5 +1,74 @@
 # Changelog
 
+## 1.2.0 - 2026-07-16
+
+### For phx plugin users
+
+#### Breaking changes
+
+- **Commits are now signed with your session's model, not `Claude Haiku 4.5`.** Drafting
+  no longer runs in a Haiku subagent, so the `Co-Authored-By` trailer names the model that
+  wrote the code rather than the one that phrased the message. GitHub's attribution
+  follows the new value automatically, but tooling pinned to the `Claude Haiku 4.5`
+  literal stops matching silently rather than failing. See
+  [ADR 004](docs/adr/004-run-creative-commits-inline.md).
+
+#### Changed
+
+- **`phx:creative-commits` runs in your session instead of dispatching to a Haiku
+  subagent.** Committing is faster, but drafting and the emoji reasoning now cost your
+  session's model rather than Haiku's, and stay in its context. See
+  [ADR 004](docs/adr/004-run-creative-commits-inline.md).
+
+- **The first commit after each upgrade installs the skill's Python dependencies** — a few
+  seconds, once per version, and it needs network access on a cold `uv` cache.
+
+- **`phx:writing-adrs` no longer copies the "do nothing" option's purpose note into
+  records.** The note is guidance to the drafter, not content for the ADR.
+
+#### Fixed
+
+- **Commit emoji no longer repeat ones recent commits used.** `emoji-seed` prints an
+  off-limits list, but only the seed emoji was barred from the final pick and the list
+  itself was ignored. It now binds the pick.
+
+- **`phx:writing-adrs` no longer writes reference links that silently break.** Links
+  resolve from `docs/adr/`: peer ADRs are bare filenames, and repo-root paths need a
+  `../../` prefix.
+
+- **`phx:creative-commits` can no longer pair one version's instructions with another
+  version's script.** The mismatch was silent but never triggered — `seed.py` has been
+  identical in every release — so no action is needed. See
+  [ADR 003](docs/adr/003-locate-skill-assets-relative-to-skill-directory.md).
+
+#### Removed
+
+- **The plugin ships no hooks.** Its only hook wrote the plugin-root pointer that the fix
+  above retires. `~/.claude/plugins/data/phx.root` is no longer written or read; copies
+  left by earlier versions are inert and safe to delete.
+
+### For phx-claude-siat contributors
+
+#### Breaking changes
+
+- **Skills must reference bundled files from the skill's own base directory.** The
+  `phx.root` pointer is gone, so a skill that still locates a script through it runs the
+  wrong version's code and exits 0 — it fails silently. Use
+  `uv run --project <this skill's directory>`, substituted at run time, and let a
+  dispatching skill's subagent load the skill itself, since loading is what reports the
+  base directory. Nothing in-repo is affected; this binds new skills and any you maintain
+  elsewhere. See [ADR 003](docs/adr/003-locate-skill-assets-relative-to-skill-directory.md).
+
+#### Changed
+
+- **Cost alone no longer earns a delegation.** Parallelism or independence must earn it;
+  cost may then only choose which model serves it. See
+  [ADR 004](docs/adr/004-run-creative-commits-inline.md).
+
+- **Working-tree liveness is judged solely from the base directory reported at skill
+  load.** A live base directory means the plugin is served from the working tree — not
+  that the skill text is current, which needs `/reload-plugins` after every edit.
+
 ## 1.1.1 - 2026-07-15
 
 ### For phx plugin users
