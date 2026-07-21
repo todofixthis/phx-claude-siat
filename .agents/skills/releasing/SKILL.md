@@ -150,13 +150,22 @@ only way it is current:
   the maintainer to merge `origin/main` into `develop` first. If `develop` has no new
   commits, there is nothing to release;
 - `gh auth status` succeeds and a GitHub remote exists;
-- `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are valid JSON;
-- the marketplace plugin entry carries **no** `version` (ADR 001 invariant);
+- the manifests and skill frontmatter validate —
+  `python3 scripts/ci/validate_manifests.py`, checking the exit code explicitly. This is
+  the same script CI runs on every PR, so the rules — valid JSON, the ADR 001 no-`version`
+  invariant, skill frontmatter, declared tooling gated — live in one place and cannot
+  drift from what CI enforces (ADR 005). Running it here fails *before* step 4 mutates
+  anything, rather than on the release PR after the CHANGELOG is already committed;
 - the chosen version is greater than `origin/main`'s current version and not already
   tagged. (The number isn't known until step 3, so this check is evaluated there — still
   before the first mutation in step 4.)
 - the `creative-commits` package tests pass —
   `uv run --project skills/creative-commits pytest` — checking the exit code explicitly.
+  CI is not a substitute here: its `python` job is path-filtered, so a release touching
+  nothing under `skills/creative-commits` skips it and `gate` passes the skip. This run is
+  unconditional. Nor does CI check the version bump above — `validate_manifests.py` has no
+  git access and checks semver *shape* only, so an unbumped or already-tagged release PR
+  goes green. Both bullets look redundant with CI and are not.
 
 ## Defaults
 

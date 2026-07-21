@@ -13,6 +13,7 @@ directories with no package to hang an import off.
 import json
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 MARKETPLACE_FILE = Path(".claude-plugin/marketplace.json")
@@ -126,12 +127,34 @@ def check_skills(errors: list) -> None:
                 errors.append(f"{path} has no description")
 
 
-def check_skill_tooling(errors: list) -> None:
-    """A skill that ships tooling must be gated by the PR workflow — see docs/adr/005.
+def declared_tools(skill_dir: Path, errors: list) -> list:
+    """Return the tool names a skill declares in [tool.autohooks], if any.
 
-    The workflow mirrors each skill's declared tooling by hand, so it would otherwise
-    fail open: tooling nobody wired a job for simply never runs, with no signal. This
-    catches the missing job, not a job that runs the wrong tools.
+    `autohooks.plugins.black` names the tool `black`. Skills declaring tooling any
+    other way return nothing — see docs/adr/006.
+    """
+    path = skill_dir / "pyproject.toml"
+    if not path.exists():
+        return []
+
+    try:
+        with path.open("rb") as handle:
+            config = tomllib.load(handle)
+    except tomllib.TOMLDecodeError as exc:
+        errors.append(f"{path} is not valid TOML: {exc}")
+        return []
+
+    plugins = config.get("tool", {}).get("autohooks", {}).get("pre-commit", [])
+    return [plugin.rsplit(".", 1)[-1] for plugin in plugins]
+
+
+def check_skill_tooling(errors: list) -> None:
+    """A skill's declared tooling must be gated by the PR workflow — see docs/adr/006.
+
+    The workflow mirrors each skill's declaration by hand, so it would otherwise fail
+    open. Two halves: a skill nothing gates at all, and a gated skill whose declaration
+    grew a tool its job never runs. The second is a substring match over the whole
+    workflow, so a tool named only in a comment satisfies it.
     """
     if not WORKFLOW_FILE.exists():
         errors.append(f"{WORKFLOW_FILE} is missing")
@@ -144,11 +167,22 @@ def check_skill_tooling(errors: list) -> None:
 
         for skill_dir in sorted(d for d in root.iterdir() if d.is_dir()):
             markers = [m for m in TOOLING_MARKERS if (skill_dir / m).exists()]
-            if markers and skill_dir.as_posix() not in workflow:
+            if not markers:
+                continue
+
+            if skill_dir.as_posix() not in workflow:
                 errors.append(
                     f"{skill_dir} ships tooling ({', '.join(markers)}) but nothing in "
-                    f"{WORKFLOW_FILE} references it; add a check for it (see docs/adr/005)"
+                    f"{WORKFLOW_FILE} references it; add a check for it (see docs/adr/006)"
                 )
+                continue
+
+            for tool in declared_tools(skill_dir, errors):
+                if tool not in workflow:
+                    errors.append(
+                        f"{skill_dir} declares {tool} but {WORKFLOW_FILE} never runs it; "
+                        f"the workflow mirrors the declaration (see docs/adr/006)"
+                    )
 
 
 def validate() -> int:
