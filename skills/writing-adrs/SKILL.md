@@ -61,7 +61,7 @@ What follows — positive and negative.
 - **`status`** — `Accepted`, `Deprecated`, or `Superseded`. Superseded ADRs are excluded from `docs/adr/INDEX.md` but remain in the repo for history.
 - **`date`** — ISO date the ADR was written.
 - **`tags`** — lowercase keywords an agent would use to locate this ADR (e.g. `[database, migrations, schema]`). Think: "what would I search for to find this decision?"
-- **`summary`** — one sentence: what was decided, not why. This appears verbatim in the index. Phrase it so a reader who sees _only_ the frontmatter won't breach the decision: name the binding choice, including the notable rejected alternative where one exists (e.g. "Use mypy, not ty").
+- **`summary`** — one sentence: what was decided, not why. This appears verbatim in the index. Phrase it so a reader who sees _only_ the frontmatter won't breach the decision: name the binding choice, including the notable rejected alternative where one exists (e.g. "Use mypy, not ty"). When the decision is explicitly provisional — an option parked pending future conditions — name the revisit trigger too, so a reader of the index alone knows it is reopenable and when.
 - **`superseded-by`** — integer ADR number; omit unless status is `Superseded`.
 
 ## Conventions
