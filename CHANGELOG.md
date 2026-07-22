@@ -1,5 +1,65 @@
 # Changelog
 
+## 1.3.0 - 2026-07-22
+
+### For phx plugin users
+
+#### Changed
+
+- **`phx:creative-commits` writes grounded commit titles.** Titles now name the concrete
+  change — so the log stays scannable under `git bisect` — instead of leaning on the
+  emoji or metaphor to carry it. No action needed; messages simply read more literally.
+
+- **`phx:writing-release-notes` applies conciseness gates.** Each candidate entry must
+  earn its place — it has to be changelog-worthy and not already explained elsewhere — so
+  generated notes come out shorter. Entries you might have expected can be gated out;
+  breaking changes and their migration steps never are.
+
+- **`phx:writing-adrs` records a revisit trigger on provisional decisions.** When an ADR
+  parks a decision pending future conditions, the skill now names what would reopen it in
+  the summary, so the ADR index alone tells a reader the decision is reopenable and when.
+
+### For phx-claude-siat contributors
+
+#### Breaking changes
+
+- **A skill that declares tooling must wire a matching PR check.** CI now fails if a skill
+  that ships tooling (`package.json`/`pyproject.toml`, or a `[tool.autohooks]` entry) is
+  not mirrored in `.github/workflows/pr.yml`: the check looks for the skill's directory
+  path and each declared tool name as plain substrings of the workflow. In the same change
+  that adds the tooling, add a job to `pr.yml` that runs it, and make sure the skill's path
+  and tool names appear there. See
+  [ADR 005](docs/adr/005-mirror-declared-tooling-as-pr-checks.md) and
+  [ADR 006](docs/adr/006-validate-the-declaration-to-catch-mirror-drift.md).
+
+- **Branch protection must require only the `gate` check.** PR jobs are path-filtered and
+  report `skipped` (not `success`) when their paths are untouched, so a required individual
+  job would leave every PR that skips it hanging on a check that never runs. Point branch
+  protection at the aggregate `gate` job alone; contributors otherwise just see a PR stuck
+  on an unresolved check. See
+  [ADR 005](docs/adr/005-mirror-declared-tooling-as-pr-checks.md).
+
+#### Added
+
+- **PR CI workflow** (`.github/workflows/pr.yml`): path-filtered jobs for the ADR index,
+  plugin/skill manifests, and the `creative-commits` Python package, converging on a single
+  required `gate` job.
+
+- **Manifest validation** (`scripts/ci/validate_manifests.py`): checks plugin and
+  marketplace manifests and skill frontmatter, and enforces the tooling/PR-check mirror
+  above. Runs on every PR and again in the `releasing` skill's validation gate.
+
+#### Changed
+
+- **CI actions pinned to commit digests.** Every GitHub Action is pinned to an immutable
+  commit SHA, with Renovate keeping the pins current
+  (`helpers:pinGitHubActionDigests`).
+
+- **The `releasing` skill is hardened.** New gates make a release fail sooner and for
+  clearer reasons: it resolves the real `origin/main` rather than a stale local branch,
+  requires local `develop` to match `origin/develop`, and verifies the back-merge reached
+  the remote before calling the release done.
+
 ## 1.2.0 - 2026-07-16
 
 ### For phx plugin users
