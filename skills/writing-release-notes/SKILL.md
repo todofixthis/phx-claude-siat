@@ -76,6 +76,24 @@ Write to the template below: high-level, grouped logically within each audience.
 security-sensitive or embargoed material (CVE details, undisclosed advisories) for
 human decision rather than publishing it unreviewed.
 
+**Two gates decide what reaches the reader.** Notes are read by humans under time
+pressure, and length is what gets them skimmed or skipped. Put every candidate entry
+through both, in order:
+
+1. **Does this belong in a changelog at all?** The reader wants what changed for them
+   and what to do about it. Refactors nobody outside can observe, dead code removed,
+   rewordings that changed no behaviour, and caveats the runtime environment already
+   precludes all fail this gate — drop them.
+2. **Is it already explained in full elsewhere?** Where a decision record, issue, or
+   doc sets out the reasoning, give the change in a sentence or two and link there
+   instead of restating the argument.
+
+These gates decide *publication*, not investigation: step 3's "err toward inclusion"
+still governs the sense-check, so nothing is cut before it is understood. Neither gate
+can drop a breaking change or trim its migration steps. And neither licenses cutting an
+entry for being awkward to explain — gate 1 turns on the reader's interest, not the
+writer's convenience.
+
 **Breaking changes — flag, don't dismiss.** "Breaking" is broader than runtime API
 breaks, and applies independently within *each* audience. The test: **if the consumer
 or contributor does nothing differently, does anything — not just compile-time or
@@ -109,7 +127,10 @@ wrong audience gets flagged. Address the feedback from both reviewers before con
 
 ### 6. Quality pass
 
-Remove repetition, regroup related items, and tighten without losing clarity. Then,
+Remove repetition, regroup related items, and tighten without losing clarity. **Re-apply
+step 4's two gates over the reviewed draft** — surrogate reviewers optimise for
+completeness and reliably ask for more, so the draft reaches this step longer than it
+left step 4, and some of what they added earns its place while some does not. Then,
 **only if the project uses NZ English** (per its stated convention or agent
 instructions), run `phx:nz-english`. Other locales — including US English — get no
 spelling pass.

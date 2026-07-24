@@ -103,7 +103,8 @@ gh pr list --base main --head develop --state all --json number,state,mergeCommi
    `mergeCommit.oid` as `X.Y.Z` — **not** `main` HEAD and not "the merge commit" by name,
    either of which a squash/rebase merge or a later commit would get wrong. Push the tag.
 9. Publish the GitHub Release for that tag with the same notes
-   (`gh release create X.Y.Z`). No artefacts, checksums, or signing.
+   (`gh release create X.Y.Z`). No artefacts, checksums, or signed assets — this is
+   about what the Release carries, not the tag, which is signed per **Defaults**.
 10. **Close referenced issues.** Extract every `#NNN` reference from the published
     notes and close each with a comment linking to the release
     (`gh issue close NNN --comment "Implemented in [X.Y.Z](<release URL>)."`). Skip
@@ -121,6 +122,15 @@ gh pr list --base main --head develop --state all --json number,state,mergeCommi
     merged: resolve in favour of `develop` and commit, since the gate only needs
     `origin/main` reachable from `develop`.
 
+    **Verify the back-merge landed** — `git fetch origin`, then
+    `git merge-base --is-ancestor origin/main origin/develop`. Compare those two
+    *remote* refs: the merge has already moved local `develop`, so a check against it
+    passes even when the push was rejected outright and reports a finished release over
+    a remote that is still diverged. The push is the step most likely to be refused
+    (branch protections, rulesets), and this is the last chance to catch it — the cost
+    lands on the *next* release, whose gate hard-fails for reasons that point nowhere
+    near here.
+
 ## Validation gate
 
 Run before Phase 1 mutates anything; **any** failure stops the release. Start with
@@ -128,6 +138,11 @@ Run before Phase 1 mutates anything; **any** failure stops the release. Start wi
 only way it is current:
 
 - on `develop`, with a clean working tree;
+- local `develop` matches `origin/develop`. Fast-forward it if it is merely behind —
+  someone pushed from elsewhere — and stop if the two have diverged. Left unchecked, a
+  stale local `develop` silently narrows the notes range, so the CHANGELOG entry is
+  written missing those commits and the step 6 push then fails *after* the entry is
+  committed;
 - `origin/main` is an ancestor of `develop`
   (`git merge-base --is-ancestor origin/main develop`) **and** `develop` has commits
   beyond `origin/main`. The usual cause of failure is a skipped step 11 back-merge; the
@@ -135,17 +150,31 @@ only way it is current:
   the maintainer to merge `origin/main` into `develop` first. If `develop` has no new
   commits, there is nothing to release;
 - `gh auth status` succeeds and a GitHub remote exists;
-- `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are valid JSON;
-- the marketplace plugin entry carries **no** `version` (ADR 001 invariant);
+- the manifests and skill frontmatter validate —
+  `python3 scripts/ci/validate_manifests.py`, checking the exit code explicitly. This is
+  the same script CI runs on every PR, so the rules — valid JSON, the ADR 001 no-`version`
+  invariant, skill frontmatter, declared tooling gated — live in one place and cannot
+  drift from what CI enforces (ADR 005). Running it here fails *before* step 4 mutates
+  anything, rather than on the release PR after the CHANGELOG is already committed;
 - the chosen version is greater than `origin/main`'s current version and not already
   tagged. (The number isn't known until step 3, so this check is evaluated there — still
   before the first mutation in step 4.)
 - the `creative-commits` package tests pass —
   `uv run --project skills/creative-commits pytest` — checking the exit code explicitly.
+  CI is not a substitute here: its `python` job is path-filtered, so a release touching
+  nothing under `skills/creative-commits` skips it and `gate` passes the skip. This run is
+  unconditional. Nor does CI check the version bump above — `validate_manifests.py` has no
+  git access and checks semver *shape* only, so an unbumped or already-tagged release PR
+  goes green. Both bullets look redundant with CI and are not.
 
 ## Defaults
 
 - **Tag format:** `X.Y.Z`, no `v` prefix — matches the `plugin.json` version string.
+  Annotated, with the message `Release X.Y.Z`:
+  `git tag -m "Release X.Y.Z" X.Y.Z <oid>`. The repo sets `tag.gpgsign`, so this signs
+  the tag automatically and a bare `git tag X.Y.Z <oid>` instead fails with
+  "no tag message" — every release tag is annotated and signed, so don't reach for a
+  lightweight tag to get past that error.
 - **CHANGELOG.md:** repo root; released versions only; each entry generated fresh at
   release; no `[Unreleased]` section (ADR 002).
 
