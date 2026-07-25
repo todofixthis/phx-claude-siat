@@ -5,10 +5,11 @@ description: Use when cutting a release of this plugin — taking the changes on
 
 # Releasing
 
-Drive the gitflow release of the phx plugin: open the `develop`→`main` PR (Phase 1),
-then — after a human merges it — tag the merge commit and publish the GitHub Release
-(Phase 2). The release notes come from `phx:writing-release-notes`; this skill owns the
-version number and every piece of version metadata that skill leaves to its caller.
+Drive Phase 1 of the gitflow release: open the `develop`→`main` PR. When a human merges
+it, the `release` GitHub Actions workflow finishes the release — tag, GitHub Release,
+back-merge — as the App. The release notes come from `phx:writing-release-notes`; this
+skill owns the version number and every piece of version metadata that skill leaves to
+its caller.
 
 **Announce at start:** "I'm using the releasing skill to cut the release."
 
@@ -47,22 +48,6 @@ works in fresh clones and worktrees, where a local `main` may not exist at all a
 check would error outright rather than pass. Leave local `main` alone — it is unused, not
 broken.
 
-## Phase detection
-
-Invoked once per phase; decide which by querying the release PR:
-
-```bash
-gh pr list --base main --head develop --state all --json number,state,mergeCommit
-```
-
-- **No open or merged PR** (none at all, or only a closed-unmerged one from an aborted
-  run) → Phase 1 (prepare).
-- **An open PR** → report it and stop; wait for the maintainer to merge.
-- **A merged PR whose version is not yet tagged** → Phase 2 (publish). Prior releases
-  leave merged **and** tagged PRs behind, so after `git fetch --tags` pick the most
-  recent merged `develop`→`main` PR whose version has no matching tag — that one is this
-  release; if every merged PR is already tagged, there is nothing to publish.
-
 ## Phase 1 — prepare (on `develop`)
 
 1. **Run the validation gate (below). Stop on any failure** — before anything mutates.
@@ -91,45 +76,34 @@ gh pr list --base main --head develop --state all --json number,state,mergeCommi
    (`gh pr create --base main --head develop`). If an open `develop`→`main` PR already
    exists (a prior aborted run), update its body rather than creating a duplicate. Tell
    the maintainer to **merge via a merge commit, not squash or rebase** — a merge commit
-   keeps `develop`'s tip as a parent of `main`, so the two branches share history and the
-   step 11 back-merge carries no content. A squash or rebase merge replays the work onto
-   `main` under new SHAs, so `develop`'s commits never become ancestors of `main` and the
-   back-merge conflicts against its own duplicated changes. Report the PR URL and stop —
-   the maintainer reviews and merges.
+   keeps `develop`'s tip a parent of `main`, so the CI back-merge carries no content; a
+   squash or rebase replays the work under new SHAs and the back-merge then conflicts.
+   Report the PR URL and stop. Merging the PR triggers the `release` workflow; tell the
+   maintainer to confirm it goes green, since a failed run leaves the release half-done.
 
-## Phase 2 — publish (after the PR is merged to `main`)
+## After merge — CI publishes
 
-8. Read the merged PR's merge commit (`gh pr view <N> --json mergeCommit`) and tag
-   `mergeCommit.oid` as `X.Y.Z` — **not** `main` HEAD and not "the merge commit" by name,
-   either of which a squash/rebase merge or a later commit would get wrong. Push the tag.
-9. Publish the GitHub Release for that tag with the same notes
-   (`gh release create X.Y.Z`). No artefacts, checksums, or signed assets — this is
-   about what the Release carries, not the tag, which is signed per **Defaults**.
-10. **Close referenced issues.** Extract every `#NNN` reference from the published
-    notes and close each with a comment linking to the release
-    (`gh issue close NNN --comment "Implemented in [X.Y.Z](<release URL>)."`). Skip
-    references that don't belong to this repo (e.g. a dependency-bump entry citing an
-    upstream project's issue number).
-11. **Back-merge `main` into `develop`** — the release is not finished without it:
-    `git fetch origin && git merge --no-edit origin/main && git push` from `develop`.
-    Merging the PR puts a merge commit on `main` that `develop` does not have, so
-    `origin/main` stops being an ancestor of `develop` the moment the PR lands; this
-    step is what restores that, and the *next* release's gate hard-fails until it is
-    done. It carries no content — the release merge commit's tree already matches
-    `develop` — so expect an empty diff either way, but note it fast-forwards (creating
-    no merge commit) if `develop` has not moved since the PR was opened, and only
-    creates one if it has. A conflict means the PR was squashed or rebased rather than
-    merged: resolve in favour of `develop` and commit, since the gate only needs
-    `origin/main` reachable from `develop`.
+Merging the release PR triggers `.github/workflows/release.yml`, which as the App tags
+the merge commit `X.Y.Z` (unsigned annotated), publishes the GitHub Release from the
+CHANGELOG top entry, and back-merges `main`→`develop`. The skill's work ends at Phase 1;
+confirm the workflow succeeded.
 
-    **Verify the back-merge landed** — `git fetch origin`, then
-    `git merge-base --is-ancestor origin/main origin/develop`. Compare those two
-    *remote* refs: the merge has already moved local `develop`, so a check against it
-    passes even when the push was rejected outright and reports a finished release over
-    a remote that is still diverged. The push is the step most likely to be refused
-    (branch protections, rulesets), and this is the last chance to catch it — the cost
-    lands on the *next* release, whose gate hard-fails for reasons that point nowhere
-    near here.
+### Manual recovery (only if the workflow fails)
+
+The workflow is idempotent; each step is independently checkable. Do only the missing
+steps, then re-run the workflow or finish by hand from `develop`:
+
+- **Tag missing?** `git tag -a X.Y.Z -m "Release X.Y.Z" <merge-commit-oid>` then
+  `git push origin X.Y.Z`. Read the merge commit from
+  `gh pr view <N> --json mergeCommit`. A hand-cut tag is signed (local `tag.gpgsign`);
+  a mix of signed and unsigned release tags is fine, since signing is unenforced.
+- **Release missing?** `gh release create X.Y.Z --notes-file <notes>`, notes from
+  `python3 scripts/ci/release_notes.py --out notes.md`.
+- **Back-merge missing?** From `develop`: `git fetch origin && git merge --no-edit origin/main && git push`.
+  A direct push to `develop` needs the App or a temporary bypass. Verify on the remote:
+  `git fetch origin && git merge-base --is-ancestor origin/main origin/develop`.
+- **Issues to close?** Rare here (notes cite ADRs). Close any `#NNN` the notes reference
+  by hand with a link to the Release.
 
 ## Validation gate
 
@@ -145,7 +119,7 @@ only way it is current:
   committed;
 - `origin/main` is an ancestor of `develop`
   (`git merge-base --is-ancestor origin/main develop`) **and** `develop` has commits
-  beyond `origin/main`. The usual cause of failure is a skipped step 11 back-merge; the
+  beyond `origin/main`. The usual cause of failure is a failed CI back-merge; the
   other is a hotfix committed to `main` that never came back. Either way, stop and tell
   the maintainer to merge `origin/main` into `develop` first. If `develop` has no new
   commits, there is nothing to release;
@@ -169,12 +143,11 @@ only way it is current:
 
 ## Defaults
 
-- **Tag format:** `X.Y.Z`, no `v` prefix — matches the `plugin.json` version string.
-  Annotated, with the message `Release X.Y.Z`:
-  `git tag -m "Release X.Y.Z" X.Y.Z <oid>`. The repo sets `tag.gpgsign`, so this signs
-  the tag automatically and a bare `git tag X.Y.Z <oid>` instead fails with
-  "no tag message" — every release tag is annotated and signed, so don't reach for a
-  lightweight tag to get past that error.
+- **Tag format:** `X.Y.Z`, no `v` prefix — matches the `plugin.json` version string. CI
+  creates an **unsigned** annotated tag (`git tag -a X.Y.Z -m "Release X.Y.Z"`); a
+  `refs/tags/*` ruleset makes release tags immutable (`non_fast_forward` + `deletion`)
+  rather than signed. A hand-cut recovery tag is signed by local `tag.gpgsign`, which is
+  harmless since signing is unenforced.
 - **CHANGELOG.md:** repo root; released versions only; each entry generated fresh at
   release; no `[Unreleased]` section (ADR 002).
 
@@ -183,9 +156,8 @@ only way it is current:
 - **No new commits on `develop`:** nothing to release; stop.
 - **`origin/main` diverged from `develop`:** stop; the maintainer merges `origin/main`
   into `develop` first (keeps `base = origin/main` an ancestor of `develop` for the notes
-  range). Usually a skipped step 11, not a hotfix.
+  range). Usually a failed CI back-merge, not a hotfix.
 - **Chosen version already tagged / not greater than `origin/main`'s:** stop with an
   error.
 - **Open `develop`→`main` PR already exists:** reuse it (update the body), don't duplicate.
 - **Not on `develop` / dirty tree / `gh` unavailable:** stop before any commit.
-- **Phase 2 invoked before the PR has merged:** phase detection reports the open PR and waits.

@@ -39,6 +39,6 @@ back-merge, and there is no human bypass left to push it manually.
 
 ## Recovery
 
-For a half-finished release, work through the `releasing` skill's edge cases —
-covering a stuck back-merge, an already-open `develop`→`main` PR, and a validation
-gate failure — rather than improvising a fix.
+For a half-finished release, work through the `releasing` skill's Manual recovery
+section — covering a stuck back-merge, an already-open `develop`→`main` PR, and a
+validation gate failure — rather than improvising a fix.
