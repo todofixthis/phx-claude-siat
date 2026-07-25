@@ -98,6 +98,9 @@ jobs:
       - name: Validate the manifests and skill frontmatter
         run: python3 scripts/ci/validate_manifests.py
 
+      - name: Unit-test the release-notes helper
+        run: python3 -m unittest discover -s scripts/ci -t scripts/ci -p 'test_*.py'
+
   # Mirrors the tooling skills/creative-commits/pyproject.toml already declares.
   python:
     needs: changes
