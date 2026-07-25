@@ -54,6 +54,13 @@ When RED/GREEN-testing a skill with subagents (see `superpowers:writing-skills`)
   before trusting GREEN, and that the fixture doesn't leak the answer (e.g. a past
   release whose PR body already holds the notes you're asking for).
 
+## Design specs and plans
+
+`docs/superpowers/specs/` and `docs/superpowers/plans/` hold dated design docs and their
+implementation plans. Each drives one implementation, then loses its value — transient,
+unlike an ADR's durable guidance. Don't read a shipped spec or plan as current truth;
+use the code, ADRs, and CHANGELOG.
+
 ## Architecture Decision Records
 
 Before proposing architectural or tooling changes, read `docs/adr/INDEX.md` and don't
