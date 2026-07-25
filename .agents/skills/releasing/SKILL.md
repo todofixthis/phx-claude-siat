@@ -97,7 +97,7 @@ steps, then re-run the workflow or finish by hand from `develop`:
   `git push origin X.Y.Z`. Read the merge commit from
   `gh pr view <N> --json mergeCommit`. A hand-cut tag is signed (local `tag.gpgsign`);
   a mix of signed and unsigned release tags is fine, since signing is unenforced.
-- **Release missing?** `gh release create X.Y.Z --notes-file <notes>`, notes from
+- **Release missing?** `gh release create X.Y.Z --notes-file notes.md`, notes from
   `python3 scripts/ci/release_notes.py --out notes.md`.
 - **Back-merge missing?** From `develop`: `git fetch origin && git merge --no-edit origin/main && git push`.
   A direct push to `develop` needs the App or a temporary bypass. Verify on the remote:

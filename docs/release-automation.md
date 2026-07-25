@@ -37,6 +37,9 @@ release has completed all the way through the workflow. Only then remove the byp
 Closing it first strands the next release's Phase 2: the App can't push the
 back-merge, and there is no human bypass left to push it manually.
 
+The workflow first fires on the merge that lands it on `main` — the 1.4.0 release —
+so `APP_ID` and `APP_PRIVATE_KEY` must be set before that release merges.
+
 ## Recovery
 
 For a half-finished release, work through the `releasing` skill's Manual recovery

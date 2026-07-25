@@ -64,11 +64,10 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+    print(version)
     if args.out:
         args.out.write_text(notes, encoding="utf-8")
-        print(version)
     else:
-        print(version)
         sys.stdout.write(notes)
     return 0
 

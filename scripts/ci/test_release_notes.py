@@ -56,6 +56,21 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(code, 1)
 
+    def test_matching_version_writes_notes_and_returns_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            changelog = Path(directory) / "CHANGELOG.md"
+            changelog.write_text(CHANGELOG)
+            plugin = Path(directory) / "plugin.json"
+            plugin.write_text('{"version": "1.3.0"}')
+            out = Path(directory) / "notes.md"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    ["--changelog", str(changelog), "--plugin", str(plugin),
+                     "--out", str(out)]
+                )
+            self.assertEqual(code, 0)
+            self.assertIn("Something changed.", out.read_text(encoding="utf-8"))
+
     def test_plugin_version_reads_the_field(self):
         with tempfile.TemporaryDirectory() as directory:
             plugin = Path(directory) / "plugin.json"
