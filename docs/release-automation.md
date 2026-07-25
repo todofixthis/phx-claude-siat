@@ -5,10 +5,9 @@
 Cutting a release is split across two actors. The `releasing` skill (unprefixed,
 project-local) drives Phase 1 only — it prepares `develop`, opens the `develop`→`main`
 PR, and stops for a human to merge it. The `push: [main]` workflow then finishes
-Phase 2 — tagging the merge commit, publishing the GitHub Release, closing referenced
-issues, and back-merging `main` into `develop` — running as a GitHub App rather than
-the human who merged, so the back-merge push isn't blocked by the same branch
-protection it must satisfy.
+Phase 2 — tagging the merge commit, publishing the GitHub Release, and back-merging
+`main` into `develop` — running as a GitHub App rather than the human who merged, so
+the back-merge push isn't blocked by the same branch protection it must satisfy.
 
 The workflow implementing this setup is
 [`.github/workflows/release.yml`](../.github/workflows/release.yml); keep the two in
