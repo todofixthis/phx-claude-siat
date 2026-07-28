@@ -54,7 +54,7 @@ jobs:
                       adr=true ;;
               esac
               case "$path" in
-                  .claude-plugin/*|skills/*/SKILL.md|.agents/skills/*/SKILL.md|scripts/ci/*)
+                  CHANGELOG.md|.claude-plugin/*|skills/*/SKILL.md|.agents/skills/*/SKILL.md|scripts/ci/*)
                       manifests=true ;;
               esac
               # A change to the workflow itself re-runs everything it gates.
@@ -100,6 +100,13 @@ jobs:
 
       - name: Unit-test the release-notes helper
         run: python3 -m unittest discover -s scripts/ci -t scripts/ci -p 'test_*.py'
+
+      # Against the real CHANGELOG, not fixtures: this is what makes an
+      # unreleasable version or a CHANGELOG/plugin.json mismatch fail on the pull
+      # request. Without it the release workflow is the first to notice, after the
+      # merge to main, where the fix needs a second PR to main.
+      - name: Check the release notes resolve
+        run: python3 scripts/ci/release_notes.py --out /dev/null
 
   # Mirrors the tooling skills/creative-commits/pyproject.toml already declares.
   python:
