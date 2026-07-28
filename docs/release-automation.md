@@ -1,25 +1,18 @@
-# Release automation
+# Release automation — one-time setup
 
-## Overview
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) finishes each
+release — tag, GitHub Release, back-merge to `develop` — as a GitHub App, so the
+back-merge push isn't blocked by the branch protection it must satisfy. That needs the
+App, its secrets, and the rulesets below in place first. Keep this file and the
+workflow in sync when either changes.
 
-Cutting a release is split across two actors. The `releasing` skill (unprefixed,
-project-local) drives Phase 1 only — it prepares `develop`, opens the `develop`→`main`
-PR, and stops for a human to merge it. The `push: [main]` workflow then finishes
-Phase 2 — tagging the merge commit, publishing the GitHub Release, and back-merging
-`main` into `develop` — running as a GitHub App rather than the human who merged, so
-the back-merge push isn't blocked by the same branch protection it must satisfy.
-
-The workflow implementing this setup is
-[`.github/workflows/release.yml`](../.github/workflows/release.yml); keep the two in
-sync when either changes.
-
-## One-time setup
+## Setup
 
 1. Create a GitHub App with the repository permission **Contents: write** only, and no
    others. Install it on `todofixthis/phx-claude-siat`. Note the App ID and generate a
    private key.
-2. Add repository Actions secrets `APP_ID` and `APP_PRIVATE_KEY` (the App ID and the
-   private key from step 1).
+2. Add repository Actions secrets `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` from
+   step 1.
 3. Split the **Trunk** ruleset into two:
    - **Trunk–develop** — target `~DEFAULT_BRANCH`; add the App as a bypass actor, mode
      `always`.
@@ -30,18 +23,12 @@ sync when either changes.
 4. Add a **tag ruleset** on `refs/tags/*`: `non_fast_forward` and `deletion`. No
    `required_signatures` — release tags are unsigned.
 
-## Rollout order (important)
+## Rollout order
 
-Keep the temporary Admin bypass on `develop` until the App is installed and one
-release has completed all the way through the workflow. Only then remove the bypass.
-Closing it first strands the next release's Phase 2: the App can't push the
-back-merge, and there is no human bypass left to push it manually.
+The workflow first fires on the merge that lands it on `main`, so both secrets must
+exist before that release merges.
 
-The workflow first fires on the merge that lands it on `main` — the 1.4.0 release —
-so `APP_ID` and `APP_PRIVATE_KEY` must be set before that release merges.
-
-## Recovery
-
-For a half-finished release, work through the `releasing` skill's Manual recovery
-section — covering a stuck back-merge, an already-open `develop`→`main` PR, and a
-validation gate failure — rather than improvising a fix.
+Keep the temporary Admin bypass on `develop` until the App is installed and one release
+has completed all the way through the workflow. Removing it earlier strands the next
+release: the App can't push the back-merge, and no human bypass is left to push it by
+hand.

@@ -78,20 +78,32 @@ broken.
    the maintainer to **merge via a merge commit, not squash or rebase** — a merge commit
    keeps `develop`'s tip a parent of `main`, so the CI back-merge carries no content; a
    squash or rebase replays the work under new SHAs and the back-merge then conflicts.
-   Report the PR URL and stop. Merging the PR triggers the `release` workflow; tell the
-   maintainer to confirm it goes green, since a failed run leaves the release half-done.
+   Report the PR URL and stop.
 
 ## After merge — CI publishes
 
 Merging the release PR triggers `.github/workflows/release.yml`, which as the App tags
 the merge commit `X.Y.Z` (unsigned annotated), publishes the GitHub Release from the
 CHANGELOG top entry, and back-merges `main`→`develop`. The skill's work ends at Phase 1;
-confirm the workflow succeeded.
+read the run's outcome yourself rather than asking the maintainer —
+`gh run list --workflow=Release --branch main --limit 1`, and `gh run watch <id>` while
+it is still going.
 
-### Manual recovery (only if the workflow fails)
+### If the run fails
 
-The workflow is idempotent; each step is independently checkable. Do only the missing
-steps, then re-run the workflow or finish by hand from `develop`:
+**Triage before touching anything.** Read the failing step —
+`gh run view <id> --log-failed` — and classify it:
+
+- **Transient** (network, a GitHub API blip, a token that failed to mint): re-run with
+  `gh run rerun <id> --failed`. Every step self-guards, so the re-run redoes only what
+  is missing.
+- **Anything else** — a version mismatch, a back-merge conflict, a rejected push —
+  report the failing step to the maintainer and stop. The pushes below need the App or a
+  `develop` bypass you do not have, so doing them by hand mostly fails again, more
+  confusingly.
+
+Once the cause is fixed, re-running the workflow is the way back. The by-hand path is
+for when it cannot run at all:
 
 - **Tag missing?** `git tag -a X.Y.Z -m "Release X.Y.Z" <merge-commit-oid>` then
   `git push origin X.Y.Z`. Read the merge commit from
@@ -100,7 +112,7 @@ steps, then re-run the workflow or finish by hand from `develop`:
 - **Release missing?** `gh release create X.Y.Z --notes-file notes.md`, notes from
   `python3 scripts/ci/release_notes.py --out notes.md`.
 - **Back-merge missing?** From `develop`: `git fetch origin && git merge --no-edit origin/main && git push`.
-  A direct push to `develop` needs the App or a temporary bypass. Verify on the remote:
+  Verify on the remote:
   `git fetch origin && git merge-base --is-ancestor origin/main origin/develop`.
 - **Issues to close?** Rare here (notes cite ADRs). Close any `#NNN` the notes reference
   by hand with a link to the Release.
