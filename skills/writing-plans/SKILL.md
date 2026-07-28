@@ -35,6 +35,14 @@ The worktree exists by now (from Step 1 above), so populate a `**Worktree:**` fi
 
 Add this to every task in the self-review checklist too: "Does the plan header include a `**Worktree:**` field naming the existing worktree and branch?"
 
+## Additional Convention: The Plan Is Branch-Scoped
+
+The plan file is scaffolding for one branch, not a deliverable. Commit it so a fresh session can resume mid-branch, then **delete it on the same branch before the PR merges** — nothing that ships should reference it. Once the work lands, the code carries the *what* and an ADR the *why*; a retained plan only supplies a third, stale answer.
+
+Make the deletion the final task's last step, so it cannot be forgotten between execution and the PR. Anything in the plan still worth keeping earns an ADR, not a reprieve.
+
+Add to the self-review checklist: "Does the final task delete the plan file?"
+
 ## Additional Convention: Commit Step
 
 Every implementation commit step must remind the agent to check for stragglers before committing:

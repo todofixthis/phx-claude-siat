@@ -31,8 +31,11 @@ Claude loads the **published, cached** plugin unless launched with `--plugin-dir
 otherwise edits and tests in this repo have no effect. Don't probe for this — let the
 first `phx:` skill you load reveal it: the working tree is **not** live if the skill
 is unavailable (`Unknown skill`) or loads from a `…/plugins/cache/…` base directory.
-If so, stop and ask whether that's intended before continuing; the user may relaunch
-with `--plugin-dir ./` (then `/reload-plugins` after edits).
+If so, **and this session edits or tests anything under `skills/`**, stop and ask; the
+user may relaunch with `--plugin-dir ./` (then `/reload-plugins` after edits). Otherwise
+note it and carry on — a cached plugin serves the released skill, which is what you want
+when merely consuming one. Skills under `.agents/skills/` load from the working tree
+either way.
 
 A live base directory means the plugin is served from the working tree — not that the
 skill text is current. Skills register at session start, so one you edit keeps serving
