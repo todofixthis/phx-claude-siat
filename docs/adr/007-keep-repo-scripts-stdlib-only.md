@@ -1,8 +1,8 @@
 ---
 status: Accepted
 date: 2026-07-28
-tags: [adr, ci, dependencies, duplication, frontmatter, git-hooks, python, scripts, stdlib, tooling, uv]
-summary: Keep everything under scripts/ stdlib-only with no Python project at the repo root, reaching for PEP 723 inline metadata rather than a root project if that changes; revisit on a second compromise over a grammar this repo does not define, or when the adapted frontmatter parser gains a third copy or its copies drift on shared input.
+tags: [adr, ci, dependencies, duplication, frontmatter, git-hooks, pep723, pre-commit, python, scripts, stdlib, tooling, uv]
+summary: Keep everything under scripts/ stdlib-only with no Python project at the repo root, and reach for a root project rather than per-script PEP 723 metadata if that ever changes; revisit on a second compromise over a grammar this repo does not define, or when the adapted frontmatter parser gains a third copy or its copies drift on shared input.
 ---
 
 # 007: Keep repo scripts stdlib-only
@@ -24,56 +24,51 @@ answers for everyone.
 The cost is real and growing. [`semver`][] would replace hand-written version regexes;
 [`PyYAML`][] would replace that adapted parser — the two copies are not identical, since
 the ADR-side one parses inline lists and the manifest-side one handles scalars only.
+The repo's one git hook is hand-written shell, where the conventional choice, the
+[`pre-commit`][] framework, is dependency-bearing — raising the fair question of whether
+this constraint is what keeps faster local feedback out of the project.
 
 Packaged skills are a different case: `skills/<name>/` units ship to users with their own
 lifecycle, and [`creative-commits`][] already declares dependencies and runs under `uv`.
 
 ## Options
 
-### Option 1: Do nothing
+### Option 1: Do nothing — keep `scripts/` stdlib-only (Accepted)
 
-Leave the constraint an unstated habit.
+Every script imports only the standard library and runs as `python3 scripts/<area>/<name>.py`.
 
-**Pros:** No document to maintain; each script author judges its own case.
-**Cons:** The habit is invisible, so it is followed by accident and abandoned by accident.
-**Risks:** A dependency arrives for one convenient import, and whichever mechanism that
-first author happens to pick — most likely the heaviest — becomes the precedent, without
-anyone weighing it.
-
-### Option 2: Declare `scripts/` stdlib-only, with a revisit trigger (Accepted)
-
-Record the constraint, and the conditions that reopen it.
-
-**Pros:** A new script inherits the answer; adding a dependency becomes a decision with a
-written bar to clear.
+**Pros:** They run unaided — in any clone, any CI job, and the git hook — with nothing to
+install, resolve, or keep current.
 **Cons:** Hand-written parsing continues, as does the duplication between `scripts/adr`
-and `scripts/ci`, which no dependency was needed to fix in the first place.
-**Risks:** The trigger is written too loosely to fire, and the constraint outlives its
-justification.
+and `scripts/ci` that no dependency was needed to fix.
+**Risks:** Left unwritten, the habit is followed by accident and abandoned by accident —
+and a script quietly approximates a grammar it should be parsing, because reaching for the
+parser was never an option anyone weighed.
 
-### Option 3: Declare dependencies per script with PEP 723 inline metadata
+### Option 2: Declare dependencies per script with PEP 723 inline metadata
 
-Give each script a [PEP 723][] header and run it as `uv run scripts/ci/foo.py`. No root
-project, no shared lockfile, dependencies isolated per script.
+Give each script a [PEP 723][] header and run it as `uv run scripts/ci/foo.py`.
 
-**Pros:** Real libraries, per script and without a shared lockfile; `uv` is already a
-dependency of this repo through `creative-commits`.
-**Cons:** Every caller's invocation changes from `python3` to `uv run`, including the
-[pre-commit hook][], which then resolves an environment before it can do anything.
-**Risks:** The hook stops being instant and offline — the two properties that make it
-worth running at all — and a first-run resolve on a slow or absent network turns a
-sub-second check into a stall or a failure.
+**Pros:** Real libraries with no root project and no shared lockfile; `uv` already comes
+with this repo through `creative-commits`.
+**Cons:** Every caller changes from `python3` to `uv run`; dependencies live in a per-file
+comment block rather than the project manifest a developer checks first; and Renovate
+reads inline metadata through its separate `pep723` manager, which [`renovate.json`][]
+would have to add to its `enabledManagers` allowlist.
+**Risks:** Each script pins independently, so a library two of them share is coordinated
+by nobody and drifts — the failure [`versions.py`][] exists to prevent one level down,
+reintroduced at the dependency level.
 
-### Option 4: Add a Python project at the repo root
+### Option 3: Add a Python project at the repo root
 
 Give the root a `pyproject.toml` and lockfile.
 
-**Pros:** Scripts get libraries, and shared code lives in one importable module.
-**Cons:** Everything in Option 3, plus a root venv sitting alongside the skill packages'
-own, and a lockfile coupling unrelated scripts to a single resolution.
-**Risks:** `python3 scripts/...` — which works in any clone with no setup — stops being
-how these run, so an environment they previously ran in unaided now needs preparing
-first.
+**Pros:** One manifest where developers expect it, already covered by the existing
+Renovate configuration, and one lock so scripts sharing a library share its version.
+**Cons:** Every caller changes from `python3` to `uv run`, and a root venv sits alongside
+the skill packages' own.
+**Risks:** An environment these previously ran in unaided now needs preparing first, so a
+cold resolve on a slow or absent network turns a sub-second hook into a stall.
 
 ## Decision
 
@@ -82,20 +77,32 @@ repo defines and constrains — flat skill frontmatter, `X.Y.Z` versions, fixed 
 headings — where a regex over a known shape is the whole job rather than an
 approximation of one. The two exceptions are held at arm's length: skill TOML is read
 through stdlib `tomllib`, and `pr.yml` is substring-matched rather than parsed, which
-ADR 006 recorded as a deliberate loss of precision. Options 3 and 4 buy libraries for
-parsing that is not yet hard.
+ADR 006 recorded as a deliberate loss of precision.
 
-Between those two, PEP 723 is the better escape hatch and a root project is not worth its
-price at any point this repo is likely to reach. **When a trigger below fires, the answer
-is PEP 723 on the affected script** — and the pre-commit hook's script is the one to keep
-stdlib-only longest, since its value is being instant and offline.
+Recording *which* dependency-bearing option to reach for matters more than it appears,
+because the cheaper-looking one is the wrong one. Both impose the same migration on
+callers — `python3` becomes `uv run` — differing only in how much moves at once, which at
+five scripts is not worth pricing. What separates them is coordination: a root manifest
+keeps one version of a shared library, in the place a developer looks first and the place
+this repo's Renovate configuration already reads, where per-file blocks let two scripts
+drift apart on the same dependency. **If a trigger below fires, the answer is a root
+project.** PEP 723 suits a genuinely standalone one-off, not the way in.
 
-Duplication is a separate question from dependencies. Within a directory, sharing is
-unremarkable: [`versions.py`][] holds the version shape that [`release_notes.py`][] and
+Local feedback is not what this constrains, and should not be defended with it. The
+`pre-commit` framework resolves each hook's environment itself, so adopting it would need
+neither a root project nor an import in any script. The real obstacle is unrelated:
+`pre-commit install` refuses to run while `core.hooksPath` is set, and this repo sets it
+for the ADR-index hook. Whether to resolve that is a live question, and a separate one.
+Likewise, what leaves `scripts/` unlinted is ADR 005's regime keying enforcement off what
+a skill *declares* — and `scripts/` declares nothing.
+
+Duplication is a separate question again. Within a directory, sharing is unremarkable:
+`versions.py` holds the version shape that [`release_notes.py`][] and
 `validate_manifests.py` both assert, precisely so the two cannot drift. The frontmatter
 parsers stay apart only because `scripts/adr` and `scripts/ci` are siblings with no
-package between them, and restructuring `scripts/` around one 8-line function is not yet
-worth it.
+package between them, and restructuring `scripts/` around one small function is not yet
+worth it. That restructuring needs no dependency, so neither option above is what unlocks
+it.
 
 **Revisit when either holds:**
 
@@ -112,13 +119,13 @@ worth it.
 
 ## Consequences
 
-`scripts/` sits outside the enforcement regime ADRs 005 and 006 built. That regime keys
-off what a skill *declares*, and these scripts declare nothing — so no formatter, linter,
-or type check runs over the code that enforces everything else, and its tests use
-`unittest` (with a `discover -s scripts/ci -t scripts/ci` invocation that exists only
-because there is no package) where the rest of the repo uses `pytest`. That is the largest
-cost here, larger than any duplicated parser, and it is the price of the scripts needing
-no setup to run.
+`scripts/` sits outside the lint, format, and type-check layer of the regime ADRs 005 and
+006 built — CI runs this code, but nothing checks it, though it is the code enforcing
+everything else. What tests exist are `scripts/ci`'s, under `unittest` (with a
+`discover -s scripts/ci -t scripts/ci` invocation that exists only because there is no
+package) where the rest of the repo uses `pytest`; `scripts/adr` has none, covered only by
+CI diffing the index it regenerates. That is the largest cost here, larger than any
+duplicated parser, and closing it is a change this decision does not stand in the way of.
 
 Each script's docstring names the constraint and cites this ADR, so it is visible at the
 point of temptation rather than only here.
@@ -128,10 +135,11 @@ point of temptation rather than only here.
 [`creative-commits`]: ../../skills/creative-commits/SKILL.md
 [`generate_index.py`]: ../../scripts/adr/generate_index.py
 [PEP 723]: https://peps.python.org/pep-0723/
-[pre-commit hook]: ../../.githooks/pre-commit
+[`pre-commit`]: https://pre-commit.com/
 [`PyYAML`]: https://pyyaml.org/
 [`release_notes.py`]: ../../scripts/ci/release_notes.py
 [`releasing`]: ../../.agents/skills/releasing/SKILL.md
+[`renovate.json`]: ../../renovate.json
 [`semver`]: https://python-semver.readthedocs.io/
 [`validate_manifests.py`]: ../../scripts/ci/validate_manifests.py
 [`versions.py`]: ../../scripts/ci/versions.py
