@@ -85,9 +85,22 @@ broken.
 Merging the release PR triggers `.github/workflows/release.yml`, which as the App tags
 the merge commit `X.Y.Z` (unsigned annotated), publishes the GitHub Release from the
 CHANGELOG top entry, and back-merges `main`→`develop`. The skill's work ends at Phase 1;
-read the run's outcome yourself rather than asking the maintainer —
-`gh run list --workflow=Release --branch main --limit 1`, and `gh run watch <id>` while
-it is still going.
+read the run's outcome yourself rather than asking the maintainer:
+`gh run list --workflow=Release --branch main --limit 1` reports the conclusion, and is
+the whole check once the run has finished.
+
+While one is still going, bound the wait rather than watching it open-endedly — the job
+usually takes under a minute, but a queued runner can stall indefinitely and the default
+watch prints every step of every poll:
+
+```bash
+timeout 300 gh run watch <id> --compact --exit-status
+```
+
+`--compact` drops all but the relevant and failed steps, `--exit-status` makes a failed
+run a non-zero exit, and `timeout` caps the wait. Read the exit code rather than the
+output: `0` succeeded, `124` means it is still running at the cap (report that and stop
+— don't re-watch), anything else is a failed run to triage below.
 
 ### If the run fails
 

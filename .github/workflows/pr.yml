@@ -104,9 +104,11 @@ jobs:
       # Against the real CHANGELOG, not fixtures: this is what makes an
       # unreleasable version or a CHANGELOG/plugin.json mismatch fail on the pull
       # request. Without it the release workflow is the first to notice, after the
-      # merge to main, where the fix needs a second PR to main.
+      # merge to main, where the fix needs a second PR to main. No --out, so the
+      # extracted notes land in the log — worth having on the rare run where what
+      # the script read is the question.
       - name: Check the release notes resolve
-        run: python3 scripts/ci/release_notes.py --out /dev/null
+        run: python3 scripts/ci/release_notes.py
 
   # Mirrors the tooling skills/creative-commits/pyproject.toml already declares.
   python:
