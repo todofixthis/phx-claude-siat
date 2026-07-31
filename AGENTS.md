@@ -16,6 +16,13 @@ manifests); its skills are invoked as `phx:<skill-name>`.
 NZ English throughout — spelling, not just prose. Place comments on the line
 preceding the code they document, not as trailing comments.
 
+## Python
+
+- `scripts/` is stdlib-only and the repo root carries no Python project (ADR 007);
+  packaged skills under `skills/<name>/` may declare dependencies.
+- Every test function carries a docstring naming the scenario it exercises: the
+  function name says what is called, the docstring says what must hold.
+
 ## Skill layout
 
 Published skills live in `skills/<name>/` and ship with the plugin and marketplace,
@@ -53,6 +60,15 @@ When RED/GREEN-testing a skill with subagents (see `superpowers:writing-skills`)
 - **Make sure RED can fail.** Confirm the no-skill control genuinely falls short
   before trusting GREEN, and that the fixture doesn't leak the answer (e.g. a past
   release whose PR body already holds the notes you're asking for).
+
+## Design specs and plans
+
+`docs/superpowers/specs/` and `docs/superpowers/plans/` hold dated design docs and their
+implementation plans. Each is scaffolding for one implementation: commit it while the
+work is in flight so a fresh session can resume mid-branch, then **delete it on the same
+branch before the PR merges**. Once the work lands, the code carries the *what* and an
+ADR the *why*; a retained plan only supplies a third, stale answer. Anything in one
+still worth keeping earns an ADR, not a reprieve.
 
 ## Architecture Decision Records
 

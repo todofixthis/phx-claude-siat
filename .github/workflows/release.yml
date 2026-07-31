@@ -1,0 +1,137 @@
+# Finishes release Phase 2 (tag, Release, back-merge) as the release GitHub App.
+# The App permissions, the develop/main/tag rulesets, and the rollout order this
+# workflow relies on live in docs/release-automation.md — change both together.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Serialise release runs so a second push cannot race a back-merge in flight.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# The workflow token needs nothing; every write uses the App token below.
+permissions:
+  contents: read
+
+# Log lines are prefixed to be scannable: ✅ did it, ⏭️ already done, ❌ failed.
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # A per-run installation token for the release App, which is the
+      # develop-scoped bypass actor. Minted here, revoked in the final step. The
+      # secrets are named for that App so a second App installed later needs its
+      # own pair rather than quietly inheriting these.
+      - name: Mint an installation token for the release App
+        id: release-app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ steps.release-app-token.outputs.token }}
+
+      # A runner has no git identity configured, and the App token doesn't supply
+      # one, so the back-merge commit needs this set explicitly — before both the
+      # tag and back-merge steps, including on a re-run that skips tag creation.
+      # Derived from the App rather than hardcoded, so the commit is attributed to
+      # the actor that actually pushed it and the workflow ports to another repo
+      # unchanged. The `<id>+<slug>[bot]@users.noreply.github.com` form is what
+      # GitHub links back to the bot account.
+      - name: Configure the git identity of the release App
+        env:
+          APP_SLUG: ${{ steps.release-app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
+        run: |
+          user_id=$(gh api "/users/$APP_SLUG[bot]" --jq .id)
+          git config user.name "$APP_SLUG[bot]"
+          git config user.email "$user_id+$APP_SLUG[bot]@users.noreply.github.com"
+          echo "✅ committing as $APP_SLUG[bot]"
+
+      # One command for both, so the tag and the notes cannot disagree: the script
+      # asserts the CHANGELOG top entry matches plugin.json (exit 1 if not),
+      # prints that version, and writes the notes. Every later step keys off this
+      # version, so an empty one has to stop the run here rather than surface as
+      # an empty tag name. Cheap and safe to run even when nothing needs
+      # releasing — a consistent repo always has CHANGELOG top == plugin.json.
+      - name: Read the version and build the release notes
+        id: release
+        run: |
+          version=$(python3 scripts/ci/release_notes.py --out notes.md)
+          if [ -z "$version" ]; then
+            echo "❌ no version resolved from the CHANGELOG and plugin manifest"
+            exit 1
+          fi
+          echo "✅ releasing $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Every step below runs on every push and guards itself, so a re-run after
+      # a partial failure finishes the missing steps without redoing the done
+      # ones. There is NO whole-job guard: gating everything on tag-presence
+      # would skip the Release and back-merge the moment the tag exists, hiding a
+      # half-release behind a green check.
+
+      - name: Create and push the tag if absent
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "⏭️ $VERSION already tagged"
+          else
+            git tag -a "$VERSION" -m "Release $VERSION" "$GITHUB_SHA"
+            git push origin "refs/tags/$VERSION"
+            echo "✅ tagged $VERSION"
+          fi
+
+      - name: Publish the GitHub Release if absent
+        env:
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "⏭️ release $VERSION already published"
+          else
+            gh release create "$VERSION" --title "$VERSION" --notes-file notes.md
+            echo "✅ published release $VERSION"
+          fi
+
+      - name: Back-merge main into develop if needed
+        run: |
+          git fetch origin main develop
+          if git merge-base --is-ancestor origin/main origin/develop; then
+            echo "⏭️ develop already contains main"
+          else
+            git checkout -B develop origin/develop
+            # A real merge, not --ff-only: develop may have advanced since the PR
+            # was cut. A conflict fails the job for manual resolution (the App is
+            # Contents:write only, by design, so it cannot open a fallback PR).
+            git merge --no-edit origin/main
+            git push origin develop
+            echo "✅ back-merged main into develop"
+          fi
+
+      # This step asserts rather than acts: its two branches report what
+      # `git merge-base` found, they don't do work. A failure means the push above
+      # was refused and the release is unfinished, so the failing branch exits 1
+      # rather than logging and letting the run go green.
+      - name: Verify the back-merge on the remote
+        run: |
+          git fetch origin
+          if git merge-base --is-ancestor origin/main origin/develop; then
+            echo "✅ origin/develop contains origin/main"
+          else
+            echo "❌ origin/develop does not contain origin/main; the back-merge did not land"
+            exit 1
+          fi
+
+      - name: Revoke the App token
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
+        run: gh api --method DELETE /installation/token || true

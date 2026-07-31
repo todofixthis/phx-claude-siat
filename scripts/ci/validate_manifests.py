@@ -4,10 +4,11 @@
 Run manually from the repo root: python3 scripts/ci/validate_manifests.py
 Run automatically by .github/workflows/pr.yml on every pull request.
 
-Stdlib-only by design, for the same reason as scripts/adr/generate_index.py: the
-repo needs no Python project (or PyYAML) at its root. The frontmatter parser is
-duplicated from that script rather than imported, because the two live in sibling
-directories with no package to hang an import off.
+Stdlib-only by design (ADR 007): the repo needs no Python project (or PyYAML) at
+its root. The frontmatter parser is adapted from scripts/adr/generate_index.py
+rather than imported, because the two live in sibling directories with no package
+to hang an import off; this copy handles scalars only, where that one also parses
+inline lists.
 """
 
 import json
@@ -15,6 +16,8 @@ import re
 import sys
 import tomllib
 from pathlib import Path
+
+from versions import RE_VERSION
 
 MARKETPLACE_FILE = Path(".claude-plugin/marketplace.json")
 PLUGIN_FILE = Path(".claude-plugin/plugin.json")
@@ -25,13 +28,6 @@ WORKFLOW_FILE = Path(".github/workflows/pr.yml")
 TOOLING_MARKERS = ("package.json", "pyproject.toml")
 
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
-# The official grammar, from https://semver.org/
-RE_SEMVER = re.compile(
-    r"^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
-    r"(?:-(?:(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)"
-    r"(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?"
-    r"(?:\+(?:[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$"
-)
 
 
 def parse_frontmatter(block: str) -> dict:
@@ -61,7 +57,7 @@ def load_json(path: Path, errors: list) -> dict | None:
 
 
 def check_plugin(errors: list) -> None:
-    """The plugin manifest must carry a semver version — the single source of truth."""
+    """The plugin manifest must carry a releasable version — the single source of truth."""
     plugin = load_json(PLUGIN_FILE, errors)
     if plugin is None:
         return
@@ -69,8 +65,12 @@ def check_plugin(errors: list) -> None:
     version = plugin.get("version")
     if version is None:
         errors.append(f"{PLUGIN_FILE} has no version")
-    elif not isinstance(version, str) or not RE_SEMVER.match(version):
-        errors.append(f"{PLUGIN_FILE} version {version!r} is not valid semver")
+    elif not isinstance(version, str) or not RE_VERSION.match(version):
+        errors.append(
+            f"{PLUGIN_FILE} version {version!r} is not releasable: this project "
+            "publishes X.Y.Z only, with no pre-release suffix or build metadata "
+            "(see docs/adr/008)"
+        )
 
 
 def check_marketplace(errors: list) -> None:
