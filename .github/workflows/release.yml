@@ -16,7 +16,7 @@ concurrency:
 permissions:
   contents: read
 
-# Log lines are prefixed to be scannable: ✅ did it, ⏭️ already done, ❌ failed.
+# Log lines are prefixed to be scannable: ✅ done, ❌ failed, ⏭️ skipped.
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -49,10 +49,10 @@ jobs:
           APP_SLUG: ${{ steps.release-app-token.outputs.app-slug }}
           GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
         run: |
-          user_id=$(gh api "/users/$APP_SLUG[bot]" --jq .id)
-          git config user.name "$APP_SLUG[bot]"
-          git config user.email "$user_id+$APP_SLUG[bot]@users.noreply.github.com"
-          echo "✅ committing as $APP_SLUG[bot]"
+          user_id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "$user_id+${APP_SLUG}[bot]@users.noreply.github.com"
+          echo "✅ committing as ${APP_SLUG}[bot]"
 
       # One command for both, so the tag and the notes cannot disagree: the script
       # asserts the CHANGELOG top entry matches plugin.json (exit 1 if not),

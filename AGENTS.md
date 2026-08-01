@@ -67,11 +67,10 @@ When RED/GREEN-testing a skill with subagents (see `superpowers:writing-skills`)
 ## Design specs and plans
 
 `docs/superpowers/specs/` and `docs/superpowers/plans/` hold dated design docs and their
-implementation plans. Each is scaffolding for one implementation: commit it while the
-work is in flight so a fresh session can resume mid-branch, then **delete it on the same
-branch before the PR is created**. Once the work lands, the code carries the *what* and an
-ADR the *why*; a retained plan only supplies a third, stale answer. Anything in one
-still worth keeping earns an ADR, not a reprieve.
+implementation plans. Both are scaffolding for one implementation: commit while the work
+is in flight so a fresh session can resume mid-branch, then **delete on the same branch
+before the PR is created** — the rule `phx:writing-plans` already applies to plans,
+extended here to specs. Anything in one still worth keeping earns an ADR, not a reprieve.
 
 ## Architecture Decision Records
 

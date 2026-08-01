@@ -111,7 +111,7 @@ Some skills require explicit instructions in `~/.claude/CLAUDE.md` to ensure Cla
 ```markdown
 # Skill resolution
 
-Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one: `receiving-code-review`, `writing-plans`.
+Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one.
 
 # Git commits
 

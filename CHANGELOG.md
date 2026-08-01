@@ -17,14 +17,16 @@
   with:
 
   ```markdown
-  Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one: `receiving-code-review`, `writing-plans`.
+  Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one.
   ```
+
+  The replacement names no skills, so it keeps covering new wrappers as they arrive.
 
   **Without the superpowers plugin installed, both wrappers delegate to a skill you do
   not have.** It stays an optional install, so if you do not run it, adapt the rule to
   skip the wrappers or leave it out — better than pointing Claude at skills that cannot
-  resolve. Splitting the wrappers into their own marketplace plugin is being considered;
-  it is too large a change to make mid-release.
+  resolve. Splitting the wrappers into their own marketplace plugin is planned for a
+  future version; it is too large a change to make mid-release.
 
 - **`phx:writing-plans` now deletes the plan file.** The final task removes it before the
   pull request is created, so nothing that ships references it. Previously it stayed in
@@ -69,14 +71,17 @@
   **Migration:** stop verifying signatures on release tags.
 
 - **Releases no longer close referenced issues.** The old Phase 2 closed every `#NNN` the
-  notes cited, with a comment linking the release. The App is `Contents: write` only, so
-  a referenced issue now stays open unless you close it by hand.
+  notes cited, with a comment linking the release. This repo tracks its work outside
+  GitHub, so that step never had an issue to close — and the App is `Contents: write`
+  only, so it could not close one anyway. Should a release ever cite an issue here, close
+  it by hand.
 
-- **Only `X.Y.Z` versions can be released.** Pre-release suffixes and build metadata are
-  rejected by both the manifest validator and the release-notes helper, which share one
-  pattern (`scripts/ci/versions.py`) so they cannot drift — import `RE_VERSION` rather
-  than writing a third. No migration: a marketplace serving whatever sits on the default
-  branch cannot offer a release candidate only to whoever asked for one. See ADR 008.
+- **Pre-release versions can no longer be published.** The manifest validator used to
+  accept suffixes and build metadata that the release flow would then refuse; both now
+  share one pattern (`scripts/ci/versions.py`), so `X.Y.Z` is all that passes either —
+  import `RE_VERSION` rather than writing a third. No migration: a marketplace serving
+  whatever sits on the default branch cannot offer a release candidate only to whoever
+  asked for one. See ADR 008.
 
 #### Added
 
