@@ -42,7 +42,8 @@ it requires [uv](https://docs.astral.sh/uv/) to be installed.
 
 > [!IMPORTANT]
 > Coding agents will not use this skill by default. If you want to use creative
-> commits, add the following to `AGENTS.md`:
+> commits, add the following to `~/.claude/CLAUDE.md` — or to a project's
+> `AGENTS.md`, to scope it to that project:
 >
 > ````markdown
 > **Always** use `phx:creative-commits` to create Git commits.
@@ -63,7 +64,8 @@ adding conventions the base skills leave out:
 
 > [!IMPORTANT]
 > To ensure your coding agent loads the correct skills, add the following to
-> `AGENTS.md`:
+> `~/.claude/CLAUDE.md` — or to a project's `AGENTS.md`, to scope it to that
+> project:
 >
 > ````markdown
 > Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one.
@@ -83,8 +85,9 @@ Install once; skills are available in every project.
 Then restart Claude Code.
 
 > [!IMPORTANT]
-> Some skills require changes to `AGENTS.md`.
-> Review [notes on specific skills](#notes-on-specific-skills) above.
+> Some skills need an instruction before an agent will reach for them. Put those
+> in `~/.claude/CLAUDE.md` so a once-and-for-all install behaves the same in every
+> project. Review [notes on specific skills](#notes-on-specific-skills) above.
 
 ### Project-level
 

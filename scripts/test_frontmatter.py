@@ -93,6 +93,44 @@ class WrappedValueTests(unittest.TestCase):
         )
 
 
+class BlockSequenceTests(unittest.TestCase):
+    def test_parses_an_indented_block_sequence(self):
+        """Installed skills declare `allowed-tools` this way, so it must not read as a wrap."""
+        fields, problems = parse_frontmatter(
+            "name: access\nallowed-tools:\n  - Read\n  - Bash(ls *)\ndescription: A skill.\n"
+        )
+        self.assertEqual(
+            fields,
+            {
+                "name": "access",
+                "allowed-tools": ["Read", "Bash(ls *)"],
+                "description": "A skill.",
+            },
+        )
+        self.assertEqual(problems, [])
+
+    def test_a_bare_key_with_nothing_under_it_stays_empty(self):
+        """A key with no value and no items is empty, not an empty list."""
+        fields, problems = parse_frontmatter("description:\n")
+        self.assertEqual((fields, problems), ({"description": ""}, []))
+
+    def test_a_wrap_after_a_sequence_key_is_still_caught(self):
+        """Only `- item` continues a sequence; prose under the key is still a wrap."""
+        _, problems = parse_frontmatter("tools:\n  - Read\nsummary: Long\n  and more\n")
+        self.assertEqual(
+            problems, ["continued onto another line; wrap it onto one: 'and more'"]
+        )
+
+
+class CommentTests(unittest.TestCase):
+    def test_ignores_comments_wherever_they_sit(self):
+        """A YAML comment is legal frontmatter and must not block a commit."""
+        fields, problems = parse_frontmatter(
+            "# why this exists\nstatus: Accepted\n  # an indented note\n"
+        )
+        self.assertEqual((fields, problems), ({"status": "Accepted"}, []))
+
+
 class BlockScalarTests(unittest.TestCase):
     def test_flags_every_block_scalar_indicator(self):
         """`>` and `|`, bare or chomped, all open a block this parser cannot read."""
@@ -116,7 +154,7 @@ class DuplicateKeyTests(unittest.TestCase):
         """A leftover second `status:` would otherwise silently decide the ADR's fate."""
         fields, problems = parse_frontmatter("status: Accepted\nstatus: Archived")
         self.assertEqual(fields, {"status": "Accepted"})
-        self.assertEqual(problems, ["sets field status twice; the later value silently wins"])
+        self.assertEqual(problems, ["sets field status twice; the first value stands"])
 
 
 if __name__ == "__main__":

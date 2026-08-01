@@ -55,9 +55,7 @@ jobs:
               esac
               case "$path" in
                   CHANGELOG.md|.claude-plugin/*|scripts/*|\
-                  skills/*/SKILL.md|.agents/skills/*/SKILL.md|\
-                  skills/*/pyproject.toml|.agents/skills/*/pyproject.toml|\
-                  skills/*/package.json|.agents/skills/*/package.json)
+                  skills/*|.agents/skills/*)
                       manifests=true ;;
               esac
               # A change to the workflow itself re-runs everything it gates.

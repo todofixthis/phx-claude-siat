@@ -133,6 +133,11 @@ class CheckPluginTests(ManifestTestCase):
         self.write(".claude-plugin/plugin.json", json.dumps({"name": PLUGIN_NAME, "version": 1.0}))
         self.assertIn("is not releasable", self.check()[0])
 
+    def test_reports_a_missing_name(self):
+        """The name an install resolves must exist, and the marketplace check relies on it."""
+        self.write(".claude-plugin/plugin.json", json.dumps({"version": "1.2.3"}))
+        self.assertIn(f"{vm.PLUGIN_FILE} has no name", self.check())
+
     def test_rejects_a_pre_release_version(self):
         """Only X.Y.Z can be published, so a suffix fails here rather than after the merge."""
         self.write_plugin(version="1.2.3-rc.1")
@@ -191,6 +196,20 @@ class CheckMarketplaceTests(ManifestTestCase):
         error = self.check()[0]
         self.assertIn("'other'", error)
         self.assertIn(f"'{PLUGIN_NAME}'", error)
+
+    def test_allows_a_second_entry_alongside_the_plugin(self):
+        """The catalogue belongs to the owner, so listing another plugin is not an error."""
+        self.write_marketplace(
+            {"name": PLUGIN_NAME, "source": dict(vm.EXPECTED_SOURCE)},
+            {"name": "other-plugin", "source": dict(vm.EXPECTED_SOURCE)},
+        )
+        self.assertEqual(self.check(), [])
+
+    def test_rejects_a_catalogue_that_never_names_the_plugin(self):
+        """Installs resolve by name, so some entry has to carry the plugin's own."""
+        self.write_marketplace({"name": "other", "source": dict(vm.EXPECTED_SOURCE)})
+        error = self.check()[0]
+        self.assertIn(f"lists no entry named '{PLUGIN_NAME}'", error)
 
     def test_rejects_an_entry_that_is_not_an_object(self):
         """A malformed entry is named rather than crashing the run."""
@@ -296,6 +315,17 @@ class DeclaredToolsTests(ManifestTestCase):
             '[tool.autohooks]\npre-commit = ["autohooks.plugins.black", "ruff"]\n'
         )
         self.assertEqual((tools, errors), (["black", "ruff"], []))
+
+    def test_reports_a_wrongly_typed_autohooks_table(self):
+        """A declaration nobody can read must error, not return no tools at all."""
+        for label, toml in {
+            "autohooks a list": '[tool]\nautohooks = ["autohooks.plugins.mypy"]\n',
+            "tool a string": 'tool = "x"\n',
+        }.items():
+            with self.subTest(shape=label):
+                tools, errors = self.tools(toml)
+                self.assertEqual(tools, [])
+                self.assertTrue(errors, "a malformed table must not pass silently")
 
     def test_rejects_declarations_that_are_not_a_list_of_names(self):
         """Every malformed shape otherwise fails open, verifying nothing downstream."""

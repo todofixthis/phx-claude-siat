@@ -62,9 +62,17 @@ def load_json(path: Path, errors: list) -> dict | None:
 
 
 def check_plugin(plugin: dict | None, errors: list) -> None:
-    """The plugin manifest must carry a releasable version — the single source of truth."""
+    """The plugin manifest must carry a name and a releasable version.
+
+    The name is what an install resolves, and it is also what the marketplace check
+    compares its entry against — unvalidated here, a missing name would silently
+    disable that comparison rather than failing.
+    """
     if plugin is None:
         return
+
+    if not plugin.get("name"):
+        errors.append(f"{PLUGIN_FILE} has no name")
 
     version = plugin.get("version")
     if version is None:
@@ -104,18 +112,14 @@ def check_marketplace(plugin: dict | None, errors: list) -> None:
         errors.append(f"{MARKETPLACE_FILE} lists no plugins")
         return
 
-    plugin_name = plugin.get("name") if plugin else None
+    names = []
     for entry in plugins:
         if not isinstance(entry, dict):
             errors.append(f"{MARKETPLACE_FILE} plugin entry {entry!r} is not an object")
             continue
 
         name = entry.get("name")
-        if plugin_name is not None and name != plugin_name:
-            errors.append(
-                f"{MARKETPLACE_FILE} plugin entry is named {name!r}, but {PLUGIN_FILE} "
-                f"names the plugin {plugin_name!r}; installs resolve by name"
-            )
+        names.append(name)
         if "version" in entry:
             errors.append(
                 f"{MARKETPLACE_FILE} plugin entry {name} carries a version; "
@@ -127,6 +131,15 @@ def check_marketplace(plugin: dict | None, errors: list) -> None:
                 f"{entry.get('source')!r}; it must be {EXPECTED_SOURCE!r} so installs "
                 f"track the release branch, not the repo default (see docs/adr/010)"
             )
+
+    # One entry must name this plugin, rather than every entry naming it: the
+    # catalogue belongs to the owner and may list others later.
+    plugin_name = plugin.get("name") if plugin else None
+    if plugin_name and plugin_name not in names:
+        errors.append(
+            f"{MARKETPLACE_FILE} lists no entry named {plugin_name!r}, which is what "
+            f"{PLUGIN_FILE} calls the plugin; installs resolve by name. Entries: {names!r}"
+        )
 
 
 def check_skills(errors: list) -> None:
@@ -180,9 +193,21 @@ def declared_tools(skill_dir: Path, errors: list) -> list:
         errors.append(f"{path} is not valid TOML: {exc}")
         return []
 
+    # Absent means the skill declares no hooks, which is fine. Present but the wrong
+    # type is a declaration nobody can read, and returning [] for it would report the
+    # mirror intact having checked nothing.
     tool = config.get("tool")
-    autohooks = tool.get("autohooks") if isinstance(tool, dict) else None
+    if tool is None:
+        return []
+    if not isinstance(tool, dict):
+        errors.append(f"{path} [tool] is not a table (see docs/adr/006)")
+        return []
+
+    autohooks = tool.get("autohooks")
+    if autohooks is None:
+        return []
     if not isinstance(autohooks, dict):
+        errors.append(f"{path} [tool.autohooks] is not a table (see docs/adr/006)")
         return []
 
     plugins = autohooks.get("pre-commit")

@@ -4,10 +4,10 @@ Shared by scripts/adr and scripts/ci, which previously kept adapted copies that
 drifted (ADR 007's revisit trigger). Stdlib-only by design: frontmatter here is a
 flat key/value block, so a line parser suffices and the repo needs no PyYAML.
 
-Every field must sit on one line. Wrapping is the failure this module exists to
-catch: a continuation line parses to whatever fitted on the first line, and where
-that continuation happens to contain a colon it also invents a key, so the real
-value is truncated and nothing looks wrong.
+Every *value* sits on one line, though a key may open an indented block sequence.
+Wrapping is the failure this module exists to catch: a continuation line parses to
+whatever fitted on the first line, and where that continuation happens to contain a
+colon it also invents a key, so the real value is truncated and nothing looks wrong.
 """
 
 import re
@@ -28,16 +28,25 @@ def parse_frontmatter(block: str) -> tuple[dict, list[str]]:
     """
     fields: dict = {}
     problems: list[str] = []
+    sequence_key: str | None = None
     for line in block.splitlines():
-        if not line.strip():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        # Top-level keys start at column 0, so anything indented continues the
-        # line above — including a continuation with no colon in it at all.
         if line[:1].isspace():
-            problems.append(f"continued onto another line; wrap it onto one: {line.strip()!r}")
+            # An indented `- item` continues a block sequence opened by the key
+            # above; anything else indented is a value wrapped onto a second line,
+            # which would otherwise parse as whatever fitted on the first.
+            if sequence_key is not None and stripped.startswith("- "):
+                if not isinstance(fields[sequence_key], list):
+                    fields[sequence_key] = []
+                fields[sequence_key].append(stripped[2:].strip())
+            else:
+                problems.append(f"continued onto another line; wrap it onto one: {stripped!r}")
             continue
+        sequence_key = None
         if ":" not in line:
-            problems.append(f"is not `key: value`: {line.strip()!r}")
+            problems.append(f"is not `key: value`: {stripped!r}")
             continue
         key, _, value = line.partition(":")
         key = key.strip()
@@ -51,11 +60,15 @@ def parse_frontmatter(block: str) -> tuple[dict, list[str]]:
             problems.append(f"field {key} uses a block scalar; put it on one line")
             continue
         if key in fields:
-            problems.append(f"sets field {key} twice; the later value silently wins")
+            problems.append(f"sets field {key} twice; the first value stands")
             continue
         if value.startswith("[") and value.endswith("]"):
             items = [item.strip() for item in value[1:-1].split(",")]
             fields[key] = [item for item in items if item]
         else:
             fields[key] = value
+            # A bare `key:` opens a block sequence if indented `- item` lines
+            # follow, and stays an empty value if none do.
+            if not value:
+                sequence_key = key
     return fields, problems
