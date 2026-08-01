@@ -22,6 +22,9 @@ PLUGIN_FILE = Path(".claude-plugin/plugin.json")
 
 # What every plugin entry's `source` must be, pinning distribution to the release
 # branch rather than to whichever branch happens to be the repo default (ADR 010).
+# Compared for equality, so an extra key is rejected too — including a `sha` commit
+# pin, which ADR 010 weighed and rejected because it needs editing every release.
+# A pin whose only defence is that someone reads it should fail closed.
 EXPECTED_SOURCE = {
     "ref": "main",
     "repo": "todofixthis/phx-claude-siat",
@@ -37,20 +40,29 @@ RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
 
 def load_json(path: Path, errors: list) -> dict | None:
-    """Read and parse a JSON manifest, recording an error if it is unusable."""
+    """Read and parse a JSON manifest, recording an error if it is unusable.
+
+    Well-formed JSON of the wrong shape is rejected here rather than left to the
+    caller: a manifest holding a list or a string parses cleanly, and every caller
+    then reaches for `.get`, so without this the run ends in a traceback instead of
+    a message naming the file.
+    """
     if not path.exists():
         errors.append(f"{path} is missing")
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        content = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         errors.append(f"{path} is not valid JSON: {exc}")
         return None
+    if not isinstance(content, dict):
+        errors.append(f"{path} must hold a JSON object, not {type(content).__name__}")
+        return None
+    return content
 
 
-def check_plugin(errors: list) -> None:
+def check_plugin(plugin: dict | None, errors: list) -> None:
     """The plugin manifest must carry a releasable version — the single source of truth."""
-    plugin = load_json(PLUGIN_FILE, errors)
     if plugin is None:
         return
 
@@ -65,8 +77,8 @@ def check_plugin(errors: list) -> None:
         )
 
 
-def check_marketplace(errors: list) -> None:
-    """Marketplace entries must not carry a version, and must pin the release ref.
+def check_marketplace(plugin: dict | None, errors: list) -> None:
+    """Marketplace entries must name the plugin, omit its version, and pin the release ref.
 
     The version resolves plugin.json -> marketplace entry -> SHA, so duplicating it
     in the entry breaks single-source-of-truth (ADR 001). The `source` pin is what
@@ -74,6 +86,9 @@ def check_marketplace(errors: list) -> None:
     silently falls back to the repo's default branch, which is `develop`. That fails
     nowhere else — installs just start serving integration — so it is asserted here
     rather than left to review, the same reasoning ADR 006 applied to skill tooling.
+
+    Each condition is checked independently: an entry that breaks two invariants
+    should report both, rather than revealing the second only once the first is fixed.
     """
     marketplace = load_json(MARKETPLACE_FILE, errors)
     if marketplace is None:
@@ -83,17 +98,30 @@ def check_marketplace(errors: list) -> None:
     if not isinstance(plugins, list):
         errors.append(f"{MARKETPLACE_FILE} has no plugins list")
         return
+    # An empty list is well-formed and advertises nothing, so the catalogue would
+    # serve no plugin at all while every other check passed.
+    if not plugins:
+        errors.append(f"{MARKETPLACE_FILE} lists no plugins")
+        return
 
+    plugin_name = plugin.get("name") if plugin else None
     for entry in plugins:
-        name = entry.get("name", "<unnamed>") if isinstance(entry, dict) else "<unnamed>"
         if not isinstance(entry, dict):
-            errors.append(f"{MARKETPLACE_FILE} plugin entry {name} is not an object")
-        elif "version" in entry:
+            errors.append(f"{MARKETPLACE_FILE} plugin entry {entry!r} is not an object")
+            continue
+
+        name = entry.get("name")
+        if plugin_name is not None and name != plugin_name:
+            errors.append(
+                f"{MARKETPLACE_FILE} plugin entry is named {name!r}, but {PLUGIN_FILE} "
+                f"names the plugin {plugin_name!r}; installs resolve by name"
+            )
+        if "version" in entry:
             errors.append(
                 f"{MARKETPLACE_FILE} plugin entry {name} carries a version; "
                 f"the version belongs only in {PLUGIN_FILE} (see docs/adr/001)"
             )
-        elif entry.get("source") != EXPECTED_SOURCE:
+        if entry.get("source") != EXPECTED_SOURCE:
             errors.append(
                 f"{MARKETPLACE_FILE} plugin entry {name} has source "
                 f"{entry.get('source')!r}; it must be {EXPECTED_SOURCE!r} so installs "
@@ -135,6 +163,11 @@ def declared_tools(skill_dir: Path, errors: list) -> list:
 
     `autohooks.plugins.black` names the tool `black`. Skills declaring tooling any
     other way return nothing — see docs/adr/006.
+
+    The shape is checked rather than assumed, because every malformed form fails
+    open: a bare string iterates into single characters, a table iterates into its
+    keys, and a trailing dot trims to the empty string — which is a substring of any
+    workflow, so the mirror check downstream passes having verified nothing.
     """
     path = skill_dir / "pyproject.toml"
     if not path.exists():
@@ -147,8 +180,27 @@ def declared_tools(skill_dir: Path, errors: list) -> list:
         errors.append(f"{path} is not valid TOML: {exc}")
         return []
 
-    plugins = config.get("tool", {}).get("autohooks", {}).get("pre-commit", [])
-    return [plugin.rsplit(".", 1)[-1] for plugin in plugins]
+    tool = config.get("tool")
+    autohooks = tool.get("autohooks") if isinstance(tool, dict) else None
+    if not isinstance(autohooks, dict):
+        return []
+
+    plugins = autohooks.get("pre-commit")
+    if plugins is None:
+        return []
+
+    names = (
+        [plugin.rsplit(".", 1)[-1] for plugin in plugins]
+        if isinstance(plugins, list) and all(isinstance(p, str) for p in plugins)
+        else None
+    )
+    if names is None or not all(names):
+        errors.append(
+            f"{path} [tool.autohooks] pre-commit must be a list of plugin names, each "
+            f"ending in the tool it runs; got {plugins!r} (see docs/adr/006)"
+        )
+        return []
+    return names
 
 
 def check_skill_tooling(errors: list) -> None:
@@ -191,8 +243,11 @@ def check_skill_tooling(errors: list) -> None:
 def validate() -> int:
     """Validate every manifest invariant. Return 0 on success, 1 on error."""
     errors: list = []
-    check_plugin(errors)
-    check_marketplace(errors)
+    # Loaded once and shared, so a missing manifest is reported once and the
+    # marketplace check can compare names against it.
+    plugin = load_json(PLUGIN_FILE, errors)
+    check_plugin(plugin, errors)
+    check_marketplace(plugin, errors)
     check_skills(errors)
     check_skill_tooling(errors)
 

@@ -101,8 +101,8 @@ The pull-request path filter routes any `scripts/` change to both the `adr` and 
 jobs, where it previously routed the two directories separately — wrong once a parser change
 can break either consumer.
 
-`validate_manifests.py`'s own checks still have none, so sharing moved the untested surface
-rather than removing it; that file is now the larger gap.
+`validate_manifests.py`'s own checks have their own suite too, so no script under `scripts/`
+is now unexercised.
 
 Two shared modules now sit at different levels — `frontmatter.py` at the package root,
 `versions.py` inside `scripts/ci`. Share at the narrowest package containing every importer,
