@@ -141,8 +141,7 @@ tree is live; a `.../plugins/cache/...` path means the published copy is active.
 > [!NOTE]
 > When working with Claude Code inside a container (e.g. using
 > [paddock](https://pypi.org/project/phx-paddock/)), make sure the plugin
-directory is
-> mounted in the container at the same path as on the host system.
+> directory is mounted in the container at the same path as on the host system.
 
 ### Git hooks
 
