@@ -4,8 +4,9 @@
 Run manually from the repo root: python3 scripts/adr/generate_index.py
 Run automatically by .githooks/pre-commit when ADR files are staged.
 
-Stdlib-only by design: ADR frontmatter is a flat key/value block, so a small
-line parser suffices and the repo needs no Python project (or PyYAML) at its root.
+Stdlib-only by design (ADR 007): ADR frontmatter is a flat key/value block, so a
+small line parser suffices and the repo needs no Python project (or PyYAML) at its
+root.
 """
 
 import re

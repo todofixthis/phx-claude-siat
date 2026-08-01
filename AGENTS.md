@@ -16,6 +16,13 @@ manifests); its skills are invoked as `phx:<skill-name>`.
 NZ English throughout — spelling, not just prose. Place comments on the line
 preceding the code they document, not as trailing comments.
 
+## Python
+
+- `scripts/` is stdlib-only and the repo root carries no Python project (ADR 007);
+  packaged skills under `skills/<name>/` may declare dependencies.
+- Every test function carries a docstring naming the scenario it exercises: the
+  function name says what is called, the docstring says what must hold.
+
 ## Skill layout
 
 Published skills live in `skills/<name>/` and ship with the plugin and marketplace,
@@ -31,8 +38,11 @@ Claude loads the **published, cached** plugin unless launched with `--plugin-dir
 otherwise edits and tests in this repo have no effect. Don't probe for this — let the
 first `phx:` skill you load reveal it: the working tree is **not** live if the skill
 is unavailable (`Unknown skill`) or loads from a `…/plugins/cache/…` base directory.
-If so, stop and ask whether that's intended before continuing; the user may relaunch
-with `--plugin-dir ./` (then `/reload-plugins` after edits).
+If so, **and this session edits or tests anything under `skills/`**, stop and ask; the
+user may relaunch with `--plugin-dir ./` (then `/reload-plugins` after edits). Otherwise
+note it and carry on — a cached plugin serves the released skill, which is what you want
+when merely consuming one. Skills under `.agents/skills/` load from the working tree
+either way.
 
 A live base directory means the plugin is served from the working tree — not that the
 skill text is current. Skills register at session start, so one you edit keeps serving
@@ -53,6 +63,14 @@ When RED/GREEN-testing a skill with subagents (see `superpowers:writing-skills`)
 - **Make sure RED can fail.** Confirm the no-skill control genuinely falls short
   before trusting GREEN, and that the fixture doesn't leak the answer (e.g. a past
   release whose PR body already holds the notes you're asking for).
+
+## Design specs and plans
+
+`docs/superpowers/specs/` and `docs/superpowers/plans/` hold dated design docs and their
+implementation plans. Both are scaffolding for one implementation: commit while the work
+is in flight so a fresh session can resume mid-branch, then **delete on the same branch
+before the PR is created** — the rule `phx:writing-plans` already applies to plans,
+extended here to specs. Anything in one still worth keeping earns an ADR, not a reprieve.
 
 ## Architecture Decision Records
 
