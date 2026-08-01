@@ -14,6 +14,7 @@ A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) c
 | `creative-commits` | Creating Git commits with distinctive emoji-adorned messages |
 | `domain-breakdown` | Writing or updating a project's architecture/domain map |
 | `nz-english` | Scanning for and correcting US English spellings |
+| `receiving-code-review` | Responding to review feedback on a pull request |
 | `reflection` | Reviewing a session for friction and improving ecosystem files |
 | `writing-adrs` | Documenting significant architectural or tooling decisions |
 | `writing-plans` | Writing implementation plans for multi-step tasks |
@@ -21,7 +22,7 @@ A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) c
 
 ### Notes on specific skills
 
-**`writing-plans`** is a wrapper around `superpowers:writing-plans` (from the [superpowers marketplace](https://github.com/obra/superpowers-marketplace)) that adds project-specific conventions on top of the base skill. This improves stability when plan execution is split across multiple sessions, since the wrapper's additional conventions are always applied consistently regardless of which session picks up the work.
+**`receiving-code-review`** and **`writing-plans`** wrap the same-named skills from the [superpowers marketplace](https://github.com/obra/superpowers-marketplace), adding conventions the base skills leave out. Wrapping keeps those conventions applied no matter which session picks the work up — which matters most when plan execution or a review response spans several sittings. `receiving-code-review` adds the pull-request mechanics: enumerate every inline thread before answering any (review *bodies* are usually empty, and batches accumulate), reply per thread, and sweep the PR body for references to whatever the response deleted or renamed.
 
 **`creative-commits`** produces narrative, emoji-adorned commit messages — a deliberate style choice that trades extra token usage (the skill runs `emoji-seed`, stages files, and reasons about human intent) for the entertainment value of reading AI-generated stories in your git log. It may not suit projects where terse, conventional commit messages are expected. The skill also includes a small Python package (`seed.py`) that generates a random emoji seed; it requires [uv](https://docs.astral.sh/uv/) to be installed. The skill locates the package relative to its own directory, so it always runs the copy that ships with the version being served.
 
@@ -110,7 +111,7 @@ Some skills require explicit instructions in `~/.claude/CLAUDE.md` to ensure Cla
 ```markdown
 # Skill resolution
 
-When asked to write an implementation plan, invoke `phx:writing-plans`, not `superpowers:writing-plans`.
+Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one: `receiving-code-review`, `writing-plans`.
 
 # Git commits
 

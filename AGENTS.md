@@ -38,8 +38,11 @@ Claude loads the **published, cached** plugin unless launched with `--plugin-dir
 otherwise edits and tests in this repo have no effect. Don't probe for this — let the
 first `phx:` skill you load reveal it: the working tree is **not** live if the skill
 is unavailable (`Unknown skill`) or loads from a `…/plugins/cache/…` base directory.
-If so, stop and ask whether that's intended before continuing; the user may relaunch
-with `--plugin-dir ./` (then `/reload-plugins` after edits).
+If so, **and this session edits or tests anything under `skills/`**, stop and ask; the
+user may relaunch with `--plugin-dir ./` (then `/reload-plugins` after edits). Otherwise
+note it and carry on — a cached plugin serves the released skill, which is what you want
+when merely consuming one. Skills under `.agents/skills/` load from the working tree
+either way.
 
 A live base directory means the plugin is served from the working tree — not that the
 skill text is current. Skills register at session start, so one you edit keeps serving
@@ -66,7 +69,7 @@ When RED/GREEN-testing a skill with subagents (see `superpowers:writing-skills`)
 `docs/superpowers/specs/` and `docs/superpowers/plans/` hold dated design docs and their
 implementation plans. Each is scaffolding for one implementation: commit it while the
 work is in flight so a fresh session can resume mid-branch, then **delete it on the same
-branch before the PR merges**. Once the work lands, the code carries the *what* and an
+branch before the PR is created**. Once the work lands, the code carries the *what* and an
 ADR the *why*; a retained plan only supplies a third, stale answer. Anything in one
 still worth keeping earns an ADR, not a reprieve.
 
