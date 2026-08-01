@@ -37,19 +37,40 @@ TOOLING_MARKERS = ("package.json", "pyproject.toml")
 
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
+# A value of `>` or `|` opens a YAML block scalar, whose continuation lines this
+# parser cannot see. Trailing chomping indicators (`-`, `+`) included.
+RE_BLOCK_SCALAR = re.compile(r"^[>|][-+]?$")
 
-def parse_frontmatter(block: str) -> dict:
-    """Parse a flat YAML frontmatter block into a dict.
+
+def parse_frontmatter(block: str) -> tuple[dict, list[str]]:
+    """Parse a flat YAML frontmatter block into a dict, plus any problems found.
 
     Skill frontmatter is `key: value` scalars only, so a line parser suffices.
+
+    Every field must sit on one line. A wrapped value or a block scalar would
+    otherwise parse to whatever fitted on the first line and validate against a
+    truncated description, so both are reported rather than skipped — matching
+    scripts/adr/generate_index.py, which this is adapted from (ADR 007) and must
+    not disagree with on input both parse.
     """
     fields: dict = {}
+    problems: list[str] = []
     for line in block.splitlines():
-        if not line.strip() or ":" not in line:
+        if not line.strip():
+            continue
+        if ":" not in line:
+            problems.append(
+                f"frontmatter line is not `key: value` — wrap onto one line: {line.strip()!r}"
+            )
             continue
         key, _, value = line.partition(":")
-        fields[key.strip()] = value.strip()
-    return fields
+        key = key.strip()
+        value = value.strip()
+        if RE_BLOCK_SCALAR.match(value):
+            problems.append(f"frontmatter field {key} uses a block scalar; put it on one line")
+            continue
+        fields[key] = value
+    return fields, problems
 
 
 def load_json(path: Path, errors: list) -> dict | None:
@@ -135,7 +156,8 @@ def check_skills(errors: list) -> None:
                 errors.append(f"{path} has no frontmatter block")
                 continue
 
-            fields = parse_frontmatter(match.group(1))
+            fields, problems = parse_frontmatter(match.group(1))
+            errors.extend(f"{path} {problem}" for problem in problems)
             name = fields.get("name", "")
             if not name:
                 errors.append(f"{path} has no name")

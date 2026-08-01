@@ -56,7 +56,14 @@ What follows — positive and negative.
 <!-- Reference-style link definitions, alphabetised by label, go here -->
 ```
 
+The `(Accepted)` marker goes on whichever option won, which is Option 1 where the decision
+keeps the status quo — see Conventions.
+
 ## Frontmatter Fields
+
+Every value sits on one line — no wrapping, no `>` or `|` block scalars. The index parser
+reads line by line, so a wrapped `summary` would otherwise yield a truncated index row; both
+generators now fail instead, but the constraint is the reason.
 
 - **`status`** — `Accepted`, `Archived`, or `Superseded`. All three stay in the repo; the last two are excluded from `docs/adr/INDEX.md`, which is what an agent loads by default.
   - `Accepted` — in force, and worth carrying in context.
@@ -70,7 +77,7 @@ What follows — positive and negative.
 ## Conventions
 
 - **Option 1 is always "Do nothing"** — sets the stakes. Describe the status quo and let its Pros/Cons/Risks show what deciding nothing costs; don't explain the option's purpose in the ADR — that's guidance to you, not content.
-- **Option 2 is the accepted option** — except where the decision is to keep the status quo, when Option 1 is, and the ADR is `Accepted` like any other. Recording an existing constraint is not a different approach from keeping it, so don't split the two into rival options to satisfy the numbering. Rejected alternatives appear as Options 2, 3, etc. Trivial mitigations (e.g. adding a comment) are implementation details of the "do nothing" choice and do not warrant their own option. Numbering is fixed when the ADR is written; `status` changes later, so never derive one from the other.
+- **Option 2 is the accepted option** — except where the decision is to keep the status quo, when Option 1 is, and the ADR is `Accepted` like any other. Recording an existing constraint is not a different approach from keeping it, so don't split the two into rival options to satisfy the numbering. Rejected alternatives appear as Options 2, 3, etc. Trivial mitigations (e.g. adding a comment) are implementation details of the "do nothing" choice and do not warrant their own option. Numbering and the `(Accepted)` marker are both fixed when the ADR is written and record which option won; `status` changes later, so never derive one from the other — a superseded ADR keeps the marker on the option that won at the time.
 - **Options must be mutually exclusive** — each must represent a fundamentally different approach. Test: could any two options be combined without contradiction? If yes, they aren't mutually exclusive. Two failure modes:
   - _Implementation details as options_ — if two options share the same core approach but differ in implementation, the variant belongs as a sub-heading within the parent option, not a top-level option
   - _Multi-dimensional problems_ — if what looks like a list of options is actually two separate decisions, structure around the primary; handle the secondary as a sub-question in the Decision section or write a follow-up ADR
