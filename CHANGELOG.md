@@ -1,5 +1,107 @@
 # Changelog
 
+## 2.0.0 - 2026-08-01
+
+### For phx plugin users
+
+#### Breaking changes
+
+- **The skill-resolution instruction in your `CLAUDE.md` needs updating.** `phx` now
+  wraps two `superpowers` skills rather than one, so an instruction naming only
+  `writing-plans` leaves `phx:receiving-code-review` unused. Replace:
+
+  ```markdown
+  When asked to write an implementation plan, invoke `phx:writing-plans`, not `superpowers:writing-plans`.
+  ```
+
+  with:
+
+  ```markdown
+  Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one: `receiving-code-review`, `writing-plans`.
+  ```
+
+  **Without the superpowers plugin installed, both wrappers delegate to a skill you do
+  not have.** It stays an optional install, so if you do not run it, adapt the rule to
+  skip the wrappers or leave it out — better than pointing Claude at skills that cannot
+  resolve. Splitting the wrappers into their own marketplace plugin is being considered;
+  it is too large a change to make mid-release.
+
+- **`phx:writing-plans` now deletes the plan file.** The final task removes it before the
+  pull request is created, so nothing that ships references it. Previously it stayed in
+  the repo, readable during review.
+  **Migration:** the plan is committed before it is deleted, so it survives in the
+  branch's history. Anything worth keeping belongs in an architecture decision record,
+  written during execution: by the time the deletion runs, the agent has finished.
+
+#### Added
+
+- **New skill: `phx:receiving-code-review`** — for answering pull-request review
+  feedback. It wraps `superpowers:receiving-code-review` with the mechanics that skill
+  leaves out: gather every inline thread before answering any, reply in each thread,
+  sweep the repo *and the PR body* for references the response made stale, and record
+  review-driven decisions as an architecture decision record rather than a reply.
+
+  It needs the [superpowers marketplace](https://github.com/obra/superpowers-marketplace)
+  plugin for the skill it delegates to, and an authenticated `gh` — it posts thread
+  replies under your credentials.
+
+### For phx-claude-siat contributors
+
+#### Breaking changes
+
+- **Releases are tagged and published by CI.** Merging the `develop`→`main` release PR
+  triggers a workflow that tags the merge commit, publishes the GitHub Release from the
+  CHANGELOG's top entry, and back-merges to `develop`. The releasing skill's own
+  mutations end at opening that PR; after the merge it watches the run and triages
+  failures.
+
+  **This is a prerequisite of the next release merge, not an optional upgrade.** The
+  workflow triggers on every push to `main` and mints a GitHub App token first, so until
+  the App, its two Actions secrets, and the split branch and tag rulesets exist, a
+  release merge fails red on `main` rather than doing nothing. Setup:
+  `docs/release-automation.md`.
+
+- **Release tags are no longer signed.** CI creates an unsigned annotated tag; a
+  `refs/tags/*` ruleset forbidding deletion and non-fast-forward substitutes immutability
+  for the signature. No signing key exists in CI, and adding one buys rotation and
+  revocation work for a guarantee the ruleset already gives. Hand-cut recovery tags are
+  still signed by the local `tag.gpgsign`, so tag history is deliberately mixed.
+  **Migration:** stop verifying signatures on release tags.
+
+- **Releases no longer close referenced issues.** The old Phase 2 closed every `#NNN` the
+  notes cited, with a comment linking the release. The App is `Contents: write` only, so
+  a referenced issue now stays open unless you close it by hand.
+
+- **Only `X.Y.Z` versions can be released.** Pre-release suffixes and build metadata are
+  rejected by both the manifest validator and the release-notes helper, which share one
+  pattern (`scripts/ci/versions.py`) so they cannot drift — import `RE_VERSION` rather
+  than writing a third. No migration: a marketplace serving whatever sits on the default
+  branch cannot offer a release candidate only to whoever asked for one. See ADR 008.
+
+#### Added
+
+- A release-notes helper (`scripts/ci/release_notes.py`) extracts the CHANGELOG's top
+  entry and asserts it matches the plugin manifest, so a release cannot be tagged with
+  one version and described with another. Its unit tests run in CI.
+
+#### Changed
+
+- **The `manifests` job does more and runs on more pull requests.** It now also runs the
+  `scripts/ci` unit tests and the release-notes helper against the real CHANGELOG; its
+  path filter covers `CHANGELOG.md`, the plugin manifests, any `SKILL.md`, and
+  `scripts/ci/*`, so an ordinary skill-text change meets these checks too. New tests need
+  a `test_*.py` name under `scripts/ci` to be discovered.
+
+- **Design specs and plans are deleted before the pull request is created**, on the
+  branch that added them — new guidance. Once the work lands, the code carries the *what*
+  and an ADR the *why*.
+
+- **`scripts/` is standard-library only, with no Python project at the repo root**
+  (ADR 007) — now recorded rather than merely practised, with the convention that every
+  test docstring names its scenario. If a script ever needs a dependency, the ADR's
+  answer is a root project, **not** per-script PEP 723 metadata; either way every caller
+  moves from `python3` to `uv run`.
+
 ## 1.3.0 - 2026-07-22
 
 ### For phx plugin users
