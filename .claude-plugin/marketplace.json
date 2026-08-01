@@ -8,7 +8,11 @@
     {
       "name": "phx",
       "description": "PHX+Claude sittin' in a tree",
-      "source": "./",
+      "source": {
+        "ref": "main",
+        "repo": "todofixthis/phx-claude-siat",
+        "source": "github"
+      },
       "author": {
         "name": "Phoenix Zerin"
       }

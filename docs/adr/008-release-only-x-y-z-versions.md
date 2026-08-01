@@ -9,7 +9,7 @@ summary: Release only X.Y.Z versions — no pre-release suffixes or build metada
 
 ## Context
 
-The marketplace serves whatever `main` holds ([ADR 001][]), and has no notion of a
+The marketplace serves whatever `main` holds ([ADR 010][]), and has no notion of a
 channel: every installer resolves the same entry, so anything on `main` is the current
 release for everyone. There is nowhere for a `1.4.0-rc.1` to sit and be reachable only by
 people who asked for it.
@@ -97,8 +97,8 @@ from the version; a malformed heading (`## 1.4.0-rc.1 - 22 July 2026`) matches n
 and is still skipped, caught downstream by the version-match assertion rather than by a
 message naming the problem.
 
-[ADR 001]: 001-co-locate-marketplace-and-plugin.md
 [ADR 002]: 002-generate-changelog-at-release.md
+[ADR 010]: 010-pin-the-marketplace-entry-to-main.md
 [`pr.yml`]: ../../.github/workflows/pr.yml
 [`release_notes.py`]: ../../scripts/ci/release_notes.py
 [`releasing`]: ../../.agents/skills/releasing/SKILL.md

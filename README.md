@@ -73,9 +73,10 @@ claude --plugin-dir ./
 This loads the skills and commands directly from the working tree (taking
 precedence over any installed copy for the session), so edits take effect after
 `/reload-plugins` without reinstalling or clearing the cache. Installing from a
-local marketplace instead (`/plugin marketplace add` + `/plugin install`) copies
-the plugin into `~/.claude/plugins/cache/`, so working-tree edits would *not* be
-picked up — use `--plugin-dir` for active development.
+local marketplace instead (`/plugin marketplace add` + `/plugin install`) doesn't
+serve this directory at all: the marketplace entry pins `main` on GitHub, so it
+fetches the released branch and copies that into `~/.claude/plugins/cache/`. Use
+`--plugin-dir` for active development.
 
 You can tell which copy a session is using from the **base directory** Claude
 reports whenever a `phx:` skill loads: a path under this repo means the working

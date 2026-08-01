@@ -21,6 +21,14 @@ from versions import RE_VERSION
 
 MARKETPLACE_FILE = Path(".claude-plugin/marketplace.json")
 PLUGIN_FILE = Path(".claude-plugin/plugin.json")
+
+# What every plugin entry's `source` must be, pinning distribution to the release
+# branch rather than to whichever branch happens to be the repo default (ADR 010).
+EXPECTED_SOURCE = {
+    "ref": "main",
+    "repo": "todofixthis/phx-claude-siat",
+    "source": "github",
+}
 SKILL_ROOTS = (Path("skills"), Path(".agents/skills"))
 WORKFLOW_FILE = Path(".github/workflows/pr.yml")
 
@@ -74,10 +82,14 @@ def check_plugin(errors: list) -> None:
 
 
 def check_marketplace(errors: list) -> None:
-    """Marketplace entries must not carry a version — see docs/adr/001.
+    """Marketplace entries must not carry a version, and must pin the release ref.
 
     The version resolves plugin.json -> marketplace entry -> SHA, so duplicating it
-    in the entry breaks single-source-of-truth.
+    in the entry breaks single-source-of-truth (ADR 001). The `source` pin is what
+    makes `main` the branch users install (ADR 010); dropped or repointed, the entry
+    silently falls back to the repo's default branch, which is `develop`. That fails
+    nowhere else — installs just start serving integration — so it is asserted here
+    rather than left to review, the same reasoning ADR 006 applied to skill tooling.
     """
     marketplace = load_json(MARKETPLACE_FILE, errors)
     if marketplace is None:
@@ -96,6 +108,12 @@ def check_marketplace(errors: list) -> None:
             errors.append(
                 f"{MARKETPLACE_FILE} plugin entry {name} carries a version; "
                 f"the version belongs only in {PLUGIN_FILE} (see docs/adr/001)"
+            )
+        elif entry.get("source") != EXPECTED_SOURCE:
+            errors.append(
+                f"{MARKETPLACE_FILE} plugin entry {name} has source "
+                f"{entry.get('source')!r}; it must be {EXPECTED_SOURCE!r} so installs "
+                f"track the release branch, not the repo default (see docs/adr/010)"
             )
 
 

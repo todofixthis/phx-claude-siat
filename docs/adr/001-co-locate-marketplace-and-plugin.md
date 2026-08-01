@@ -87,6 +87,11 @@ marketplace, or stable-vs-latest channels are needed.
 
 ## Consequences
 
+> **Amended by [ADR 010][]:** the entry now pins `ref: main`, so distribution no longer
+> follows the repository's default branch. The bullets below that reason from the default
+> branch — including the version→commit ambiguity — are superseded on that point only; the
+> decision above stands.
+
 - `version` is removed from the marketplace plugin entry, leaving `plugin.json`
   authoritative. This is safe for existing installs: `plugin.json` already outranks
   the entry, so no resolved version changes and no spurious update fires. Releasing
@@ -104,3 +109,5 @@ marketplace, or stable-vs-latest channels are needed.
 - The split trigger is recorded, so the bet is reversible: migration later is bounded
   — create the new repository, move the marketplace manifest, update the install docs,
   and users re-add the marketplace once.
+
+[ADR 010]: 010-pin-the-marketplace-entry-to-main.md

@@ -33,7 +33,8 @@ repo launched with `--plugin-dir ./` so it resolves.
 
 ## Model of the flow
 
-`main` is the stable branch the marketplace serves (ADR 001's default branch); `develop`
+`main` is the stable branch the marketplace serves — the marketplace entry pins that ref
+(ADR 010), so the repository's default branch does not decide what ships; `develop`
 is integration. A release is the `develop`→`main` PR. The unreleased range is always
 `base = origin/main`, `HEAD = develop` — tag-independent, so it works even with no tags
 yet. Tags are a version→commit record, not the range source.
@@ -101,6 +102,26 @@ timeout 300 gh run watch <id> --compact --exit-status
 run a non-zero exit, and `timeout` caps the wait. Read the exit code rather than the
 output: `0` succeeded, `124` means it is still running at the cap (report that and stop
 — don't re-watch), anything else is a failed run to triage below.
+
+### After a successful run
+
+Two steps a green conclusion does not cover:
+
+- **Fast-forward local `develop`.** CI pushed the back-merge, so the local branch is
+  behind by at least that commit. `git pull --ff-only` — the session that cut the
+  release is usually the one that keeps working in the repo, and the next gate reads
+  `origin/main` against a `develop` that must be current.
+- **Read the run's annotations.** They carry deprecation notices and step warnings that
+  do not fail the run and never appear in the conclusion, so nothing else surfaces them
+  until the deprecated input is removed and a release breaks:
+
+  ```bash
+  gh api /repos/{owner}/{repo}/commits/<merge-sha>/check-runs \
+    --jq '.check_runs[] | "\(.name)\t\(.output.annotations_count)\t\(.output.annotations_url)"'
+  ```
+
+  Fetch the `annotations_url` of any run with a non-zero count. Report what they say;
+  don't fix them mid-release.
 
 ### If the run fails
 
