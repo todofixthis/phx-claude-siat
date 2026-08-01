@@ -69,7 +69,7 @@ When RED/GREEN-testing a skill with subagents (see `superpowers:writing-skills`)
 `docs/superpowers/specs/` and `docs/superpowers/plans/` hold dated design docs and their
 implementation plans. Each is scaffolding for one implementation: commit it while the
 work is in flight so a fresh session can resume mid-branch, then **delete it on the same
-branch before the PR merges**. Once the work lands, the code carries the *what* and an
+branch before the PR is created**. Once the work lands, the code carries the *what* and an
 ADR the *why*; a retained plan only supplies a third, stale answer. Anything in one
 still worth keeping earns an ADR, not a reprieve.
 
