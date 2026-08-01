@@ -76,7 +76,9 @@ broken.
 7. **Open the PR** `develop`→`main` with the notes as the body
    (`gh pr create --base main --head develop`). If an open `develop`→`main` PR already
    exists (a prior aborted run), update its body rather than creating a duplicate. Tell
-   the maintainer to **merge via a merge commit, not squash or rebase** — a merge commit
+   the maintainer that the PR is ready. Both rulesets set `allowed_merge_methods: ["merge"]`,
+   so GitHub refuses squash and rebase — don't ask for a merge commit as though it were the
+   maintainer's responsibility. It matters because a merge commit
    keeps `develop`'s tip a parent of `main`, so the CI back-merge carries no content; a
    squash or rebase replays the work under new SHAs and the back-merge then conflicts.
    Report the PR URL and stop.
