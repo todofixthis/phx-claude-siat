@@ -79,9 +79,9 @@ def generate() -> int:
             has_errors = True
             continue
         fields, title = parsed
-        # Both are deliberately out of the index an agent loads by default:
-        # Superseded because a later ADR replaced it, Archived because the decision
-        # stands but is not worth carrying in context. The ADRs stay in the repo.
+        # Kept out of the index an agent loads by default: Superseded because a later
+        # ADR replaced it, Archived because the decision stands but isn't worth
+        # carrying. Both stay in the repo.
         if fields.get("status") in ("Archived", "Superseded"):
             continue
         number_match = RE_FILE_NUMBER.match(path.name)
