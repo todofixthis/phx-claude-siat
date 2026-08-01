@@ -144,7 +144,7 @@ for when it cannot run at all:
   `gh pr view <N> --json mergeCommit`. A hand-cut tag is signed (local `tag.gpgsign`);
   a mix of signed and unsigned release tags is fine, since signing is unenforced.
 - **Release missing?** `gh release create X.Y.Z --notes-file notes.md`, notes from
-  `python3 scripts/ci/release_notes.py --out notes.md`.
+  `python3 -m scripts.ci.release_notes --out notes.md`.
 - **Back-merge missing?** From `develop`: `git fetch origin && git merge --no-edit origin/main && git push`.
   Verify on the remote:
   `git fetch origin && git merge-base --is-ancestor origin/main origin/develop`.
@@ -171,7 +171,7 @@ only way it is current:
   commits, there is nothing to release;
 - `gh auth status` succeeds and a GitHub remote exists;
 - the manifests and skill frontmatter validate —
-  `python3 scripts/ci/validate_manifests.py`, checking the exit code explicitly. This is
+  `python3 -m scripts.ci.validate_manifests`, checking the exit code explicitly. This is
   the same script CI runs on every PR, so the rules — valid JSON, the ADR 001 no-`version`
   invariant, skill frontmatter, declared tooling gated — live in one place and cannot
   drift from what CI enforces (ADR 005). Running it here fails *before* step 4 mutates

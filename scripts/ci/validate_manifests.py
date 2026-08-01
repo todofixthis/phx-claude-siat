@@ -1,14 +1,11 @@
-#!/usr/bin/env python3
 """Validate the plugin manifests and skill frontmatter.
 
-Run manually from the repo root: python3 scripts/ci/validate_manifests.py
+Run manually from the repo root: python3 -m scripts.ci.validate_manifests
 Run automatically by .github/workflows/pr.yml on every pull request.
 
 Stdlib-only by design (ADR 007): the repo needs no Python project (or PyYAML) at
-its root. The frontmatter parser is adapted from scripts/adr/generate_index.py
-rather than imported, because the two live in sibling directories with no package
-to hang an import off; this copy handles scalars only, where that one also parses
-inline lists.
+its root. The frontmatter parser is imported from scripts.frontmatter rather than
+adapted, so this and the ADR index cannot disagree on the same input (ADR 011).
 """
 
 import json
@@ -17,7 +14,8 @@ import sys
 import tomllib
 from pathlib import Path
 
-from versions import RE_VERSION
+from scripts.ci.versions import RE_VERSION
+from scripts.frontmatter import parse_frontmatter
 
 MARKETPLACE_FILE = Path(".claude-plugin/marketplace.json")
 PLUGIN_FILE = Path(".claude-plugin/plugin.json")
@@ -36,41 +34,6 @@ WORKFLOW_FILE = Path(".github/workflows/pr.yml")
 TOOLING_MARKERS = ("package.json", "pyproject.toml")
 
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
-
-# A value of `>` or `|` opens a YAML block scalar, whose continuation lines this
-# parser cannot see. Trailing chomping indicators (`-`, `+`) included.
-RE_BLOCK_SCALAR = re.compile(r"^[>|][-+]?$")
-
-
-def parse_frontmatter(block: str) -> tuple[dict, list[str]]:
-    """Parse a flat YAML frontmatter block into a dict, plus any problems found.
-
-    Skill frontmatter is `key: value` scalars only, so a line parser suffices.
-
-    Every field must sit on one line. A wrapped value or a block scalar would
-    otherwise parse to whatever fitted on the first line and validate against a
-    truncated description, so both are reported rather than skipped — matching
-    scripts/adr/generate_index.py, which this is adapted from (ADR 007) and must
-    not disagree with on input both parse.
-    """
-    fields: dict = {}
-    problems: list[str] = []
-    for line in block.splitlines():
-        if not line.strip():
-            continue
-        if ":" not in line:
-            problems.append(
-                f"frontmatter line is not `key: value` — wrap onto one line: {line.strip()!r}"
-            )
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if RE_BLOCK_SCALAR.match(value):
-            problems.append(f"frontmatter field {key} uses a block scalar; put it on one line")
-            continue
-        fields[key] = value
-    return fields, problems
 
 
 def load_json(path: Path, errors: list) -> dict | None:

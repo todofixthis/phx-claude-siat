@@ -1,20 +1,21 @@
-#!/usr/bin/env python3
 """Regenerate docs/adr/INDEX.md from ADR frontmatter.
 
-Run manually from the repo root: python3 scripts/adr/generate_index.py
+Run manually from the repo root: python3 -m scripts.adr.generate_index
 Run automatically by .githooks/pre-commit when ADR files are staged.
 
 Stdlib-only by design (ADR 007): ADR frontmatter is a flat key/value block, so a
 small line parser suffices and the repo needs no Python project (or PyYAML) at its
-root.
+root. That parser lives in scripts.frontmatter, shared with the manifest validator
+so the two cannot disagree on the same input (ADR 011).
 """
 
 import re
 import sys
 from pathlib import Path
 
+from scripts.frontmatter import parse_frontmatter
+
 ADR_DIR = Path("docs/adr")
-INDEX_FILE = ADR_DIR / "INDEX.md"
 
 STATUSES = ("Accepted", "Archived", "Superseded")
 
@@ -23,49 +24,11 @@ STATUSES = ("Accepted", "Archived", "Superseded")
 # stay in the repo.
 HIDDEN_STATUSES = ("Archived", "Superseded")
 
-# A value of `>` or `|` opens a YAML block scalar, whose continuation lines this
-# parser cannot see. Trailing chomping indicators (`-`, `+`) included.
-RE_BLOCK_SCALAR = re.compile(r"^[>|][-+]?$")
-
 RE_ADR_FILENAME = re.compile(r"^\d+-.*\.md$")
 RE_FILE_NUMBER = re.compile(r"^(\d+)")
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
 RE_H1_TITLE = re.compile(r"^# (.+)$", re.MULTILINE)
 RE_NUMBER_PREFIX = re.compile(r"^\d+:\s*")
-
-
-def parse_frontmatter(block: str) -> tuple[dict, list[str]]:
-    """Parse a flat YAML frontmatter block into a dict, plus any problems found.
-
-    Handles `key: value` scalars and `key: [a, b, c]` inline lists — the only
-    shapes ADR frontmatter uses. List values become list[str]; scalars stay str.
-
-    Every field must sit on one line. A wrapped value or a block scalar would
-    otherwise parse to whatever fitted on the first line and produce a truncated
-    index row with no error, so both are reported rather than skipped.
-    """
-    fields: dict = {}
-    problems: list[str] = []
-    for line in block.splitlines():
-        if not line.strip():
-            continue
-        if ":" not in line:
-            problems.append(
-                f"frontmatter line is not `key: value` — wrap onto one line: {line.strip()!r}"
-            )
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if RE_BLOCK_SCALAR.match(value):
-            problems.append(f"frontmatter field {key} uses a block scalar; put it on one line")
-            continue
-        if value.startswith("[") and value.endswith("]"):
-            items = [item.strip() for item in value[1:-1].split(",")]
-            fields[key] = [item for item in items if item]
-        else:
-            fields[key] = value
-    return fields, problems
 
 
 def parse_adr(content: str):
@@ -88,9 +51,15 @@ def cell(value) -> str:
     return value.replace("|", "\\|")
 
 
-def generate() -> int:
-    """Regenerate INDEX.md from ADR frontmatter. Return 0 on success, 1 on error."""
-    files = sorted(f for f in ADR_DIR.iterdir() if RE_ADR_FILENAME.match(f.name))
+def generate(adr_dir: Path = ADR_DIR) -> int:
+    """Regenerate INDEX.md from ADR frontmatter. Return 0 on success, 1 on error.
+
+    `adr_dir` is a parameter so tests can point at a fixture directory. Defaulting
+    it to a path relative to the working directory is what lets every caller run
+    this from the repo root without arguments.
+    """
+    index_file = adr_dir / "INDEX.md"
+    files = sorted(f for f in adr_dir.iterdir() if RE_ADR_FILENAME.match(f.name))
 
     rows = []
     has_errors = False
@@ -122,13 +91,10 @@ def generate() -> int:
             continue
         if status in HIDDEN_STATUSES:
             continue
-        number_match = RE_FILE_NUMBER.match(path.name)
-        if not number_match:
-            print(f"Error: {path.name} has no leading number", file=sys.stderr)
-            has_errors = True
-            continue
+        # RE_ADR_FILENAME already required a leading number, so this always matches.
+        number = RE_FILE_NUMBER.match(path.name).group(1)
         rows.append(
-            f"| [{number_match.group(1)}]({path.name}) | {cell(fields.get('status', ''))} "
+            f"| [{number}]({path.name}) | {cell(fields.get('status', ''))} "
             f"| {cell(title)} | {cell(fields.get('tags', []))} | {cell(fields.get('summary', ''))} |"
         )
 
@@ -148,8 +114,8 @@ def generate() -> int:
             "",
         ]
     )
-    INDEX_FILE.write_text(output, encoding="utf-8")
-    print(f"Generated {INDEX_FILE} ({len(rows)} entries)")
+    index_file.write_text(output, encoding="utf-8")
+    print(f"Generated {index_file} ({len(rows)} entries)")
     return 0
 
 

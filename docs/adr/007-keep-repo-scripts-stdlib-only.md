@@ -2,12 +2,17 @@
 status: Accepted
 date: 2026-07-28
 tags: [adr, ci, dependencies, duplication, frontmatter, git-hooks, pep723, pre-commit, python, scripts, stdlib, tooling, uv]
-summary: Keep everything under scripts/ stdlib-only with no Python project at the repo root, and reach for a root project rather than per-script PEP 723 metadata if that ever changes; revisit on a second compromise over a grammar this repo does not define, or when the adapted frontmatter parser gains a third copy or its copies drift on shared input.
+summary: Keep everything under scripts/ stdlib-only with no Python project at the repo root, and reach for a root project rather than per-script PEP 723 metadata if that ever changes; revisit on a second compromise over a grammar this repo does not define — the frontmatter-duplication trigger has already fired and was discharged by ADR 011, which shares the parser rather than adapting it.
 ---
 
 # 007: Keep repo scripts stdlib-only
 
 ## Context
+
+> **Amended by [ADR 011][].** The stdlib-only decision below stands unchanged. What no longer
+> holds: scripts run as `python3 -m scripts.<area>.<name>`, `scripts/` is a package, the
+> frontmatter parser is shared rather than adapted per directory, and `scripts/adr` now has
+> tests. Statements below describing any of those as they were are history, not guidance.
 
 `scripts/` has grown to five files — ADR index generation, manifest validation, release
 notes, a shared version pattern, and one test module — run by CI, the pre-commit hook,
@@ -113,9 +118,10 @@ it.
   substring-matches `.github/workflows/pr.yml` rather than parsing it, a blindness ADR 006
   recorded knowingly. A second such compromise, or that one causing a miss in practice, is
   the trigger.
-- The frontmatter parser gains a third copy, or the two copies disagree on input both must
-  handle. Their current difference is one parsing a superset of the other, which is
-  tolerable; drift on shared input is not, and neither is a third site to keep in step.
+- ~~The frontmatter parser gains a third copy, or the two copies disagree on input both must
+  handle.~~ **Fired and discharged by ADR 011**, which replaced both copies with one shared
+  module. The general form survives it: a second site hand-parsing the same grammar is the
+  trigger, whatever the grammar.
 
 ## Consequences
 
@@ -132,6 +138,7 @@ point of temptation rather than only here.
 
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
+[ADR 011]: 011-make-scripts-a-package.md
 [`creative-commits`]: ../../skills/creative-commits/SKILL.md
 [`generate_index.py`]: ../../scripts/adr/generate_index.py
 [PEP 723]: https://peps.python.org/pep-0723/

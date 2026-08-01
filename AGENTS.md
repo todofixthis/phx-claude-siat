@@ -20,6 +20,9 @@ preceding the code they document, not as trailing comments.
 
 - `scripts/` is stdlib-only and the repo root carries no Python project (ADR 007);
   packaged skills under `skills/<name>/` may declare dependencies.
+- `scripts/` is a package (ADR 011), so run a script as `python3 -m scripts.<area>.<name>`
+  from the repo root — a path invocation fails to import. The whole suite is
+  `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`.
 - Every test function carries a docstring naming the scenario it exercises: the
   function name says what is called, the docstring says what must hold.
 

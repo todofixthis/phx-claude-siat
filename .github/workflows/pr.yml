@@ -50,11 +50,11 @@ jobs:
                       python=true ;;
               esac
               case "$path" in
-                  docs/adr/*|scripts/adr/*)
+                  docs/adr/*|scripts/*)
                       adr=true ;;
               esac
               case "$path" in
-                  CHANGELOG.md|.claude-plugin/*|skills/*/SKILL.md|.agents/skills/*/SKILL.md|scripts/ci/*)
+                  CHANGELOG.md|.claude-plugin/*|skills/*/SKILL.md|.agents/skills/*/SKILL.md|scripts/*)
                       manifests=true ;;
               esac
               # A change to the workflow itself re-runs everything it gates.
@@ -79,7 +79,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Regenerate the ADR index
-        run: python3 scripts/adr/generate_index.py
+        run: python3 -m scripts.adr.generate_index
 
       - name: Check the ADR index is up to date
         run: |
@@ -96,10 +96,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Validate the manifests and skill frontmatter
-        run: python3 scripts/ci/validate_manifests.py
+        run: python3 -m scripts.ci.validate_manifests
 
-      - name: Unit-test the release-notes helper
-        run: python3 -m unittest discover -s scripts/ci -t scripts/ci -p 'test_*.py'
+      - name: Unit-test the repo scripts
+        run: python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 
       # Against the real CHANGELOG, not fixtures: this is what makes an
       # unreleasable version or a CHANGELOG/plugin.json mismatch fail on the pull
@@ -108,7 +108,7 @@ jobs:
       # extracted notes land in the log — worth having on the rare run where what
       # the script read is the question.
       - name: Check the release notes resolve
-        run: python3 scripts/ci/release_notes.py
+        run: python3 -m scripts.ci.release_notes
 
   # Mirrors the tooling skills/creative-commits/pyproject.toml already declares.
   python:

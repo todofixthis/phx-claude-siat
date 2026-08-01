@@ -3,7 +3,7 @@
 Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
 (ADR 007). Run from the repo root:
 
-    python3 -m unittest discover -s scripts/ci -t scripts/ci -p 'test_*.py'
+    python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 """
 
 import contextlib
@@ -13,8 +13,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import release_notes
-from release_notes import main, plugin_version, top_entry
+from scripts.ci import release_notes
+from scripts.ci.release_notes import main, plugin_version, top_entry
 
 CHANGELOG = """# Changelog
 
