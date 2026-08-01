@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Extract the top CHANGELOG entry and assert it matches plugin.json's version.
+
+Stdlib-only, run from the repo root (ADR 007): the repo carries no root Python
+project. Prints the version to stdout and writes the notes to `--out`:
+
+    python3 scripts/ci/release_notes.py --out notes.md
+"""
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+from versions import RE_VERSION, VERSION
+
+DEFAULT_CHANGELOG_FILE = Path("CHANGELOG.md")
+DEFAULT_PLUGIN_FILE = Path(".claude-plugin/plugin.json")
+
+DATE = r"\d{4}-\d{2}-\d{2}"
+
+# A version-entry heading: "## X.Y.Z - YYYY-MM-DD". Sub-sections use ### / ####,
+# which this does not match (character 3 is "#", not a space).
+RE_ENTRY = re.compile(rf"^## (?P<version>{VERSION}) - {DATE}\s*$")
+
+# The same heading with any version shape, including ones RE_ENTRY rejects.
+# Matching this but not RE_ENTRY is an error rather than a miss: falling through
+# to the entry below would publish the previous release's notes under this
+# release's tag.
+RE_ANY_ENTRY = re.compile(rf"^## (?P<version>\S+) - {DATE}\s*$")
+
+
+def plugin_version(plugin_file: Path = DEFAULT_PLUGIN_FILE) -> str:
+    """Return the version the plugin manifest declares.
+
+    This is the plugin's version, not the marketplace's — the marketplace entry
+    carries no version at all (ADR 001).
+    """
+    version = json.loads(plugin_file.read_text(encoding="utf-8")).get("version", "")
+    if not RE_VERSION.match(version):
+        raise ValueError(f"{plugin_file} declares no usable version: {version!r}")
+    return version
+
+
+def top_entry(changelog: str) -> tuple[str, str]:
+    """Return (version, notes) for the newest CHANGELOG entry.
+
+    notes is every line after the heading up to (not including) the next entry
+    heading, stripped of surrounding whitespace.
+    """
+    lines = changelog.splitlines()
+    start = None
+    version = None
+    for index, line in enumerate(lines):
+        if match := RE_ENTRY.match(line):
+            start, version = index, match.group("version")
+            break
+        if unsupported := RE_ANY_ENTRY.match(line):
+            raise ValueError(
+                f"{unsupported.group('version')} is not a releasable version: this"
+                " project publishes X.Y.Z only, with no pre-release suffix or build"
+                " metadata (see docs/adr/008)"
+            )
+    if start is None:
+        raise ValueError("no '## X.Y.Z - DATE' entry found in CHANGELOG")
+    body = []
+    for line in lines[start + 1 :]:
+        if line.startswith("## "):
+            break
+        body.append(line)
+    notes = "\n".join(body).strip()
+    if not notes:
+        raise ValueError(f"the {version} CHANGELOG entry is empty")
+    return version, notes
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--changelog", type=Path, default=DEFAULT_CHANGELOG_FILE)
+    parser.add_argument("--plugin-manifest", type=Path, default=DEFAULT_PLUGIN_FILE)
+    parser.add_argument("--out", type=Path, help="write notes here instead of stdout")
+    args = parser.parse_args(argv)
+
+    version, notes = top_entry(args.changelog.read_text(encoding="utf-8"))
+    declared = plugin_version(args.plugin_manifest)
+    if version != declared:
+        print(
+            f"CHANGELOG top entry is {version} but plugin.json is {declared}",
+            file=sys.stderr,
+        )
+        return 1
+    print(version)
+    if args.out:
+        args.out.write_text(f"{notes}\n", encoding="utf-8")
+    else:
+        sys.stdout.write(f"{notes}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
