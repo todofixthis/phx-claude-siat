@@ -22,14 +22,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # A per-run installation token for the release App, which is the
-      # develop-scoped bypass actor. Minted here, revoked in the final step. The
-      # secrets are named for that App so a second App installed later needs its
-      # own pair rather than quietly inheriting these.
+      # develop-scoped bypass actor. The action revokes it in its own post step,
+      # so there is nothing to clean up here — revoking it explicitly instead
+      # makes that post step fail with "Bad credentials". The secrets are named
+      # for that App so a second App installed later needs its own pair rather
+      # than quietly inheriting these. `client-id` takes the App's Client ID,
+      # which is a different value from the numeric App ID the legacy `app-id`
+      # input wanted.
       - name: Mint an installation token for the release App
         id: release-app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,7 +67,7 @@ jobs:
       - name: Read the version and build the release notes
         id: release
         run: |
-          version=$(python3 scripts/ci/release_notes.py --out notes.md)
+          version=$(python3 -m scripts.ci.release_notes --out notes.md)
           if [ -z "$version" ]; then
             echo "❌ no version resolved from the CHANGELOG and plugin manifest"
             exit 1
@@ -129,9 +133,3 @@ jobs:
             echo "❌ origin/develop does not contain origin/main; the back-merge did not land"
             exit 1
           fi
-
-      - name: Revoke the App token
-        if: always()
-        env:
-          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
-        run: gh api --method DELETE /installation/token || true
