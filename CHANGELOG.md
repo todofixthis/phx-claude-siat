@@ -18,7 +18,14 @@ what `phx:writing-adrs` writes, and what it asks you.
 
   **Migration:** an ADR carrying `status: Deprecated` becomes `Accepted`, marker left
   where it is. Do **not** rename it to `Archived` — that is a new and unrelated status,
-  not this one under another name.
+  not this one under another name. Across a whole `docs/adr/`, hand the judgement to
+  your agent rather than making it yourself:
+
+  ````markdown
+  Read the Frontmatter Fields and Conventions sections of the phx:writing-adrs skill,
+  then find every ADR in docs/adr/ carrying `status: Deprecated`. For each, tell me
+  which status it should now hold and why, before changing anything.
+  ````
 
 #### Added
 
@@ -62,8 +69,16 @@ what `phx:writing-adrs` writes, and what it asks you.
   `source` reaches you with this release's bump. But the catalogue holding that `source`
   is itself read from the default branch: if your cached catalogue predates the pin,
   this version can be fetched through the old source and cached, and an update whose
-  resolved version is unchanged is then skipped. For certainty you are on the released
-  tree, uninstall and reinstall rather than relying on the update.
+  resolved version is unchanged is then skipped.
+
+  For certainty you are on the released tree, refresh the catalogue and reinstall rather
+  than relying on the update:
+
+  ````shell
+  /plugin uninstall phx@todofixthis
+  /plugin marketplace update todofixthis
+  /plugin install phx@todofixthis
+  ````
 
 ### For phx-claude-siat contributors
 
@@ -81,6 +96,11 @@ what `phx:writing-adrs` writes, and what it asks you.
   keys, no key containing whitespace. The parser used to keep whatever fitted on the
   first line and say nothing. Descriptions are long, so this is the likeliest one to
   catch you: wrapping used to work.
+
+  The limit exists because of ADR 007: the repo hand-parses frontmatter line by line
+  rather than depending on PyYAML. Taking that dependency would lift it, and ADR 007's
+  standing trigger is exactly a script having to parse a grammar this repo does not
+  define — but we are not ready to take it yet.
 
 - **Checks now reject, rather than pass or crash on, input they previously let by:**
   - an ADR with an unrecognised status, or a status missing the field it owns;
