@@ -20,9 +20,13 @@ or the change is "small" is still skipping it — don't.
 ## Preconditions
 
 `phx:writing-release-notes` and `phx:creative-commits` must resolve. Both are plugin
-skills (`phx:` prefix); this skill is a project skill (unprefixed). Because
-`writing-release-notes` is unpublished until this process first ships it, run in this
-repo launched with `--plugin-dir ./` so it resolves.
+skills (`phx:` prefix); this skill is a project skill (unprefixed) and loads from the
+working tree either way, so a cached plugin serves the release fine. The exception is a
+release that changes one of those two — check with
+`git diff --stat origin/main..develop -- skills/writing-release-notes skills/creative-commits`,
+and where that is non-empty, stop and ask the maintainer to relaunch with `--plugin-dir ./`
+so the release is cut by the skill it is about to ship rather than the one already
+published.
 
 ## Inputs (both optional)
 
@@ -70,7 +74,9 @@ broken.
    the generated notes go under a heading of the new version + today's date. There is no
    `[Unreleased]` section — the changelog records released versions only (ADR 002).
 5. **Bump `plugin.json`** to the new version — and **only** there; the marketplace entry
-   carries no version (ADR 001).
+   carries no version (ADR 001). Replace the version string in place rather than
+   re-serialising the file — `json.dumps` and `jq .` both reformat it, expanding the
+   `keywords` array across several lines and burying the one line that changed.
 6. **Commit** the prep (`CHANGELOG.md` + `plugin.json`) via `phx:creative-commits` on
    `develop`; push, and verify the push succeeded before continuing.
 7. **Open the PR** `develop`→`main` with the notes as the body
@@ -80,6 +86,11 @@ broken.
    `allowed_merge_methods: ["merge"]`, so GitHub refuses squash and rebase — which matters
    because a merge commit keeps `develop`'s tip a parent of `main`, leaving the CI
    back-merge no content to carry, where a replay under new SHAs would conflict.
+   Both also require review threads resolved, so comments left on the release pull
+   request block its own merge. Read `gh pr view <N> --json mergeable,mergeStateStatus`
+   before reporting: green checks with `BLOCKED` is usually an unresolved thread, though a
+   changes-requested review or a branch behind its base does the same. Say which it is,
+   rather than leaving the maintainer at a greyed-out button.
 
 ## After merge — CI publishes
 
