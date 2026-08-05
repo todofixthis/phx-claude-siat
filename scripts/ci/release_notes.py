@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 """Extract the top CHANGELOG entry and assert it matches plugin.json's version.
 
 Stdlib-only, run from the repo root (ADR 007): the repo carries no root Python
 project. Prints the version to stdout and writes the notes to `--out`:
 
-    python3 scripts/ci/release_notes.py --out notes.md
+    python3 -m scripts.ci.release_notes --out notes.md
 """
 
 import argparse
@@ -13,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-from versions import RE_VERSION, VERSION
+from scripts.ci.versions import RE_VERSION, VERSION
 
 DEFAULT_CHANGELOG_FILE = Path("CHANGELOG.md")
 DEFAULT_PLUGIN_FILE = Path(".claude-plugin/plugin.json")

@@ -67,7 +67,7 @@ jobs:
       - name: Read the version and build the release notes
         id: release
         run: |
-          version=$(python3 scripts/ci/release_notes.py --out notes.md)
+          version=$(python3 -m scripts.ci.release_notes --out notes.md)
           if [ -z "$version" ]; then
             echo "❌ no version resolved from the CHANGELOG and plugin manifest"
             exit 1

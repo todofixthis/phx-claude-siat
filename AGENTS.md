@@ -20,8 +20,18 @@ preceding the code they document, not as trailing comments.
 
 - `scripts/` is stdlib-only and the repo root carries no Python project (ADR 007);
   packaged skills under `skills/<name>/` may declare dependencies.
-- Every test function carries a docstring naming the scenario it exercises: the
-  function name says what is called, the docstring says what must hold.
+- `scripts/` is a package (ADR 011), so run a script as `python3 -m scripts.<area>.<name>`
+  from the repo root — a path invocation fails to import. The whole suite is
+  `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`.
+- Every function annotates its return type and its named parameters, `-> None`
+  included; `*args` and `**kwargs` are left bare. Test functions are exempt from
+  both; the helpers and fixture classes serving them are not.
+- Where a literal names something a module already defines a constant for — a
+  filename, a path, a header — import the constant instead, tests included. A
+  rename then fails in one place rather than passing against a stale string. Give a
+  literal a constant of its own once a second use appears.
+- Test conventions live in `.agents/rules/testing.md`; read it before writing or
+  changing tests.
 
 ## Skill layout
 

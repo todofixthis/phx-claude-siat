@@ -1,9 +1,9 @@
-"""Unit tests for release_notes.py.
+"""Tests for release_notes.py.
 
 Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
 (ADR 007). Run from the repo root:
 
-    python3 -m unittest discover -s scripts/ci -t scripts/ci -p 'test_*.py'
+    python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 """
 
 import contextlib
@@ -11,10 +11,11 @@ import io
 import json
 import tempfile
 import unittest
+from collections.abc import Iterator
 from pathlib import Path
 
-import release_notes
-from release_notes import main, plugin_version, top_entry
+from scripts.ci import release_notes
+from scripts.ci.release_notes import main, plugin_version, top_entry
 
 CHANGELOG = """# Changelog
 
@@ -39,7 +40,7 @@ TOP_NOTES = """### For phx plugin users
 
 
 @contextlib.contextmanager
-def release_files(changelog: str = CHANGELOG, version: str = "1.3.0"):
+def release_files(changelog: str = CHANGELOG, version: str = "1.3.0") -> Iterator[Path]:
     """Yield a temp directory holding a changelog and manifest at their default paths."""
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -53,6 +54,8 @@ def release_files(changelog: str = CHANGELOG, version: str = "1.3.0"):
 
 
 class TopEntryTests(unittest.TestCase):
+    """Unit tests for ``top_entry()``."""
+
     def test_returns_the_newest_version(self):
         """The version comes from the first entry heading, not a later one."""
         version, _ = top_entry(CHANGELOG)
@@ -86,6 +89,8 @@ class TopEntryTests(unittest.TestCase):
 
 
 class PluginVersionTests(unittest.TestCase):
+    """Unit tests for ``plugin_version()``."""
+
     def test_reads_the_declared_version(self):
         """The version comes from the manifest's `version` field."""
         with release_files(version="9.9.9") as root:
@@ -101,6 +106,8 @@ class PluginVersionTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    """Integration tests: the command line, end to end over real files."""
+
     def test_defaults_resolve_against_the_working_directory(self):
         """With no path arguments, the default paths locate the repo's own files."""
         with release_files() as root, contextlib.chdir(root):

@@ -12,5 +12,5 @@ done
 
 [ "$adr_staged" -eq 1 ] || exit 0
 
-python3 scripts/adr/generate_index.py || exit 1
+python3 -m scripts.adr.generate_index || exit 1
 git add docs/adr/INDEX.md
