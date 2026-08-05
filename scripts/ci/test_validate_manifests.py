@@ -1,4 +1,4 @@
-"""Unit tests for validate_manifests.py.
+"""Tests for validate_manifests.py.
 
 Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
 (ADR 007). Run from the repo root:
@@ -10,7 +10,7 @@ each call, so these tests `chdir` into a fixture repo rather than patching five
 constants and risking a half-applied patch. That works only while those constants
 stay relative — anchoring one to `__file__` would break it silently.
 
-Each test starts from a skeleton that validates clean and breaks exactly one thing,
+Each test starts from a fixture that validates clean and breaks exactly one thing,
 so a single reported error is meaningful. `test_pristine_fixture_is_valid` is what
 makes that true; it also guards against a lost chdir, which would otherwise let a
 positive test pass by reading the real repo.
@@ -19,8 +19,10 @@ positive test pass by reading the real repo.
 import contextlib
 import io
 import json
+import shutil
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 
 from scripts.ci import validate_manifests as vm
@@ -33,45 +35,47 @@ WORKFLOW = "jobs:\n  python:\n    # runs skills/example-tooling under black\n   
 class ManifestTestCase(unittest.TestCase):
     """A temp directory holding a repo skeleton that validates clean."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         directory = self.enterContext(tempfile.TemporaryDirectory())
         self.root = Path(directory)
         self.enterContext(contextlib.chdir(self.root))
         self.assertNotEqual(Path.cwd(), Path(vm.__file__).parents[2], "fixture chdir failed")
 
-        self.write_plugin()
+        self.write_plugin_manifest()
         self.write_marketplace()
-        for root in ("skills", ".agents/skills"):
-            self.write_skill(f"{root}/plain")
-        self.write(".github/workflows/pr.yml", WORKFLOW)
+        for root in vm.SKILL_ROOTS:
+            self.write_skill(root / "plain")
+        self.write(vm.WORKFLOW_FILE, WORKFLOW)
 
-    def write(self, path: str, content: str) -> Path:
+    def write(self, path: str | Path, content: str) -> Path:
         """Create a file in the fixture, making its parents as needed."""
         target = self.root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return target
 
-    def write_plugin(self, **overrides) -> None:
+    def write_plugin_manifest(self, **overrides) -> None:
         """Write .claude-plugin/plugin.json, with any field overridden."""
         manifest = {"name": PLUGIN_NAME, "version": "1.2.3"} | overrides
-        self.write(".claude-plugin/plugin.json", json.dumps(manifest))
+        self.write(vm.PLUGIN_FILE, json.dumps(manifest))
 
     def write_marketplace(self, *entries) -> None:
         """Write .claude-plugin/marketplace.json, defaulting to one valid entry."""
         if not entries:
             entries = ({"name": PLUGIN_NAME, "source": dict(vm.EXPECTED_SOURCE)},)
-        self.write(".claude-plugin/marketplace.json", json.dumps({"plugins": list(entries)}))
+        self.write(vm.MARKETPLACE_FILE, json.dumps({"plugins": list(entries)}))
 
-    def write_skill(self, path: str, name: str | None = None, body: str | None = None) -> None:
+    def write_skill(
+        self, path: str | Path, name: str | None = None, body: str | None = None
+    ) -> None:
         """Write a SKILL.md whose declared name matches its directory by default."""
         directory = Path(path)
         content = body if body is not None else SKILL_FRONTMATTER.format(
             name=name if name is not None else directory.name
         )
-        self.write(f"{path}/SKILL.md", content)
+        self.write(directory / vm.SKILL_FILENAME, content)
 
-    def errors_from(self, check, *args) -> list:
+    def errors_from(self, check: Callable, *args) -> list:
         """Run one check in isolation and return the errors it recorded."""
         errors: list = []
         check(*args, errors)
@@ -85,15 +89,9 @@ class ManifestTestCase(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
 
-class FixtureTests(ManifestTestCase):
-    def test_pristine_fixture_is_valid(self):
-        """The skeleton every other test mutates must itself pass, or nothing below means anything."""
-        code, out, err = self.run_validate()
-        self.assertEqual((code, err), (0, ""))
-        self.assertIn("Manifests and skill frontmatter are valid", out)
-
-
 class LoadJsonTests(ManifestTestCase):
+    """Unit tests for ``load_json()``."""
+
     def test_reports_a_missing_file(self):
         """A manifest that does not exist is named rather than crashing on open."""
         errors: list = []
@@ -116,6 +114,8 @@ class LoadJsonTests(ManifestTestCase):
 
 
 class CheckPluginTests(ManifestTestCase):
+    """Unit tests for ``check_plugin()``."""
+
     def check(self) -> list:
         """Load the fixture's plugin manifest and run the plugin check over it."""
         errors: list = []
@@ -124,29 +124,30 @@ class CheckPluginTests(ManifestTestCase):
 
     def test_reports_a_missing_version(self):
         """The plugin manifest is the single source of the version, so it must carry one."""
-        self.write_plugin(version=None)
-        self.write(".claude-plugin/plugin.json", json.dumps({"name": PLUGIN_NAME}))
+        self.write(vm.PLUGIN_FILE, json.dumps({"name": PLUGIN_NAME}))
         self.assertEqual(self.check(), [f"{vm.PLUGIN_FILE} has no version"])
 
     def test_rejects_a_version_that_is_not_a_string(self):
         """A JSON number is a realistic hand-edit and must not reach the regex."""
-        self.write(".claude-plugin/plugin.json", json.dumps({"name": PLUGIN_NAME, "version": 1.0}))
+        self.write(vm.PLUGIN_FILE, json.dumps({"name": PLUGIN_NAME, "version": 1.0}))
         self.assertIn("is not releasable", self.check()[0])
 
     def test_reports_a_missing_name(self):
         """The name an install resolves must exist, and the marketplace check relies on it."""
-        self.write(".claude-plugin/plugin.json", json.dumps({"version": "1.2.3"}))
+        self.write(vm.PLUGIN_FILE, json.dumps({"version": "1.2.3"}))
         self.assertIn(f"{vm.PLUGIN_FILE} has no name", self.check())
 
     def test_rejects_a_pre_release_version(self):
         """Only X.Y.Z can be published, so a suffix fails here rather than after the merge."""
-        self.write_plugin(version="1.2.3-rc.1")
+        self.write_plugin_manifest(version="1.2.3-rc.1")
         error = self.check()[0]
         self.assertIn("'1.2.3-rc.1'", error)
         self.assertIn("docs/adr/008", error)
 
 
 class CheckMarketplaceTests(ManifestTestCase):
+    """Unit tests for ``check_marketplace()``."""
+
     def check(self) -> list:
         """Run the marketplace check against the fixture's two manifests."""
         errors: list = []
@@ -172,7 +173,7 @@ class CheckMarketplaceTests(ManifestTestCase):
         """The pin is compared as a mapping, so key order in the file is irrelevant."""
         source = dict(reversed(list(vm.EXPECTED_SOURCE.items())))
         self.write(
-            ".claude-plugin/marketplace.json",
+            vm.MARKETPLACE_FILE,
             json.dumps({"plugins": [{"name": PLUGIN_NAME, "source": source}]}),
         )
         self.assertEqual(self.check(), [])
@@ -197,13 +198,16 @@ class CheckMarketplaceTests(ManifestTestCase):
         self.assertIn("'other'", error)
         self.assertIn(f"'{PLUGIN_NAME}'", error)
 
-    def test_allows_a_second_entry_alongside_the_plugin(self):
-        """The catalogue belongs to the owner, so listing another plugin is not an error."""
+    def test_rejects_a_second_entry_alongside_the_plugin(self):
+        """Distributing another plugin from here is a decision, and this is where it surfaces."""
         self.write_marketplace(
             {"name": PLUGIN_NAME, "source": dict(vm.EXPECTED_SOURCE)},
             {"name": "other-plugin", "source": dict(vm.EXPECTED_SOURCE)},
         )
-        self.assertEqual(self.check(), [])
+        error = self.check()[0]
+        self.assertIn("lists 2 entries", error)
+        self.assertIn("Remove the duplicate", error)
+        self.assertIn("docs/adr/012", error)
 
     def test_rejects_a_catalogue_that_never_names_the_plugin(self):
         """Installs resolve by name, so some entry has to carry the plugin's own."""
@@ -220,29 +224,33 @@ class CheckMarketplaceTests(ManifestTestCase):
         """Without a list of plugins there is no catalogue to check."""
         for payload in ({}, {"plugins": {"name": PLUGIN_NAME}}):
             with self.subTest(payload=payload):
-                self.write(".claude-plugin/marketplace.json", json.dumps(payload))
+                self.write(vm.MARKETPLACE_FILE, json.dumps(payload))
                 self.assertIn("has no plugins list", self.check()[0])
 
     def test_rejects_an_empty_plugins_list(self):
         """An empty catalogue is well-formed and advertises nothing."""
-        self.write(".claude-plugin/marketplace.json", json.dumps({"plugins": []}))
+        self.write(vm.MARKETPLACE_FILE, json.dumps({"plugins": []}))
         self.assertEqual(self.check(), [f"{vm.MARKETPLACE_FILE} lists no plugins"])
 
 
 class CheckSkillsTests(ManifestTestCase):
+    """Unit tests for ``check_skills()``."""
+
     def check(self) -> list:
         """Run the skill check over the fixture's skill roots."""
         return self.errors_from(vm.check_skills)
 
     def test_reports_a_directory_with_no_skill_file(self):
         """Every directory under a skill root is a skill and must declare itself."""
-        (self.root / "skills" / "empty").mkdir()
-        self.assertIn("skills/empty/SKILL.md is missing", self.check())
+        empty = vm.SKILL_ROOTS[0] / "empty"
+        (self.root / empty).mkdir()
+        self.assertIn(f"{empty / vm.SKILL_FILENAME} is missing", self.check())
 
     def test_reports_a_skill_file_with_no_frontmatter(self):
         """Frontmatter is where the name and description live; without it there is nothing to check."""
-        self.write_skill("skills/bare", body="# Just a heading\n")
-        self.assertIn("skills/bare/SKILL.md has no frontmatter block", self.check())
+        bare = vm.SKILL_ROOTS[0] / "bare"
+        self.write_skill(bare, body="# Just a heading\n")
+        self.assertIn(f"{bare / vm.SKILL_FILENAME} has no frontmatter block", self.check())
 
     def test_rejects_a_name_that_does_not_match_the_directory(self):
         """The invocation name comes from the directory, so a mismatch renames the skill silently."""
@@ -250,12 +258,15 @@ class CheckSkillsTests(ManifestTestCase):
         error = next(e for e in self.check() if "does not match" in e)
         self.assertIn("'declared'", error)
 
-    def test_reports_a_missing_name_and_an_empty_description(self):
-        """Both fields are required, and an empty value is as absent as a missing key."""
-        self.write_skill("skills/thin", body="---\ndescription:\n---\n\n# Skill\n")
-        errors = self.check()
-        self.assertIn("skills/thin/SKILL.md has no name", errors)
-        self.assertIn("skills/thin/SKILL.md has no description", errors)
+    def test_reports_a_missing_name(self):
+        """The name is what the skill is invoked as, so frontmatter has to declare it."""
+        self.write_skill("skills/thin", body="---\ndescription: A thing.\n---\n\n# Skill\n")
+        self.assertIn(f"skills/thin/{vm.SKILL_FILENAME} has no name", self.check())
+
+    def test_reports_an_empty_description(self):
+        """A key present with nothing after it is as absent as a missing key."""
+        self.write_skill("skills/thin", body="---\nname: thin\ndescription:\n---\n\n# Skill\n")
+        self.assertIn(f"skills/thin/{vm.SKILL_FILENAME} has no description", self.check())
 
     def test_surfaces_parser_problems_against_the_file(self):
         """A frontmatter problem must name the file it came from, not float free."""
@@ -271,27 +282,26 @@ class CheckSkillsTests(ManifestTestCase):
 
     def test_reports_a_missing_skill_root(self):
         """A vanished root is an error, not zero skills to check."""
-        for item in (self.root / ".agents" / "skills" / "plain").iterdir():
-            item.unlink()
-        (self.root / ".agents" / "skills" / "plain").rmdir()
-        (self.root / ".agents" / "skills").rmdir()
-        self.assertIn(".agents/skills is missing", self.check())
+        root = vm.SKILL_ROOTS[-1]
+        shutil.rmtree(self.root / root)
+        self.assertIn(f"{root} is missing", self.check())
 
     def test_checks_both_skill_roots(self):
         """A broken project-local skill must fail as loudly as a published one."""
-        self.write_skill(".agents/skills/local", name="wrong")
-        self.assertTrue(
-            any(".agents/skills/local" in error for error in self.check()), self.check()
-        )
+        local = vm.SKILL_ROOTS[-1] / "local"
+        self.write_skill(local, name="wrong")
+        self.assertTrue(any(str(local) in error for error in self.check()), self.check())
 
 
 class DeclaredToolsTests(ManifestTestCase):
+    """Unit tests for ``declared_tools()``."""
+
     def tools(self, toml: str | None) -> tuple[list, list]:
         """Write a skill's pyproject (or none) and return its tools and errors."""
         skill = self.root / "skills" / "tooled"
         skill.mkdir(parents=True, exist_ok=True)
         if toml is not None:
-            (skill / "pyproject.toml").write_text(toml, encoding="utf-8")
+            (skill / vm.PYPROJECT_FILENAME).write_text(toml, encoding="utf-8")
         errors: list = []
         return vm.declared_tools(Path("skills/tooled"), errors), errors
 
@@ -343,6 +353,8 @@ class DeclaredToolsTests(ManifestTestCase):
 
 
 class CheckSkillToolingTests(ManifestTestCase):
+    """Unit tests for ``check_skill_tooling()``."""
+
     def check(self) -> list:
         """Run the tooling-mirror check over the fixture."""
         return self.errors_from(vm.check_skill_tooling)
@@ -353,47 +365,55 @@ class CheckSkillToolingTests(ManifestTestCase):
 
     def test_reports_a_tooling_skill_the_workflow_never_names(self):
         """A skill CI does not gate is the drift ADR 006 exists to catch."""
-        self.write("skills/ungated/SKILL.md", SKILL_FRONTMATTER.format(name="ungated"))
-        self.write("skills/ungated/pyproject.toml", "[project]\nname = 'x'\n")
+        self.write_skill("skills/ungated")
+        self.write(f"skills/ungated/{vm.PYPROJECT_FILENAME}", "[project]\nname = 'x'\n")
         error = next(e for e in self.check() if "skills/ungated" in e)
-        self.assertIn("nothing in .github/workflows/pr.yml references it", error)
+        self.assertIn(f"nothing in {vm.WORKFLOW_FILE} references it", error)
 
     def test_counts_a_package_json_as_tooling(self):
         """Both markers mean the skill ships something a job has to run."""
-        self.write("skills/noded/SKILL.md", SKILL_FRONTMATTER.format(name="noded"))
-        self.write("skills/noded/package.json", "{}")
+        self.write_skill("skills/noded")
+        self.write(f"skills/noded/{vm.TOOLING_MARKERS[0]}", "{}")
         self.assertTrue(any("skills/noded" in error for error in self.check()))
 
     def test_reports_a_declared_tool_the_workflow_never_runs(self):
         """The second half of the mirror: a gated skill whose declaration outgrew its job."""
-        self.write("skills/example-tooling/SKILL.md", SKILL_FRONTMATTER.format(name="example-tooling"))
+        self.write_skill("skills/example-tooling")
         self.write(
-            "skills/example-tooling/pyproject.toml",
+            f"skills/example-tooling/{vm.PYPROJECT_FILENAME}",
             '[tool.autohooks]\npre-commit = ["autohooks.plugins.mypy"]\n',
         )
         errors = self.check()
         self.assertEqual(len(errors), 1, errors)
-        self.assertIn("declares mypy but .github/workflows/pr.yml never runs it", errors[0])
+        self.assertIn(f"declares mypy but {vm.WORKFLOW_FILE} never runs it", errors[0])
 
     def test_a_tool_named_only_in_a_comment_satisfies_the_check(self):
         """ADR 006 accepted this blindness knowingly; pinning it makes any change deliberate."""
-        self.write("skills/example-tooling/SKILL.md", SKILL_FRONTMATTER.format(name="example-tooling"))
+        self.write_skill("skills/example-tooling")
         self.write(
-            "skills/example-tooling/pyproject.toml",
+            f"skills/example-tooling/{vm.PYPROJECT_FILENAME}",
             '[tool.autohooks]\npre-commit = ["autohooks.plugins.black"]\n',
         )
         self.assertEqual(self.check(), [])
 
     def test_reports_a_missing_workflow(self):
         """Without the workflow there is nothing to mirror against."""
-        (self.root / ".github" / "workflows" / "pr.yml").unlink()
-        self.assertEqual(self.check(), [".github/workflows/pr.yml is missing"])
+        (self.root / vm.WORKFLOW_FILE).unlink()
+        self.assertEqual(self.check(), [f"{vm.WORKFLOW_FILE} is missing"])
 
 
 class ValidateTests(ManifestTestCase):
+    """Integration tests: every check runs, and one run reports all of them."""
+
+    def test_pristine_fixture_is_valid(self):
+        """The fixture every other test mutates must itself pass, or nothing else means anything."""
+        code, out, err = self.run_validate()
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("Manifests and skill frontmatter are valid", out)
+
     def test_reports_a_single_failure_and_exits_non_zero(self):
         """One broken invariant fails the run, with the error and the trailer on stderr."""
-        self.write_plugin(version="nope")
+        self.write_plugin_manifest(version="nope")
         code, _, err = self.run_validate()
         self.assertEqual(code, 1)
         self.assertIn("is not releasable", err)
@@ -401,7 +421,7 @@ class ValidateTests(ManifestTestCase):
 
     def test_reports_failures_from_every_check_in_one_run(self):
         """No check short-circuits the rest, so one run lists everything to fix."""
-        self.write_plugin(version="nope")
+        self.write_plugin_manifest(version="nope")
         self.write_marketplace({"name": PLUGIN_NAME, "source": "./"})
         self.write_skill("skills/mismatched", name="other")
         code, _, err = self.run_validate()

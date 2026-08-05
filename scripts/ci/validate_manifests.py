@@ -30,11 +30,13 @@ EXPECTED_SOURCE = {
     "repo": "todofixthis/phx-claude-siat",
     "source": "github",
 }
+PYPROJECT_FILENAME = "pyproject.toml"
+SKILL_FILENAME = "SKILL.md"
 SKILL_ROOTS = (Path("skills"), Path(".agents/skills"))
 WORKFLOW_FILE = Path(".github/workflows/pr.yml")
 
 # Files whose presence means a skill ships tooling something has to run.
-TOOLING_MARKERS = ("package.json", "pyproject.toml")
+TOOLING_MARKERS = ("package.json", PYPROJECT_FILENAME)
 
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
@@ -61,20 +63,20 @@ def load_json(path: Path, errors: list) -> dict | None:
     return content
 
 
-def check_plugin(plugin: dict | None, errors: list) -> None:
+def check_plugin(plugin_manifest: dict | None, errors: list) -> None:
     """The plugin manifest must carry a name and a releasable version.
 
     The name is what an install resolves, and it is also what the marketplace check
     compares its entry against — unvalidated here, a missing name would silently
     disable that comparison rather than failing.
     """
-    if plugin is None:
+    if plugin_manifest is None:
         return
 
-    if not plugin.get("name"):
+    if not plugin_manifest.get("name"):
         errors.append(f"{PLUGIN_FILE} has no name")
 
-    version = plugin.get("version")
+    version = plugin_manifest.get("version")
     if version is None:
         errors.append(f"{PLUGIN_FILE} has no version")
     elif not isinstance(version, str) or not RE_VERSION.match(version):
@@ -85,8 +87,8 @@ def check_plugin(plugin: dict | None, errors: list) -> None:
         )
 
 
-def check_marketplace(plugin: dict | None, errors: list) -> None:
-    """Marketplace entries must name the plugin, omit its version, and pin the release ref.
+def check_marketplace(plugin_manifest: dict | None, errors: list) -> None:
+    """The catalogue lists this plugin alone, versionless, pinned to the release ref.
 
     The version resolves plugin.json -> marketplace entry -> SHA, so duplicating it
     in the entry breaks single-source-of-truth (ADR 001). The `source` pin is what
@@ -94,6 +96,10 @@ def check_marketplace(plugin: dict | None, errors: list) -> None:
     silently falls back to the repo's default branch, which is `develop`. That fails
     nowhere else — installs just start serving integration — so it is asserted here
     rather than left to review, the same reasoning ADR 006 applied to skill tooling.
+
+    A second entry fails rather than passing as a catalogue that grew: distributing
+    another plugin from here is an architectural change, and this check failing is
+    what tells whoever added the entry that ADR 012 wants the decision recorded.
 
     Each condition is checked independently: an entry that breaks two invariants
     should report both, rather than revealing the second only once the first is fixed.
@@ -111,6 +117,13 @@ def check_marketplace(plugin: dict | None, errors: list) -> None:
     if not plugins:
         errors.append(f"{MARKETPLACE_FILE} lists no plugins")
         return
+    if len(plugins) > 1:
+        errors.append(
+            f"{MARKETPLACE_FILE} lists {len(plugins)} entries; this catalogue advertises "
+            f"the one plugin {PLUGIN_FILE} declares and nothing else. Remove the "
+            "duplicate, or — if the second plugin is deliberate — reopen docs/adr/001 "
+            "and relax this check, which is the decision docs/adr/012 asks for"
+        )
 
     names = []
     for entry in plugins:
@@ -132,9 +145,7 @@ def check_marketplace(plugin: dict | None, errors: list) -> None:
                 f"track the release branch, not the repo default (see docs/adr/010)"
             )
 
-    # One entry must name this plugin, rather than every entry naming it: the
-    # catalogue belongs to the owner and may list others later.
-    plugin_name = plugin.get("name") if plugin else None
+    plugin_name = plugin_manifest.get("name") if plugin_manifest else None
     if plugin_name and plugin_name not in names:
         errors.append(
             f"{MARKETPLACE_FILE} lists no entry named {plugin_name!r}, which is what "
@@ -150,7 +161,7 @@ def check_skills(errors: list) -> None:
             continue
 
         for skill_dir in sorted(d for d in root.iterdir() if d.is_dir()):
-            path = skill_dir / "SKILL.md"
+            path = skill_dir / SKILL_FILENAME
             if not path.exists():
                 errors.append(f"{path} is missing")
                 continue
@@ -182,7 +193,7 @@ def declared_tools(skill_dir: Path, errors: list) -> list:
     keys, and a trailing dot trims to the empty string — which is a substring of any
     workflow, so the mirror check downstream passes having verified nothing.
     """
-    path = skill_dir / "pyproject.toml"
+    path = skill_dir / PYPROJECT_FILENAME
     if not path.exists():
         return []
 
