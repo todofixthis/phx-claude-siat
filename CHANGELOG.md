@@ -1,5 +1,157 @@
 # Changelog
 
+## 3.0.0 - 2026-08-05
+
+### For phx plugin users
+
+The plugin ships no validator, so nothing below fails a build of yours — these change
+what `phx:writing-adrs` writes, and what it asks you.
+
+#### Breaking changes
+
+- **`status: Deprecated` is gone, and nothing replaces it.** It meant "the investigation
+  concluded no change was warranted" — an ADR where Option 1, do nothing, won. That is
+  now an ordinary `Accepted` ADR with its `(Accepted)` marker on Option 1. The
+  option-numbering rule changed with it, and gained one it lacked: numbering and the
+  marker are fixed when the ADR is written and never derived from `status`, so a
+  superseded ADR keeps its marker on the option that won.
+
+  **Migration:** an ADR carrying `status: Deprecated` becomes `Accepted`, marker left
+  where it is. Do **not** rename it to `Archived` — that is a new and unrelated status,
+  not this one under another name.
+
+#### Added
+
+- **A third status, `Archived`, for a decision worth keeping but not worth loading.** It
+  still binds, but something other than someone reading the index stops people breaking
+  it — typically a comment sitting where the breaking change would be written. Such a
+  decision leaves `docs/adr/INDEX.md`, costing no context, and the skill has your agent
+  search the archived ones before recording any new decision. The bar is deliberately
+  hard: the defence must be met *while the work is still being planned*, so a check that
+  fails afterwards does not qualify.
+
+- **`archived-because`**, a frontmatter field required of an `Archived` ADR and refused
+  of any other: one sentence naming that defence and where someone meets it, so whether
+  and why a decision left the index reads at a glance.
+
+#### Changed
+
+- **The skill asks you rather than recording a premise it cannot check.** Where an ADR
+  would rest on a claim about a tool, workflow, or live setting the agent cannot verify,
+  it raises the question instead of writing the uncertainty in as a caveat. Its review
+  pass now also checks archival timing, and that claims were checked against the thing
+  itself rather than against documentation.
+
+- **The README marks which skills need an instruction in your `CLAUDE.md` before an
+  agent will reach for them** — `creative-commits`, `receiving-code-review` and
+  `writing-plans` — with the lines to add beside each skill rather than in one distant
+  section. Three skills were easy to install and never see used.
+
+- **ADR frontmatter values must sit on one line** — no wrapping, no `>` or `|` block
+  scalars, since a wrapped value truncates under a line-based parser. Advisory for you;
+  nothing shipped enforces it.
+
+#### Fixed
+
+- **Installs now serve releases rather than integration.** The marketplace entry used a
+  relative source, which resolves to the repository's default branch — `develop` — so
+  every install since 1.0.0 has been served the integration branch. The entry now pins
+  `ref: main` on GitHub, and CI asserts the pin. See ADR 010.
+
+  **Mostly no action needed, with one hole.** The cache is keyed by version, so the new
+  `source` reaches you with this release's bump. But the catalogue holding that `source`
+  is itself read from the default branch: if your cached catalogue predates the pin,
+  this version can be fetched through the old source and cached, and an update whose
+  resolved version is unchanged is then skipped. For certainty you are on the released
+  tree, uninstall and reinstall rather than relying on the update.
+
+### For phx-claude-siat contributors
+
+#### Breaking changes
+
+- **Run scripts as `python3 -m scripts.<area>.<name>` from the repo root** (ADR 011).
+  A path invocation fails with an import error, and the scripts lost their shebang and
+  executable bit, so `./scripts/...` fails too. The suite is
+  `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`. The hook and both
+  workflows are converted; a shell alias of your own is not.
+
+- **A wrapped `description:` in any `SKILL.md` now fails the build.** The manifest
+  validator shares the ADR frontmatter parser, so every `SKILL.md` under both skill
+  roots is held to one line per value — no wrapping, no block scalars, no duplicate
+  keys, no key containing whitespace. The parser used to keep whatever fitted on the
+  first line and say nothing. Descriptions are long, so this is the likeliest one to
+  catch you: wrapping used to work.
+
+- **Checks now reject, rather than pass or crash on, input they previously let by:**
+  - an ADR with an unrecognised status, or a status missing the field it owns;
+  - a file in `docs/adr` that is neither an ADR nor the index — a misfiled note, or an
+    ADR named against the convention, which used to drop out of the index unseen;
+  - a plugin manifest with no `name`;
+  - a catalogue that is empty, lists more than one plugin (ADR 012), or names something
+    other than what the plugin manifest declares;
+  - a tooling declaration written as a bare string, a table, or with a trailing dot —
+    the last matched any workflow, because it trims to the empty string;
+  - a manifest holding valid JSON of the wrong shape, which used to end in an
+    `AttributeError` rather than a message naming the file.
+
+- **The release App's Actions secret is renamed** to `RELEASE_APP_CLIENT_ID`, because
+  the token action takes the App's Client ID — a different value from the numeric App ID
+  the deprecated input wanted. **Migration:** read the Client ID off the App's settings
+  page and store it under the new name; the private key is unchanged. Full setup in
+  `docs/release-automation.md`.
+
+- **A pull request must be current with its base before it can merge.** The rulesets are
+  renamed `trunk-develop` and `trunk-main`, the first targeting `refs/heads/develop`
+  literally so it survives a default-branch change;
+  `strict_required_status_checks_policy` is on and review threads must be resolved.
+
+- **A fork cannot pass the `manifests` job unchanged.** The `source` check compares
+  against `todofixthis/phx-claude-siat` at `main` exactly, with no escape hatch, so a
+  fork fails on a file nobody touched. Repoint `EXPECTED_SOURCE` in
+  `scripts/ci/validate_manifests.py`.
+
+- **`/plugin marketplace add ./` no longer serves your clone** — it fetches the pinned
+  `main` from GitHub. `--plugin-dir ./` remains the only way to run working-tree code.
+
+- **Two conventions are enforced by review now, both written in `AGENTS.md`.** Every
+  function annotates its return type and named parameters — `*args` and `**kwargs` stay
+  bare, test functions are exempt, their helpers and fixtures are not. A literal
+  duplicating a constant imports the constant instead, tests included.
+
+#### Added
+
+- **A test suite where there was almost none** — 90 new tests, 101 in total, over the
+  frontmatter parser, the ADR index generator and the manifest validator. ADR 007 called
+  `scripts/adr` having no tests "the largest cost here, larger than any duplicated
+  parser". Every check is mutation-tested: disabled in turn, with a test confirmed to
+  catch it.
+
+- **`.agents/rules/testing.md`**, a path-scoped rule holding the testing conventions,
+  loaded when you open a test file rather than every session. It also asks you to name
+  in the pull request which checks you mutation-tested and what caught each — a new
+  expectation, not a description of past work. The test-docstring rule moved here from
+  `AGENTS.md` rather than being dropped; `.claude/rules` symlinks to it.
+
+- **Four decision records.** ADR 009 keeps a standing bypass on the `develop` ruleset;
+  ADR 010 pins the marketplace entry to `main`; ADR 011 makes `scripts/` a package;
+  ADR 012 holds the catalogue to one plugin. ADRs 001 and 007 gain amendment notes, and
+  ADR 008 a repointed citation.
+
+- **A porting note in `docs/release-automation.md`** for a project that cannot keep a
+  standing bypass on its integration branch — release branches instead, at three gated
+  pull requests per release.
+
+#### Fixed
+
+- **One frontmatter parser instead of two adapted copies** (ADR 011). Both truncated a
+  wrapped value silently, and the fix applied to input both of them read — the drift
+  ADR 007's revisit trigger existed to catch, now fired and discharged.
+
+- **ADR 006's drift check could not fire on the change it exists to catch.** The
+  `manifests` path filter matched `skills/*/SKILL.md` but not `skills/*/pyproject.toml`,
+  so adding a tool to `[tool.autohooks]` ran no manifest validation at all. It now
+  covers whole skill directories under both roots.
+
 ## 2.0.0 - 2026-08-01
 
 ### For phx plugin users
