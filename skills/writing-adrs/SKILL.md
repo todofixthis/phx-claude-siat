@@ -17,6 +17,7 @@ status: Accepted
 date: YYYY-MM-DD
 tags: [tag1, tag2, tag3]
 summary: One sentence describing what was decided (not why).
+# plus archived-because or superseded-by, where the status calls for one
 ---
 
 # NNN: Title (Imperative Mood)
@@ -67,14 +68,19 @@ truncated index row.
 
 - **`status`** — `Accepted`, `Archived`, or `Superseded`. All three stay in the repo; the last two are excluded from `docs/adr/INDEX.md`, which is what an agent loads by default.
   - `Accepted` — in force, and worth carrying in context.
-  - `Archived` — in force, but defended by something other than being read, so it need not be carried in context. Archive only when you can **name a defence the breach path passes through while the work is still being planned**. Only two qualify, unless another meets that same timing test: a comment wherever a breach would be authored, met as an agent explores the code; and a breach so large it needs its own ADR, met when the archived-decisions check below runs. An automated check is not enough on its own — a failing hook or pull request arrives after the wrong work is built, protecting the branch rather than the effort. Judge a defence by whether a breacher meets it in time; how tempting the rejected option is decides nothing. Three ways one fails: a comment covers only the sites it sits in, so treat a set of files as growing unless you can call it closed; a note in the files that *keep* a decision does not guard the new file that would break it; and where an ADR rejects several options, a defence covering one covers none. **Name the defence in the ADR**; archiving without one is a bet nobody recorded. Set the status whenever a defence exists, including long after writing.
+  - `Archived` — in force, but defended by something other than being read, so it need not be carried in context. Archive only when you can **name a defence the breach path passes through while the work is still being planned**. Only two qualify, unless another meets that same timing test: a comment wherever a breach would be authored, met as an agent explores the code; and a breach so large it needs its own ADR, met when the archived-decisions check below runs. An automated check is not enough on its own — a failing hook or pull request arrives after the wrong work is built, protecting the branch rather than the effort. Judge a defence by whether a breacher meets it in time; how tempting the rejected option is decides nothing. Three ways one fails: a comment covers only the sites it sits in, so treat a set of files as growing unless you can call it closed; a note in the files that *keep* a decision does not guard the new file that would break it; and where an ADR rejects several options, a defence covering one covers none. **Name the defence in `archived-because`**; archiving without one is a bet nobody recorded. Set the status whenever a defence that passes the timing test exists, including long after writing.
   - `Superseded` — replaced by a later ADR; set `superseded-by`.
 
   Status tracks only whether a decision is in force and how it is defended. A provisional decision, or one near its revisit condition, stays `Accepted` — nearly reopenable makes it more worth carrying, not less. A revisit condition is one whose arrival would change the choice; a condition the decision accommodates is a premise, not a trigger.
 - **`date`** — ISO date the ADR was written.
 - **`tags`** — lowercase keywords an agent would use to locate this ADR (e.g. `[database, migrations, schema]`). Think: "what would I search for to find this decision?"
 - **`summary`** — one sentence: what was decided, not why. This appears verbatim in the index. Phrase it so a reader who sees _only_ the frontmatter won't breach the decision: name the binding choice, including the notable rejected alternative where one exists (e.g. "Use mypy, not ty"). When the decision is explicitly provisional — an option parked pending future conditions — name the revisit trigger too, so a reader of the frontmatter alone knows it is reopenable and when — as much for an `Archived` ADR, reached through the archived-decisions check.
+- **`archived-because`** — one sentence naming the defence and where a breacher meets it, so whether and why an ADR left the index reads at a glance. Required when status is `Archived`; omit otherwise. One line, whichever defence applies:
+  - `archived-because: A comment at the top of every workflow file names the pin, met while the workflow is being edited.`
+  - `archived-because: Nothing breaches this without its own ADR, met at the archived-decisions check.`
 - **`superseded-by`** — integer ADR number; omit unless status is `Superseded`.
+
+`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. `generate_index` reports a breach of that pairing, so a status changed without its field can't leave the old one behind reading as current. It runs on every pull request touching `docs/adr/`, and locally only where the pre-commit hook is installed.
 
 ## Conventions
 
@@ -85,7 +91,7 @@ truncated index row.
   - _Multi-dimensional problems_ — if what looks like a list of options is actually two separate decisions, structure around the primary; handle the secondary as a sub-question in the Decision section or write a follow-up ADR
 - **Number sequentially** — never reuse or renumber
 - **Check archived decisions before recording a new one** — `rg -l 'status: Archived' docs/adr/` and read any whose subject touches yours. They are out of the index by design, so writing an ADR is the one moment they resurface — which is what makes archiving on that defence safe, and unsafe for any breach too small to warrant one. A new decision contradicting an archived one supersedes it rather than sitting alongside it.
-- **Never edit INDEX.md** — it is regenerated by the `adr-index` pre-commit hook on every commit
+- **Never edit INDEX.md** — `generate_index` regenerates it, run by the pre-commit hook where a clone has installed one and by the pull-request workflow either way
 - **Supersede, don't edit** — new ADR for changed decisions; mark the old one superseded
 - **Keep it concise** — enough to reconstruct the reasoning, not a thesis
 - **Check every factual premise against the thing itself** before writing it — the tool's config, the workflow file, the live setting via its API. Documentation is not a source, including this repo's own: a doc asserting the same thing is as likely to be where the error came from. Premises outlive the session that wrote them and are read as settled. Where one can't be checked — a setting behind access you don't have — ask the maintainer rather than writing the gap into the ADR: a premise the decision rests on is worth waiting for, and one that isn't should come out.
@@ -174,7 +180,7 @@ Dispatch a subagent to review the draft as a senior engineer would. Give it the 
 - **Soundness** — does the accepted option make sense for _this_ project, given its constraints and prior ADRs? Would a principal engineer choose differently?
 - **Unsurfaced trade-offs** — are there notable costs, risks, or downsides of the accepted option the ADR does not mention?
 - **Implicit assumptions** — what does the decision take for granted that a reader would not know? Each should be stated explicitly.
-- **Archival** — if the ADR is `Archived`, does it name a defence that exists and lands early enough to change the plan rather than only reject the result? Push back hard: a decision that merely feels settled is the tempting one to archive, and a wrongly archived one stays invisible until someone re-litigates it. If it is `Accepted`, ask whether a *qualifying* defence could be named — not whether anything defends it, since a real defence can still fail the timing test.
+- **Archival** — if the ADR is `Archived`, does `archived-because` name a defence that exists and lands early enough to change the plan rather than only reject the result? Push back hard: a decision that merely feels settled is the tempting one to archive, and a wrongly archived one stays invisible until someone re-litigates it. If it is `Accepted`, ask whether a *qualifying* defence could be named — not whether anything defends it, since a real defence can still fail the timing test.
 - **Factual accuracy** — is every claim about tooling, workflow, or platform behaviour true of the actual configuration? Have it check config, workflow files, and live settings itself rather than review your notes, and report what each claim was verified against.
 - **Frontmatter sufficiency** — would an agent that reads _only_ the frontmatter (`summary`, `tags`, `status`) avoid breaching this decision? If the decision constrains future work, the `summary` and `tags` must make that constraint discoverable. This holds for `Archived` ADRs too, even though nothing reads their frontmatter by default: archiving is reversible, and one restored later — perhaps because it was archived in error — carries whatever it was written with.
 

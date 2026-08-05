@@ -1,4 +1,4 @@
-"""Unit tests for the shared frontmatter parser.
+"""Unit tests for ``parse_frontmatter()``.
 
 Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
 (ADR 007). Run from the repo root:
@@ -12,6 +12,8 @@ from scripts.frontmatter import parse_frontmatter
 
 
 class ScalarTests(unittest.TestCase):
+    """Scalar values, the shape almost every field takes."""
+
     def test_parses_scalars_and_ignores_blank_lines(self):
         """A block of `key: value` lines parses cleanly, blank lines and all."""
         fields, problems = parse_frontmatter("status: Accepted\n\n   \ndate: 2026-08-01")
@@ -32,6 +34,8 @@ class ScalarTests(unittest.TestCase):
 
 
 class InlineListTests(unittest.TestCase):
+    """`tags: [a, b]`, the only inline list any frontmatter here uses."""
+
     def test_parses_an_inline_list_into_stripped_items(self):
         """`tags: [a, b]` becomes a list, which is the only list-valued field in use."""
         fields, problems = parse_frontmatter("tags: [ci,  releases , adr]")
@@ -94,6 +98,8 @@ class WrappedValueTests(unittest.TestCase):
 
 
 class BlockSequenceTests(unittest.TestCase):
+    """Indented `- item` lines, which installed skills use for `allowed-tools`."""
+
     def test_parses_an_indented_block_sequence(self):
         """Installed skills declare `allowed-tools` this way, so it must not read as a wrap."""
         fields, problems = parse_frontmatter(
@@ -123,6 +129,8 @@ class BlockSequenceTests(unittest.TestCase):
 
 
 class CommentTests(unittest.TestCase):
+    """YAML comments, which are legal and must not block a commit."""
+
     def test_ignores_comments_wherever_they_sit(self):
         """A YAML comment is legal frontmatter and must not block a commit."""
         fields, problems = parse_frontmatter(
@@ -132,6 +140,8 @@ class CommentTests(unittest.TestCase):
 
 
 class BlockScalarTests(unittest.TestCase):
+    """`>` and `|`, which open a block this line parser cannot read."""
+
     def test_flags_every_block_scalar_indicator(self):
         """`>` and `|`, bare or chomped, all open a block this parser cannot read."""
         for indicator in (">", "|", ">-", "|-", ">+", "|+"):
@@ -150,6 +160,8 @@ class BlockScalarTests(unittest.TestCase):
 
 
 class DuplicateKeyTests(unittest.TestCase):
+    """A key set twice, where the loser decides nothing but looks like it does."""
+
     def test_flags_a_repeated_key_and_keeps_the_first(self):
         """A leftover second `status:` would otherwise silently decide the ADR's fate."""
         fields, problems = parse_frontmatter("status: Accepted\nstatus: Archived")
