@@ -133,12 +133,14 @@ hold: a direct push there reaches users only after a release pull request has me
 ADR 008's revisit trigger — a marketplace with no channel concept — is now reachable without
 one. Two marketplace entries pinned at different refs of this repository would give a
 pre-release channel, so if pre-releases are ever wanted, that ADR reopens on a mechanism it
-assumed did not exist.
+assumed did not exist. [ADR 012][] has since closed that mechanism, holding the catalogue to
+one entry, so ADR 008 reopens on some other one.
 
 [ADR 001]: 001-co-locate-marketplace-and-plugin.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [ADR 008]: 008-release-only-x-y-z-versions.md
 [ADR 009]: 009-keep-a-standing-develop-bypass.md
+[ADR 012]: 012-advertise-one-plugin-per-catalogue.md
 [`AGENTS.md`]: ../../AGENTS.md
 [`marketplace.json`]: ../../.claude-plugin/marketplace.json
 [`plugin.json`]: ../../.claude-plugin/plugin.json
