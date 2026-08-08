@@ -2,7 +2,8 @@
 status: Accepted
 date: 2026-08-01
 tags: [branches, default-branch, distribution, github, marketplace, plugin, ref, releases, source, updates, versioning]
-summary: Pin the marketplace plugin entry to a github source at ref main — a branch, not a per-release tag — so what users install is the release branch rather than whichever branch happens to be the repository default, and assert the pin in CI; revisit if the marketplace and plugin ever split repositories.
+summary: Pin the marketplace plugin entry to a github source at ref main — a branch, not a per-release tag — so what users install is the release branch rather than whichever branch happens to be the repository default, and assert the pin in CI.
+revisit-when: The marketplace and plugin split repositories.
 ---
 
 # 010: Pin the marketplace entry to main

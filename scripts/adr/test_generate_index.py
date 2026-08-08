@@ -22,6 +22,8 @@ from scripts.adr.generate_index import (
     EMPTY_NOTE,
     HIDDEN_STATUSES,
     INDEX_HEADER,
+    REVISIT_DISCHARGED_BY_FIELD,
+    REVISIT_WHEN_FIELD,
     STATUS_FIELDS,
     TABLE_HEADER,
     cell,
@@ -34,9 +36,16 @@ from scripts.adr.generate_index import (
 SENTINEL = "untouched\n"
 
 ROWS = {
-    "001-first.md": "| [001](001-first.md) | Accepted | Do the thing | alpha, beta | A summary. |\n",
-    "002-second.md": "| [002](002-second.md) | Accepted | Do another thing | alpha, beta | A summary. |\n",
+    "001-first.md": (
+        "| [001](001-first.md) | Accepted | Do the thing | alpha, beta | A summary. |  |\n"
+    ),
+    "002-second.md": (
+        "| [002](002-second.md) | Accepted | Do another thing | alpha, beta | A summary. |  |\n"
+    ),
 }
+
+# A trigger short enough to read inside an asserted row, and recognisably a condition.
+TRIGGER = "A second plugin joins the marketplace."
 
 
 def adr(status: str | None = "Accepted", title: str = "1: Do the thing", **fields) -> str:
@@ -187,6 +196,22 @@ class ParseAdrTests(unittest.TestCase):
         """The pairing is required, so the valid combination must pass cleanly."""
         self.assertEqual(self.problems(adr(status="Superseded", **{"superseded-by": "12"})), [])
 
+    def test_accepts_a_revisit_trigger_on_its_own(self):
+        """A live trigger is the ordinary case: it needs no discharge until one arrives."""
+        self.assertEqual(self.problems(adr(**{REVISIT_WHEN_FIELD: TRIGGER})), [])
+
+    def test_accepts_a_discharge_paired_with_the_trigger_it_spent(self):
+        """The pairing is required, so the valid combination must pass cleanly."""
+        fields = {REVISIT_WHEN_FIELD: TRIGGER, REVISIT_DISCHARGED_BY_FIELD: "12"}
+        self.assertEqual(self.problems(adr(**fields)), [])
+
+    def test_rejects_a_discharge_with_no_trigger(self):
+        """A discharge alone records that something was spent without saying what."""
+        self.assertIn(
+            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` but no `{REVISIT_WHEN_FIELD}` to spend",
+            self.problems(adr(**{REVISIT_DISCHARGED_BY_FIELD: "12"})),
+        )
+
     def test_collects_every_problem_in_one_pass(self):
         """One fix must not be the thing that reveals the next."""
         content = "---\nstatus: Draft\nnonsense\n---\n\nNo heading.\n"
@@ -254,6 +279,23 @@ class GenerateTests(AdrDirTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(self.index(), f"{INDEX_HEADER}\n{EMPTY_NOTE}")
         self.assertIn("(0 entries)", out)
+
+    def test_carries_a_revisit_trigger_into_its_own_column(self):
+        """The index is where a trigger reaches someone who never opens the ADR."""
+        self.write("001-first.md", adr(**{REVISIT_WHEN_FIELD: TRIGGER}))
+        self.run_generate()
+        self.assertEqual(
+            self.index(),
+            f"{INDEX_HEADER}\n{TABLE_HEADER}| [001](001-first.md) | Accepted "
+            f"| Do the thing | alpha, beta | A summary. | {TRIGGER} |\n",
+        )
+
+    def test_omits_a_discharged_trigger_from_its_column(self):
+        """A spent condition stops costing context, there being nothing left to act on."""
+        fields = {REVISIT_WHEN_FIELD: TRIGGER, REVISIT_DISCHARGED_BY_FIELD: "12"}
+        self.write("001-first.md", adr(**fields))
+        self.run_generate()
+        self.assert_index_lists("001-first.md")
 
     def test_is_idempotent(self):
         """The CI check diffs this file, so a second run must reproduce it exactly."""

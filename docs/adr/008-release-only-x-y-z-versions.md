@@ -2,7 +2,8 @@
 status: Accepted
 date: 2026-07-28
 tags: [changelog, ci, marketplace, plugin, pre-release, releases, semver, validation, versioning]
-summary: Release only X.Y.Z versions — no pre-release suffixes or build metadata — from one shared pattern, failing loudly at the pull-request gate rather than after the merge to main; revisit if the plugin marketplace gains a pre-release or channel concept.
+summary: Release only X.Y.Z versions — no pre-release suffixes or build metadata — from one shared pattern, failing loudly at the pull-request gate rather than after the merge to main.
+revisit-when: The plugin marketplace gains a pre-release or channel concept, or a release must reach a subset of users by some mechanism other than a second catalogue entry.
 ---
 
 # 008: Release only X.Y.Z versions
@@ -71,9 +72,10 @@ on its own terms — it never identifies a distinct release, so it has no busine
 changelog heading however pre-releases are handled.
 
 **Revisit if** the plugin marketplace gains a pre-release or channel concept, or a release
-otherwise needs to reach a subset of users before everyone. That is an upstream change
-nobody here watches for, so the error messages carry the pointer: whoever first tries a
-pre-release version is told which decision to reopen.
+otherwise needs to reach a subset of users before everyone — by some mechanism other than
+a second catalogue entry, which ADR 010 raised and [ADR 012][] then closed. What remains is
+an upstream change nobody here watches for, so the error messages carry the pointer:
+whoever first tries a pre-release version is told which decision to reopen.
 
 ## Consequences
 
@@ -99,6 +101,7 @@ message naming the problem.
 
 [ADR 002]: 002-generate-changelog-at-release.md
 [ADR 010]: 010-pin-the-marketplace-entry-to-main.md
+[ADR 012]: 012-advertise-one-plugin-per-catalogue.md
 [`pr.yml`]: ../../.github/workflows/pr.yml
 [`release_notes.py`]: ../../scripts/ci/release_notes.py
 [`releasing`]: ../../.agents/skills/releasing/SKILL.md
