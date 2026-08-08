@@ -6,7 +6,7 @@ summary: Advertise exactly one marketplace entry; a second fails the manifest ch
 revisit-when: A second plugin joins the marketplace.
 ---
 
-# 012: Advertise One Plugin Per Catalogue
+# 012: Advertise one plugin per catalogue
 
 ## Context
 
