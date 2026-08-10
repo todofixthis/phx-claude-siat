@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-07-15
-tags: [skills, plugin-root, hooks, versioning, creative-commits, file-paths, uv, single-source-of-truth, subagents]
+scope: [skills/]
 summary: Locate a skill's bundled files relative to the skill's own directory, not via a hook-written plugin root pointer.
 ---
 

@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-07-15
-tags: [creative-commits, subagents, delegation, dispatch, cost, context, model-attribution, co-authored-by, commits, latency]
+scope: [skills/creative-commits/]
 summary: Run creative-commits inline rather than dispatching it to a cheap-model subagent; cost alone never earns a delegation — parallelism or independence must — and cost may then only choose its model.
 revisit-when: A measurement, not an intuition, shows the delegation's saving is real, or commit-time context becomes a real constraint.
 ---

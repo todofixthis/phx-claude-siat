@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-07-16
-tags: [autohooks, ci, drift, github-actions, pull-requests, pyproject, python, skills, tomllib, tooling, validation]
+scope: [.github/workflows/pr.yml, scripts/ci/validate_manifests.py]
 summary: Catch mirror drift by having CI check each skill's declaration against the workflow — failing the build when a declared tool is never run — rather than making the declaration executable and retiring the mirror.
 revisit-when: A second skill ships tooling, or a skill ships a package.json rather than a pyproject.toml.
 ---

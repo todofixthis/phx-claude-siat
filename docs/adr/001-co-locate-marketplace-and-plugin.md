@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-06-27
-tags: [marketplace, plugin, repository-structure, versioning, releases, single-source-of-truth]
+scope: [.claude-plugin/]
 summary: Keep the marketplace and plugin in one repository; the plugin version lives only in plugin.json, never duplicated in the marketplace entry.
 revisit-when: A second plugin joins the marketplace, or stable-vs-latest channels are needed.
 ---
