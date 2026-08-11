@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-07-28
-tags: [changelog, ci, marketplace, plugin, pre-release, releases, semver, validation, versioning]
+scope: [.agents/skills/releasing/, scripts/ci/versions.py]
 summary: Release only X.Y.Z versions — no pre-release suffixes or build metadata — from one shared pattern, failing loudly at the pull-request gate rather than after the merge to main.
 revisit-when: The plugin marketplace gains a pre-release or channel concept, or a release must reach a subset of users by some mechanism other than a second catalogue entry.
 ---

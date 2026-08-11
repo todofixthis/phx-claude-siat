@@ -5,10 +5,11 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 
-`generate()` takes its directory as an argument, so these tests never chdir into
-the repo — the one exception covers default resolution deliberately. Without that,
-a test reaching `generate()` would rewrite the real docs/adr/INDEX.md, which the
-pre-commit hook then stages.
+`generate()` takes its directories as arguments, so these tests never chdir and never
+call it without them: the defaults resolve from the module (ADR 015), so an argumentless
+call rewrites the real docs/adr/INDEX.md whatever the working directory is. The one test
+that does chdir asserts precisely that — that moving cwd cannot redirect the defaults —
+and never calls `generate()`.
 """
 
 import contextlib
@@ -18,29 +19,41 @@ import unittest
 from pathlib import Path
 
 from scripts.adr.generate_index import (
+    ADR_DIR,
     ADR_INDEX_FILENAME,
     EMPTY_NOTE,
     HIDDEN_STATUSES,
     INDEX_HEADER,
+    REPO_ROOT,
     REVISIT_DISCHARGED_BY_FIELD,
     REVISIT_WHEN_FIELD,
+    SCOPE_FIELD,
     STATUS_FIELDS,
     TABLE_HEADER,
+    TAGS_FIELD,
     cell,
     generate,
+    main,
     parse_adr,
+    report_scoped_to,
+    scope_matches,
+    scope_problems,
 )
 
 # Written into the index before a run that must fail, then asserted unchanged: it is
 # how a test tells "left alone" apart from "rewritten with the same content".
 SENTINEL = "untouched\n"
 
+# A file the fixture creates at the repo root, so the default scope names something that
+# exists. It sits outside the ADR directory, where it would read as a misfiled document.
+SCOPED_FILE = "README.md"
+
 ROWS = {
     "001-first.md": (
-        "| [001](001-first.md) | Accepted | Do the thing | alpha, beta | A summary. |  |\n"
+        f"| [001](001-first.md) | Accepted | Do the thing | {SCOPED_FILE} | A summary. |  |\n"
     ),
     "002-second.md": (
-        "| [002](002-second.md) | Accepted | Do another thing | alpha, beta | A summary. |  |\n"
+        f"| [002](002-second.md) | Accepted | Do another thing | {SCOPED_FILE} | A summary. |  |\n"
     ),
 }
 
@@ -55,7 +68,7 @@ def adr(status: str | None = "Accepted", title: str = "1: Do the thing", **field
     key being absent rather than holding the text "None".
     """
     fields = {"status": status} | fields
-    lines = ["date: 2026-08-01", "tags: [alpha, beta]", "summary: A summary."]
+    lines = ["date: 2026-08-01", f"scope: [{SCOPED_FILE}]", "summary: A summary."]
     for key, value in fields.items():
         lines = [line for line in lines if not line.startswith(f"{key}:")]
         if value is not None:
@@ -64,15 +77,29 @@ def adr(status: str | None = "Accepted", title: str = "1: Do the thing", **field
 
 
 class AdrDirTestCase(unittest.TestCase):
-    """A temp directory standing in for docs/adr, living for the whole test."""
+    """A temp repo with a docs/adr inside it, living for the whole test.
+
+    The two directories are separate because scope entries resolve against the repo
+    root: a scoped file placed in the ADR directory would be read as a misfiled
+    document, so the fixture cannot collapse them into one.
+    """
 
     def setUp(self) -> None:
         directory = self.enterContext(tempfile.TemporaryDirectory())
-        self.root = Path(directory)
+        self.repo_root = Path(directory)
+        self.root = self.repo_root / "docs" / "adr"
+        self.root.mkdir(parents=True)
+        (self.repo_root / SCOPED_FILE).write_text("", encoding="utf-8")
 
     def write(self, name: str, content: str) -> None:
         """Place a file in the fixture directory."""
         (self.root / name).write_text(content, encoding="utf-8")
+
+    def write_scoped(self, name: str) -> None:
+        """Create a path at the repo root for a scope entry to name."""
+        target = self.repo_root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
 
     def write_adrs(self, *names: str) -> None:
         """Place one valid ADR per name, titled to match the row expected for it."""
@@ -84,7 +111,7 @@ class AdrDirTestCase(unittest.TestCase):
         """Run generate() against the fixture, returning its exit code with both streams."""
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = generate(self.root)
+            code = generate(self.root, self.repo_root)
         return code, out.getvalue(), err.getvalue()
 
     def index(self) -> str:
@@ -212,10 +239,93 @@ class ParseAdrTests(unittest.TestCase):
             self.problems(adr(**{REVISIT_DISCHARGED_BY_FIELD: "12"})),
         )
 
+    def test_rejects_the_field_scope_replaced(self):
+        """A stale `tags` must fail, or a half-finished migration passes unnoticed."""
+        problem = self.problems(adr(**{TAGS_FIELD: "[alpha, beta]"}))[0]
+        self.assertIn(f"declares `{TAGS_FIELD}`", problem)
+        self.assertIn(f"`{SCOPE_FIELD}` replaced", problem)
+
+    def test_rejects_a_missing_scope(self):
+        """Required, so that an absent field cannot pass for a decision binding no path."""
+        self.assertIn(
+            f"declares no `{SCOPE_FIELD}`; list the paths it binds, or `[]` where it binds none",
+            self.problems(adr(**{SCOPE_FIELD: None})),
+        )
+
+    def test_accepts_a_scope_binding_no_path(self):
+        """`[]` is the answer for a decision whose subject has no file, not an omission."""
+        self.assertEqual(self.problems(adr(**{SCOPE_FIELD: "[]"})), [])
+
+    def test_rejects_a_scope_written_as_a_scalar(self):
+        """One bare path parses as a string, which would iterate character by character."""
+        self.assertIn(
+            f"declares `{SCOPE_FIELD}` as a scalar",
+            self.problems(adr(**{SCOPE_FIELD: "scripts/"}))[0],
+        )
+
     def test_collects_every_problem_in_one_pass(self):
         """One fix must not be the thing that reveals the next."""
         content = "---\nstatus: Draft\nnonsense\n---\n\nNo heading.\n"
-        self.assertEqual(len(self.problems(content)), 3)
+        self.assertEqual(len(self.problems(content)), 4)
+
+
+class ScopeProblemsTests(unittest.TestCase):
+    """Unit tests for ``scope_problems()``: the one rule needing the filesystem."""
+
+    def setUp(self) -> None:
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.root = Path(directory)
+        (self.root / "scripts").mkdir()
+        (self.root / "scripts" / "versions.py").write_text("", encoding="utf-8")
+
+    def test_accepts_entries_that_resolve(self):
+        """A file and a directory prefix both name something; neither is a problem."""
+        self.assertEqual(scope_problems(["scripts/versions.py", "scripts/"], self.root), [])
+
+    def test_reports_an_entry_matching_nothing(self):
+        """A path that moved leaves a scope naming code that is no longer there."""
+        problem = scope_problems(["scripts/gone.py"], self.root)[0]
+        self.assertIn("scopes `scripts/gone.py`, which nothing matches", problem)
+
+    def test_reports_a_directory_written_without_its_slash(self):
+        """Without the slash nothing beneath the directory matches, so it silently binds one path."""
+        self.assertIn(
+            "scopes `scripts`, a directory; write it as `scripts/`",
+            scope_problems(["scripts"], self.root),
+        )
+
+    def test_reports_an_entry_written_as_a_glob(self):
+        """A glob is the natural thing to reach for, and 'nothing matches' would misdiagnose it."""
+        problem = scope_problems(["scripts/**/*.py"], self.root)[0]
+        self.assertIn("which reads as a glob", problem)
+
+    def test_reports_every_bad_entry(self):
+        """One scope may hold several paths, and one fix must not reveal the next."""
+        self.assertEqual(len(scope_problems(["a.py", "b.py"], self.root)), 2)
+
+
+class ScopeMatchesTests(unittest.TestCase):
+    """Unit tests for ``scope_matches()``."""
+
+    def test_matches_the_file_itself(self):
+        """An entry naming one file covers that file."""
+        self.assertTrue(scope_matches("scripts/versions.py", "scripts/versions.py"))
+
+    def test_matches_anything_beneath_a_directory(self):
+        """A trailing slash is what makes an entry cover a subtree rather than one path."""
+        self.assertTrue(scope_matches("scripts/", "scripts/ci/versions.py"))
+
+    def test_does_not_match_a_sibling_sharing_a_prefix(self):
+        """`scripts/` must not reach `scripts-old/`, which shares its opening characters."""
+        self.assertFalse(scope_matches("scripts/", "scripts-old/versions.py"))
+
+    def test_opens_a_subtree_only_for_an_entry_ending_in_a_slash(self):
+        """Bare string prefixing would let `scripts` swallow `scripts-old/`; the slash is the guard."""
+        self.assertFalse(scope_matches("scripts", "scripts-old/versions.py"))
+
+    def test_does_not_match_an_unrelated_path(self):
+        """The common case: most decisions bind nothing the file in hand touches."""
+        self.assertFalse(scope_matches("scripts/", "docs/adr/001-first.md"))
 
 
 class CellTests(unittest.TestCase):
@@ -287,7 +397,7 @@ class GenerateTests(AdrDirTestCase):
         self.assertEqual(
             self.index(),
             f"{INDEX_HEADER}\n{TABLE_HEADER}| [001](001-first.md) | Accepted "
-            f"| Do the thing | alpha, beta | A summary. | {TRIGGER} |\n",
+            f"| Do the thing | {SCOPED_FILE} | A summary. | {TRIGGER} |\n",
         )
 
     def test_omits_a_discharged_trigger_from_its_column(self):
@@ -296,6 +406,23 @@ class GenerateTests(AdrDirTestCase):
         self.write("001-first.md", adr(**fields))
         self.run_generate()
         self.assert_index_lists("001-first.md")
+
+    def test_leaves_the_scope_cell_empty_for_a_decision_binding_no_path(self):
+        """An empty cell is a statement — nothing you edit will surface this decision."""
+        self.write("001-first.md", adr(**{SCOPE_FIELD: "[]"}))
+        self.run_generate()
+        self.assertEqual(
+            self.index(),
+            f"{INDEX_HEADER}\n{TABLE_HEADER}| [001](001-first.md) | Accepted "
+            "| Do the thing |  | A summary. |  |\n",
+        )
+
+    def test_lists_every_scope_entry_in_one_cell(self):
+        """A decision binding several paths must show all of them, not the first."""
+        self.write_scoped("CHANGELOG.md")
+        self.write("001-first.md", adr(**{SCOPE_FIELD: f"[{SCOPED_FILE}, CHANGELOG.md]"}))
+        self.run_generate()
+        self.assertIn(f"| {SCOPED_FILE}, CHANGELOG.md |", self.index())
 
     def test_is_idempotent(self):
         """The CI check diffs this file, so a second run must reproduce it exactly."""
@@ -347,22 +474,120 @@ class GenerateFailureTests(AdrDirTestCase):
         self.write("002-bad.md", adr(status="Draft"))
         self.assert_rejected("002-bad.md")
 
+    def test_rejects_a_scope_naming_something_that_is_gone(self):
+        """A path that moved must fail here rather than rot unnoticed in the index."""
+        self.write("001-first.md", adr(**{SCOPE_FIELD: "[scripts/gone.py]"}))
+        self.assert_rejected("001-first.md scopes `scripts/gone.py`, which nothing matches")
+
+    def test_checks_the_scope_of_an_archived_adr(self):
+        """Archived means out of the index, not out of force; its paths rot the same way."""
+        fields = {"archived-because": "A comment.", SCOPE_FIELD: "[scripts/gone.py]"}
+        self.write("001-first.md", adr(status="Archived", **fields))
+        self.assert_rejected("001-first.md scopes `scripts/gone.py`")
+
+    def test_leaves_the_scope_of_a_superseded_adr_alone(self):
+        """Editing a superseded ADR is forbidden, so checking one could only deadlock the build."""
+        fields = {"superseded-by": "12", SCOPE_FIELD: "[scripts/gone.py]"}
+        self.write("001-superseded.md", adr(status="Superseded", **fields))
+        code, _, err = self.run_generate()
+        self.assertEqual((code, err), (0, ""))
+
+
+class ReportScopedToTests(AdrDirTestCase):
+    """Integration tests: the `--for` lookup from a path back to the decisions binding it."""
+
+    def report(self, *paths: str) -> tuple[int, str]:
+        """Run report_scoped_to() against the fixture, returning its code and output."""
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = report_scoped_to(list(paths), self.root)
+        return code, out.getvalue()
+
+    def test_warns_that_an_unreadable_adr_binds_nothing(self):
+        """This is the only place the lookup speaks, so a silent gap reads as 'nothing binds it'."""
+        self.write("001-bad.md", adr(status="Draft"))
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            report_scoped_to(["scripts/versions.py"], self.root)
+        self.assertIn("001-bad.md could not be read, so it binds nothing here", err.getvalue())
+
+    def test_names_the_decision_binding_the_path(self):
+        """The question a code author holds: what binds the file in front of me?"""
+        self.write_scoped("scripts/versions.py")
+        self.write("001-first.md", adr(**{SCOPE_FIELD: "[scripts/]"}))
+        code, out = self.report("scripts/versions.py")
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "001 (Accepted): Do the thing — docs/adr/001-first.md\n")
+
+    def test_stays_silent_for_a_path_nothing_binds(self):
+        """Most files are bound by nothing, so the common case must not cry wolf."""
+        self.write_adrs("001-first.md")
+        self.assertEqual(self.report("docs/unrelated.md"), (0, ""))
+
+    def test_reports_an_archived_decision(self):
+        """Archived ADRs are out of the index by design; this is where they resurface."""
+        self.write_scoped("scripts/versions.py")
+        fields = {"archived-because": "A comment.", SCOPE_FIELD: "[scripts/]"}
+        self.write("001-first.md", adr(status="Archived", **fields))
+        self.assertIn("001 (Archived)", self.report("scripts/versions.py")[1])
+
+    def test_omits_a_superseded_decision(self):
+        """A replaced decision binds nothing, so surfacing it would be noise."""
+        self.write_scoped("scripts/versions.py")
+        fields = {"superseded-by": "12", SCOPE_FIELD: "[scripts/]"}
+        self.write("001-superseded.md", adr(status="Superseded", **fields))
+        self.assertEqual(self.report("scripts/versions.py"), (0, ""))
+
+    def test_reports_every_decision_binding_the_path(self):
+        """Two ADRs can bind one path, and stopping at the first would hide the second."""
+        self.write_scoped("scripts/versions.py")
+        for name in ("001-first.md", "002-second.md"):
+            self.write(name, adr(**{SCOPE_FIELD: "[scripts/]"}))
+        self.assertEqual(len(self.report("scripts/versions.py")[1].splitlines()), 2)
+
+    def test_matches_any_of_several_paths(self):
+        """The hook passes every staged path at once, so one match in the set is enough."""
+        self.write_scoped("scripts/versions.py")
+        self.write("001-first.md", adr(**{SCOPE_FIELD: "[scripts/]"}))
+        self.assertIn("001", self.report("README.md", "scripts/versions.py")[1])
+
+
+class ArgumentTests(unittest.TestCase):
+    """Unit tests for ``main()``: which mode each invocation selects."""
+
+    def test_rejects_for_with_no_path(self):
+        """`--for` with nothing after it would otherwise report against an empty set."""
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = main(["--for"])
+        self.assertEqual(code, 1)
+        self.assertIn("--for needs at least one path", err.getvalue())
+
+    def test_rejects_an_unrecognised_argument(self):
+        """A typo must fail rather than silently regenerating the index instead."""
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = main(["--wat"])
+        self.assertEqual(code, 1)
+        self.assertIn("unrecognised arguments", err.getvalue())
+
 
 class DefaultDirectoryTests(unittest.TestCase):
-    """Integration test: the no-argument invocation every caller actually uses."""
+    """Integration test: what the no-argument invocation resolves to."""
 
-    def test_defaults_to_docs_adr_under_the_working_directory(self):
-        """Callers run this from the repo root with no arguments; that path must resolve."""
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "docs" / "adr"
-            root.mkdir(parents=True)
-            (root / "001-first.md").write_text(adr(), encoding="utf-8")
-            with contextlib.chdir(directory):
-                with contextlib.redirect_stdout(io.StringIO()):
-                    code = generate()
-            self.assertEqual(code, 0)
-            index = (root / ADR_INDEX_FILENAME).read_text(encoding="utf-8")
-            self.assertIn("001-first.md", index)
+    def test_a_working_directory_holding_its_own_docs_adr_cannot_capture_the_defaults(self):
+        """A relative default resolves against the caller's tree, silently editing it instead."""
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        (Path(directory) / "docs" / "adr").mkdir(parents=True)
+        with contextlib.chdir(directory):
+            self.assertTrue(ADR_DIR.is_absolute())
+            self.assertFalse(ADR_DIR.is_relative_to(directory))
+
+    def test_the_root_is_the_repo_rather_than_the_package_inside_it(self):
+        """One `.parent` too few lands on scripts/, where docs/adr does not exist."""
+        self.assertEqual(ADR_DIR, REPO_ROOT / "docs" / "adr")
+        self.assertTrue(ADR_DIR.is_dir())
+        self.assertTrue(Path(__file__).resolve().is_relative_to(REPO_ROOT))
 
 
 if __name__ == "__main__":

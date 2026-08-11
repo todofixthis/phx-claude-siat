@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-08-01
-tags: [admin, branch-protection, bypass, ci, develop, github-app, releases, releasing, rulesets, workflow]
+scope: []
 summary: Keep the Admin bypass on the develop ruleset permanently, for release preparation and mid-release corrections only — ordinary work still goes by pull request — rather than removing it after rollout or routing preparation through release/X.Y.Z branches.
 revisit-when: A second person gains write access, or a human stops needing to write to develop.
 ---

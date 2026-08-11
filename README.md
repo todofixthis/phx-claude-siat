@@ -153,12 +153,19 @@ git config core.hooksPath .githooks
 ```
 
 The `pre-commit` hook regenerates `docs/adr/INDEX.md` from ADR frontmatter
-whenever an ADR is staged. The setting lives in the clone's shared config and
-the path is relative, so a single activation also covers every worktree. To
-regenerate the index by hand:
+whenever an ADR is staged, and reports any decision whose `scope` covers a
+staged path — advisory only, so it never refuses a commit. The setting lives in
+the clone's shared config and the path is relative, so a single activation also
+covers every worktree. To regenerate the index by hand:
 
 ```bash
 python3 -m scripts.adr.generate_index
+```
+
+To ask which decisions bind a file before changing it:
+
+```bash
+python3 -m scripts.adr.generate_index --for scripts/ci/versions.py
 ```
 
 ## Licence

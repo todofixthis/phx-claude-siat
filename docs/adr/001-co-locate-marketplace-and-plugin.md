@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-06-27
-tags: [marketplace, plugin, repository-structure, versioning, releases, single-source-of-truth]
+scope: [.claude-plugin/]
 summary: Keep the marketplace and plugin in one repository; the plugin version lives only in plugin.json, never duplicated in the marketplace entry.
 revisit-when: A second plugin joins the marketplace, or stable-vs-latest channels are needed.
 ---
@@ -13,8 +13,8 @@ revisit-when: A second plugin joins the marketplace, or stable-vs-latest channel
 This repository is simultaneously a Claude Code marketplace (`todofixthis`) and the
 single plugin that marketplace lists (`phx`). The two are conceptually distinct
 entities with independent lifecycles: a plugin is versioned, released software; a
-marketplace is a catalog recording where plugins live. This marketplace lists only
-this author's own plugins — it is not a general catalog for third-party plugins.
+marketplace is a catalogue recording where plugins live. This marketplace lists only
+this author's own plugins — it is not a general catalogue for third-party plugins.
 
 Per Claude Code's documented behaviour, a plugin's version resolves in priority
 order: `plugin.json`, then the marketplace plugin entry, then the git commit SHA. An
@@ -50,23 +50,23 @@ reaches users.
 
 Keep marketplace and plugin in this repository. `plugin.json` is the sole source of
 truth for the plugin version; the marketplace plugin entry carries no `version`. A
-marketplace change (catalog edits, re-pointing a source) is a distinct, rare event
+marketplace change (catalogue edits, re-pointing a source) is a distinct, rare event
 from a plugin release.
 
 **Pros:** One repository, one PR/CI/issue surface; unambiguous version ownership.
-**Cons:** Marketplace and plugin commits share one history; one catalog serves both
+**Cons:** Marketplace and plugin commits share one history; one catalogue serves both
 local development and published distribution.
 **Risks:** A contributor could edit the wrong lifecycle, or re-add a `version` to the
 marketplace entry.
 
 ### Option 3: Split into two repositories
 
-Move the marketplace catalog to its own repository; the plugin lives alone, listed by
+Move the marketplace catalogue to its own repository; the plugin lives alone, listed by
 GitHub source and optionally pinned to a release ref.
 
 **Pros:** Fully independent lifecycles; stable-vs-latest channels via ref pinning;
-catalog write-access decoupled from plugin-development access; a clean catalog
-identity able to list third-party plugins; no catalog churn from active plugin
+catalogue write-access decoupled from plugin-development access; a clean catalogue
+identity able to list third-party plugins; no catalogue churn from active plugin
 development.
 **Cons:** For a single first-party plugin, the marketplace repository is a near-empty
 one-file repository; if it pins per release, every release gains a cross-repo
@@ -79,8 +79,8 @@ channel requirement exists.
 Co-locate (Option 2). With a single first-party plugin and no need for stable/latest
 channels, one repository is less total toil than two: splitting pays off only when
 the marketplace lists multiple plugins or pins releases to refs. Its other benefits
-do not apply here — the catalog lists only this author's plugins, so decoupled access
-control and a third-party identity carry no weight, and catalog churn is negligible
+do not apply here — the catalogue lists only this author's plugins, so decoupled access
+control and a third-party identity carry no weight, and catalogue churn is negligible
 because marketplace edits are rare. The separation that matters is logical, not
 physical: `plugin.json` owns the version, the marketplace entry is a pointer, and the
 two lifecycles are documented as distinct. Revisit when a second plugin joins the
@@ -97,7 +97,7 @@ marketplace, or stable-vs-latest channels are needed.
   authoritative. This is safe for existing installs: `plugin.json` already outranks
   the entry, so no resolved version changes and no spurious update fires. Releasing
   becomes: bump `plugin.json` and land it on the default branch.
-- One catalog now serves both development and published distribution, so the
+- One catalogue now serves both development and published distribution, so the
   marketplace `description` (currently "Development marketplace…") is corrected to
   describe that published role, lest users adding it be misled.
 - Installed copies update only when `plugin.json`'s version changes, so a release

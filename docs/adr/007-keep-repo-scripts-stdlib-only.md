@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-07-28
-tags: [adr, ci, dependencies, duplication, frontmatter, git-hooks, pep723, pre-commit, python, scripts, stdlib, tooling, uv]
+scope: [scripts/]
 summary: Keep everything under scripts/ stdlib-only with no Python project at the repo root, and reach for a root project rather than per-script PEP 723 metadata if that ever changes.
 revisit-when: A second script hand-parses a grammar this repo does not define, or the workflow substring-match already under the constraint causes a miss in practice.
 ---
