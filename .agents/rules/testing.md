@@ -98,6 +98,22 @@ skipped item goes unnoticed.
 ## Mutation-test each check you add
 
 After adding a check to the code under test, disable it in place, confirm a test
-fails, and restore it before committing. A check no test can kill is untested however
-many tests surround it. This is a step you run, not an artefact you leave behind, so
+fails, and restore it before committing:
+
+```
+python3 -m scripts.dev.mutate --file scripts/adr/generate_index.py \
+    --anchor 'if not target.exists():' --with 'if False:'
+```
+
+That restores the source in a `finally`, so an interrupted run cannot leave a
+deliberately broken check in a tree you are about to commit, and it exits 0 when a
+test caught the mutation and 1 when none did, so a sequence of them can be scripted
+rather than read by eye. This is a step you run, not an artefact you leave behind, so
 say in the pull request which checks you mutated and what caught each.
+
+A check no test can kill is untested however many tests surround it — but the failure
+this catches most often is the other one: **a test that passes whether the check is
+there or not**. Two shipped in this repo before a mutation found them, each asserting
+something trivially true of the correct and the broken code alike. So when a mutation
+survives, suspect the test before the check: read the assertion again and ask what
+value it would take under both, rather than adding a second test beside the first.
