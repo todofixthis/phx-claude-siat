@@ -134,8 +134,18 @@ the field was not honouring costs nothing real.
   no more than a missing tag list does — unfilled and deliberate look identical — so the
   empty index cell means "this decision binds no path" only because the field cannot
   simply be left out.
+- Scope is checked for `Accepted` and `Archived` decisions, both being in force and both
+  editable, and not for `Superseded` ones: a superseded ADR naming a deleted path would be
+  a build failure whose only remedy — editing it — "supersede, don't edit" forbids. That
+  the rule is absolute even where an edit changes no decision is a question about the rule
+  rather than about scope, and is not settled here.
 - `--for` runs only in the pre-commit hook, which is opt-in per clone and not installed by
   CI, so the central benefit reaches only clones that ran `git config core.hooksPath`.
+- **`--for` does not qualify as an archival defence** and must not be mistaken for one: it
+  fires at commit time, after the work exists, which is the timing `writing-adrs` rejects
+  when it declines to let an automated check archive a decision. It prompts rework where a
+  comment in the code changes the plan. [ADR 014][] covers the in-time case; the two are
+  complementary.
 - Removing `tags` breaks any repository whose own conventions rest on it, and
   `generate_index` now rejects the field outright rather than ignoring it, so a
   half-finished migration cannot pass in either direction.
@@ -145,14 +155,18 @@ the field was not honouring costs nothing real.
   will be empty far more often than it is here, and the revisit trigger above is written
   against this repository's corpus rather than theirs.
 
-### Tensions accepted for now
+### Known tensions
 
-Four of these are unresolved rather than solved, and are grouped here to be cited rather
-than rediscovered. They are accepted because `scope` is a net gain over the tags it
-replaces even carrying all four, and because the eventual answer to most of them is the
-same one: `writing-adrs` is intended to grow from a skill-and-scripts amalgam into a
-system with its own hooks, tools and state, and the entries accumulated meanwhile — even
-the brittle ones — are the evidence that design will be drawn from.
+Grouped for citation, not as a template: this is an ad-hoc heading in one ADR, not a
+section `writing-adrs` defines, and one use is not enough to know whether the grouping
+earns its keep.
+
+Both entries are costs this decision **accommodates deliberately**, which is why neither is
+a `revisit-when` — a condition the decision already absorbs is a premise, not a trigger.
+They are accepted because `scope` is a net gain over the tags it replaces while carrying
+both. The answer to each is also the same: `writing-adrs` is intended to grow from a
+skill-and-scripts amalgam into a system with its own hooks, tools and state, and the entries
+accumulated meanwhile — brittle ones included — are the evidence that design will draw on.
 
 1. **Scope rot is silent outside the paths that trigger a check.** Both the hook and the
    `adr` job in [`pr.yml`][] fire only on ADR or script changes, so a rename under
@@ -161,24 +175,14 @@ the brittle ones — are the evidence that design will be drawn from.
    whoever renamed. That is why `pr.yml` is itself in this ADR's scope: narrowing that
    filter is how this decision gets breached. Where the failure is real rot rather than a
    typo, drop the entry, and ask whether a decision binding nothing should still be
-   `Accepted`.
+   `Accepted`. Not a trigger: the remedy is not to reopen this decision but to watch paths
+   continuously, which is the system above rather than a different keying.
 2. **Shallow prefixes and useful output pull against each other.** Deep entries break on
    rename, so the advice is to prefer the shallowest prefix that is true — but `scripts/`
    is already scoped by three decisions, so any script commit reports three. Advisory
-   output that fires on almost every commit is tuned out, and nothing measures that.
-   Prefer shallow, and treat a decision that would report on most commits as a sign the
-   scope is wider than the decision.
-3. **`Superseded` ADRs are exempt from the scope check, because "supersede, don't edit"
-   leaves no way to fix one.** Checking them would make a superseded ADR pointing at a
-   deleted path a build failure whose only remedy is forbidden. The wider tension is that
-   the rule is absolute where the edit is minor and changes no decision — a stale path, a
-   spelling — and that is worth revisiting on its own terms rather than as a scope
-   question. `Archived` ADRs are checked, being in force and editable.
-4. **`--for` does not qualify as an archival defence**, and must not be mistaken for one:
-   it fires at commit time, after the work exists, which is the timing `writing-adrs`
-   rejects when it declines to let an automated check archive a decision. It prompts
-   rework where a comment in the code changes the plan. [ADR 014][] covers the in-time
-   case; the two are complementary.
+   output that fires on almost every commit is tuned out, and nothing measures that. Not a
+   trigger: the remedy is per-ADR, since a decision reporting on most commits has a scope
+   wider than the decision, and the fix is that ADR's scope rather than this one's rule.
 
 [ADR 001]: 001-co-locate-marketplace-and-plugin.md
 [ADR 010]: 010-pin-the-marketplace-entry-to-main.md
