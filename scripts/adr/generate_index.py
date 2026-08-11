@@ -21,9 +21,12 @@ from pathlib import Path
 
 from scripts.frontmatter import parse_frontmatter
 
-ADR_DIR = Path("docs/adr")
+# Resolved from this file rather than the working directory (ADR 015): a path relative to
+# the caller's cwd points at whichever repo they happen to be standing in, and scope
+# entries are checked against it.
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+ADR_DIR = REPO_ROOT / "docs" / "adr"
 ADR_INDEX_FILENAME = "INDEX.md"
-REPO_ROOT = Path(".")
 
 STATUSES = ("Accepted", "Archived", "Superseded")
 
@@ -182,8 +185,8 @@ def generate(adr_dir: Path = ADR_DIR, repo_root: Path = REPO_ROOT) -> int:
     """Regenerate INDEX.md from ADR frontmatter. Return 0 on success, 1 on error.
 
     `adr_dir` and `repo_root` are parameters so tests can point at a fixture directory.
-    Defaulting both to paths relative to the working directory is what lets every caller
-    run this from the repo root without arguments.
+    Both default to paths resolved from this module, so a caller needs no arguments and
+    no particular working directory (ADR 015).
     """
     index_file = adr_dir / ADR_INDEX_FILENAME
 

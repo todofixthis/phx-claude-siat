@@ -5,10 +5,11 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 
-`generate()` takes its directory as an argument, so these tests never chdir into
-the repo — the one exception covers default resolution deliberately. Without that,
-a test reaching `generate()` would rewrite the real docs/adr/INDEX.md, which the
-pre-commit hook then stages.
+`generate()` takes its directories as arguments, so these tests never chdir and never
+call it without them: the defaults resolve from the module (ADR 015), so an argumentless
+call rewrites the real docs/adr/INDEX.md whatever the working directory is. The one test
+that does chdir asserts precisely that — that moving cwd cannot redirect the defaults —
+and never calls `generate()`.
 """
 
 import contextlib
@@ -18,10 +19,12 @@ import unittest
 from pathlib import Path
 
 from scripts.adr.generate_index import (
+    ADR_DIR,
     ADR_INDEX_FILENAME,
     EMPTY_NOTE,
     HIDDEN_STATUSES,
     INDEX_HEADER,
+    REPO_ROOT,
     REVISIT_DISCHARGED_BY_FIELD,
     REVISIT_WHEN_FIELD,
     SCOPE_FIELD,
@@ -570,34 +573,21 @@ class ArgumentTests(unittest.TestCase):
 
 
 class DefaultDirectoryTests(unittest.TestCase):
-    """Integration test: the no-argument invocation every caller actually uses."""
+    """Integration test: what the no-argument invocation resolves to."""
 
-    def test_defaults_to_docs_adr_under_the_working_directory(self):
-        """Callers run this from the repo root with no arguments; that path must resolve."""
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "docs" / "adr"
-            root.mkdir(parents=True)
-            (root / "001-first.md").write_text(adr(), encoding="utf-8")
-            (Path(directory) / SCOPED_FILE).write_text("", encoding="utf-8")
-            with contextlib.chdir(directory):
-                with contextlib.redirect_stdout(io.StringIO()):
-                    code = generate()
-            self.assertEqual(code, 0)
-            index = (root / ADR_INDEX_FILENAME).read_text(encoding="utf-8")
-            self.assertIn("001-first.md", index)
+    def test_a_working_directory_holding_its_own_docs_adr_cannot_capture_the_defaults(self):
+        """A relative default resolves against the caller's tree, silently editing it instead."""
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        (Path(directory) / "docs" / "adr").mkdir(parents=True)
+        with contextlib.chdir(directory):
+            self.assertTrue(ADR_DIR.is_absolute())
+            self.assertFalse(ADR_DIR.is_relative_to(directory))
 
-    def test_resolves_scope_entries_against_the_working_directory(self):
-        """The repo root defaults alongside the ADR directory, so scope resolves unaided."""
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "docs" / "adr"
-            root.mkdir(parents=True)
-            (root / "001-first.md").write_text(adr(), encoding="utf-8")
-            err = io.StringIO()
-            with contextlib.chdir(directory):
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
-                    code = generate()
-            self.assertEqual(code, 1)
-            self.assertIn(f"scopes `{SCOPED_FILE}`, which nothing matches", err.getvalue())
+    def test_the_root_is_the_repo_rather_than_the_package_inside_it(self):
+        """One `.parent` too few lands on scripts/, where docs/adr does not exist."""
+        self.assertEqual(ADR_DIR, REPO_ROOT / "docs" / "adr")
+        self.assertTrue(ADR_DIR.is_dir())
+        self.assertTrue(Path(__file__).resolve().is_relative_to(REPO_ROOT))
 
 
 if __name__ == "__main__":

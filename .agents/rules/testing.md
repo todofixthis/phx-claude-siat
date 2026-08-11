@@ -67,13 +67,19 @@ broken makes every negative test pass for the wrong reason.
 ## Say what the module does about the working directory, and why
 
 Where the subject resolves paths, the module docstring states its stance on `chdir`
-and what the stance rests on — these two modules take opposite ones for the same
-reason. Where the subject takes its directory as an argument, don't chdir: a test that
-did would rewrite the real file the subject generates, so the only test that chdirs is
-the one covering the default argument, and it says so. Where the subject resolves
-module-level relative paths instead, chdir into a fixture repo rather than patching
-each path, and assert the chdir took, or a positive test can pass by reading the real
-repo.
+and what the stance rests on — the two modules here take opposite ones for the same
+reason, and ADR 015 is what decides which applies.
+
+Where the subject takes its directories as arguments, pass a fixture and never chdir.
+Its defaults are anchored to the module, so an argumentless call rewrites the real file
+the subject generates no matter where the test stands; the only test that changes
+directory is the one asserting that a `chdir` *cannot* redirect the defaults, and it
+asserts the paths rather than calling the subject.
+
+Where the subject reads module-level relative paths instead, chdir into a fixture repo
+rather than patching each path, and assert the chdir took, or a positive test can pass
+by reading the real repo. Those constants must stay relative for that to work — the
+docstring says so, because anchoring one to `__file__` would break it silently.
 
 ## Guard against a partial pass
 
