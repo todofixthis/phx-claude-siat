@@ -105,15 +105,33 @@ python3 -m scripts.dev.mutate --file scripts/adr/generate_index.py \
     --anchor 'if not target.exists():' --with 'if False:'
 ```
 
-That restores the source in a `finally`, so an interrupted run cannot leave a
-deliberately broken check in a tree you are about to commit, and it exits 0 when a
-test caught the mutation and 1 when none did, so a sequence of them can be scripted
-rather than read by eye. This is a step you run, not an artefact you leave behind, so
-say in the pull request which checks you mutated and what caught each.
+Add `--occurrence N` where the anchor appears more than once; without it the first is
+mutated and the run says so. The source is restored in a `finally` and on the signals a
+shell sends, so an interrupted run cannot leave a deliberately broken check in a tree you
+are about to commit. It exits 0 only on **CAUGHT**, so a sequence can be scripted rather
+than read by eye — **MISSED**, **INVALID** (the mutation broke the import, proving
+nothing) and **UNKNOWN** (the suite died without naming a case) all exit 1. This is a
+step you run, not an artefact you leave behind, so say in the pull request which checks
+you mutated and what caught each.
 
-A check no test can kill is untested however many tests surround it — but the failure
-this catches most often is the other one: **a test that passes whether the check is
-there or not**. Two shipped in this repo before a mutation found them, each asserting
-something trivially true of the correct and the broken code alike. So when a mutation
-survives, suspect the test before the check: read the assertion again and ask what
-value it would take under both, rather than adding a second test beside the first.
+A check nothing can catch is untested however many tests surround it — but the failure
+this finds most often is the other one: **a test that passes whether the check is there
+or not**. Three shipped in this repo before a mutation found them, each asserting
+something trivially true of the correct and the broken code alike. So when a mutation is
+MISSED, suspect the test before the check: read the assertion again and ask what value it
+would take under both, rather than adding a second test beside the first.
+
+## Have someone else read the tests you wrote alongside the code
+
+Where one change adds a module *and* the tests for it, nobody has read those tests as a
+reader — you wrote both halves against the same mental model, so a gap in the model is
+invisible from inside it. Dispatch a subagent as a test analyst: give it the subject, its
+tests and this file, and ask what is **not** covered and which existing test would pass
+with its subject's logic disabled.
+
+The evidence for the rule is the tool above. It arrived mutation-tested and reviewed, and
+an analyst still found that every fixture wrote to stdout while `unittest` writes its
+whole result block to stderr — so the line joining the two streams was never exercised,
+and dropping it would have reported "0 failing tests" for every real run while the suite
+stayed green. Mutation testing and this pass catch different things: mutation finds tests
+that assert nothing, an analyst finds tests that were never written.
