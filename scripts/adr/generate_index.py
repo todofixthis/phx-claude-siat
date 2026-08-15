@@ -248,7 +248,7 @@ def generate(adr_dir: Path = ADR_DIR, repo_root: Path = REPO_ROOT) -> int:
 
 
 def report_scoped_to(paths: list[str], adr_dir: Path = ADR_DIR) -> int:
-    """Print the binding decisions covering any of `paths`. Return 0, or 1 on a bad ADR.
+    """Print the binding decisions covering any of `paths`. Always returns 0.
 
     This is the direction the index cannot serve. A reader scanning INDEX.md has to
     already suspect a decision exists; this answers the question they actually hold —

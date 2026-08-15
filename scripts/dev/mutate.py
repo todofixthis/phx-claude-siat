@@ -27,6 +27,7 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
+from types import FrameType
 
 # A suite that has not finished by now is not going to: the mutation broke a loop guard
 # or an exit condition. Generous enough that a slow real suite still reports honestly.
@@ -227,7 +228,7 @@ def mutate(
     """Mutate, test, restore, report. The source is restored however this exits."""
     original = apply_mutation(path, anchor, replacement)
 
-    def restore_and_resume(number, _frame):
+    def restore_and_resume(number: int, _frame: FrameType | None) -> None:
         """Put the file back, then let the signal do what it would have done."""
         path.write_bytes(original)
         signal.signal(number, signal.SIG_DFL)
@@ -237,9 +238,13 @@ def mutate(
     try:
         code, output = run_tests(command)
     finally:
+        # The file first, the handlers after. Restoring the handlers first opens a window
+        # where the source is still mutated and a SIGTERM would take the default action;
+        # this way a signal arriving mid-write is caught by `restore_and_resume`, which
+        # writes the same bytes again and re-raises.
+        path.write_bytes(original)
         for number, handler in previous.items():
             signal.signal(number, handler)
-        path.write_bytes(original)
     return report(code, output)
 
 

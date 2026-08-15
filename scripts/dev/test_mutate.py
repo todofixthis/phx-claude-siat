@@ -96,11 +96,6 @@ class SourceFileTestCase(unittest.TestCase):
         """Read the subject back as text."""
         return self.path.read_text(encoding="utf-8")
 
-    def quietly(self, call) -> None:
-        """Run something whose warnings and verdict are not this test's subject."""
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            call()
-
 
 class FindOccurrencesTests(unittest.TestCase):
     """Unit tests for ``find_occurrences()``."""

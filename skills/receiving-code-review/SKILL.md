@@ -12,8 +12,15 @@ description: Use when responding to review feedback on a pull request, before ma
 Fetch all review comments before answering any of them:
 
 ```bash
-gh api repos/{owner}/{repo}/pulls/{pr}/comments --paginate
+PR=123
+gh api "repos/{owner}/{repo}/pulls/$PR/comments" --paginate \
+  --jq '.[] | select(.in_reply_to_id == null) | "\(.id)\t\(.path):\(.line)\t\(.body)"'
 ```
+
+`gh` fills `{owner}` and `{repo}` from the checked-out repository, and `{branch}` — but not
+the pull-request number, which 404s if you leave it as a placeholder. The `select` keeps
+top-level comments only: the endpoint returns replies mixed in, and looping over the lot
+means replying to replies, including your own from the last sitting.
 
 `gh pr view --json reviews` returns review *bodies*, which are often empty — the substance is in the inline comments, which that field omits. Review batches also accumulate across sittings, so the newest review is rarely the whole ask. Enumerate the lot, then decide what the response is.
 
@@ -29,17 +36,40 @@ REPLY_FOOTER=$'\n\n🤖 _Generated with [Claude Code](https://claude.com/claude-
 PR=123
 reply() {
   gh api -X POST "repos/{owner}/{repo}/pulls/$PR/comments/$1/replies" \
-    -f body="$2$REPLY_FOOTER" --silent || echo "FAILED: comment $1"
+    -f body="$2$REPLY_FOOTER" --silent || { echo "FAILED: comment $1" >&2; return 1; }
 }
 ```
 
-`gh api` fills `{owner}` and `{repo}` from the checked-out repository but not the pull-request number, so that one is a shell variable. Check the exit code rather than reading the output: a helper that swallows a failed POST reproduces the whole-batch failure it exists to prevent.
+Check the exit code rather than reading the output: a helper that swallows a failed POST reproduces the whole-batch failure it exists to prevent — `cmd || echo` exits 0, so the branch must `return 1`.
+
+Returning it is only half the job; the calls have to collect it, or the swallow just moves up a level:
+
+```bash
+failed=0
+reply 3762661948 'Applied.'                    || failed=$((failed + 1))
+reply 3762666372 'Not doing this, because …'   || failed=$((failed + 1))
+[ "$failed" -eq 0 ] || { echo "$failed replies failed" >&2; exit 1; }
+```
+
+**Define the footer, `PR`, the helper and every call in one shell invocation.** Each tool call is its own shell, so a helper defined in an earlier one is gone and `$REPLY_FOOTER` is empty — which posts unsigned replies and exits 0, the failure this convention exists to prevent.
+
+Then ask which threads are still unanswered, rather than counting replies: a count has nothing to compare against, since replies accumulate across sittings and other authors' count too. This prints the id of every thread with no reply, so silence means done:
+
+```bash
+comm -23 \
+  <(gh api "repos/{owner}/{repo}/pulls/$PR/comments" --paginate \
+      --jq '.[] | select(.in_reply_to_id == null) | .id' | sort) \
+  <(gh api "repos/{owner}/{repo}/pulls/$PR/comments" --paginate \
+      --jq '.[] | select(.in_reply_to_id != null) | .in_reply_to_id' | sort -u)
+```
+
+Ask `jq` for one line per item and count lines, never `| length`: under `--paginate` each page is filtered separately, so `length` prints a number per page and the first one looks like the answer. (`--slurp` would join them but is refused alongside `--jq`.)
 
 Add a single PR comment on top only for what spans threads or exceeds what was asked: findings you made beyond the review, decisions the reviewer must weigh, and a map from comment to commit.
 
 ## Additional Convention: Sweep for Stale References
 
-Answering a review deletes files, renames symbols, and moves documentation. Before declaring the response done, search the repo **and the PR body** for references to anything the response removed or renamed. The PR body is the one nothing else checks — it is written once and cited afterwards, so it holds the freshest-looking stale reference in the whole change.
+Answering a review deletes files, renames symbols, and moves documentation. Before declaring the response done, search the repo **and the PR body** for references to anything the response removed or renamed. The PR body is the one nothing else checks, so it holds the freshest-looking stale reference in the whole change.
 
 ## Additional Convention: Review-Driven Decisions Earn an ADR
 
