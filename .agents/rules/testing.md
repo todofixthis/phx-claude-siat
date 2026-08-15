@@ -116,12 +116,15 @@ import, proving nothing) and **UNKNOWN** (the suite died without naming a case) 
 1. This is a step you run, not an artefact you leave behind, so say in the pull request
 which checks you mutated and what caught each.
 
-**One blind spot to know about.** A run is itself a bounded, flagged subprocess, so
-anything the child *inherits* from it — a resource limit, an environment variable — reads
-the same whether or not the check that sets it is present, and mutating that check reports
-MISSED. Those checks are still worth testing; verify them by running their tests directly
-rather than through a mutation, and say so where the reader would otherwise read MISSED as
-a gap.
+**When MISSED is a blind spot rather than a gap.** A run is a subprocess carrying a memory
+cap, an environment flag and a working directory, all of which its child inherits. So a
+check whose *effect is one of those things* — setting a limit, exporting a variable,
+choosing a directory — reads the same whether or not it is present, and reports MISSED
+however well it is tested. That is the whole of the exception, and it is rare: everywhere
+else MISSED means what it says, so reach for this explanation only after checking that the
+mutated check really does set something a child inherits. Where it does, verify it by
+running its tests directly, and say so in the pull request, or the next reader takes MISSED
+for untested.
 
 A check nothing can catch is untested however many tests surround it — but the failure
 this finds most often is the other one: **a test that passes whether the check is there
