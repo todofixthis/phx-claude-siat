@@ -127,7 +127,7 @@ jobs:
       # Pinned to a commit digest; the v8 line publishes no floating major tag,
       # so the version comment tracks the exact release. Renovate's github-actions
       # manager keeps both digest and comment current.
-      - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           cache-dependency-glob: skills/creative-commits/uv.lock
           enable-cache: true
