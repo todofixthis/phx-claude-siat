@@ -105,14 +105,23 @@ python3 -m scripts.dev.mutate --file scripts/adr/generate_index.py \
     --anchor 'if not target.exists():' --with 'if False:'
 ```
 
-Add `--occurrence N` where the anchor appears more than once; without it the first is
-mutated and the run says so. The source is restored in a `finally` and on the signals a
-shell sends, so an interrupted run cannot leave a deliberately broken check in a tree you
-are about to commit. It exits 0 only on **CAUGHT**, so a sequence can be scripted rather
-than read by eye — **MISSED**, **INVALID** (the mutation broke the import, proving
-nothing) and **UNKNOWN** (the suite died without naming a case) all exit 1. This is a
-step you run, not an artefact you leave behind, so say in the pull request which checks
-you mutated and what caught each.
+The anchor must match exactly once; where it does not, extend it with surrounding lines
+until it does, as you would to make an edit. The source is restored in a `finally` and on
+the signals a shell sends, so an interrupted run cannot leave a deliberately broken check
+in a tree you are about to commit, and the run is bounded in time and memory because the
+thing being tested is a deliberate breakage — disabling a loop guard is a normal mutation
+and produces a suite that never returns. It exits 0 only on **CAUGHT**, so a sequence can
+be scripted rather than read by eye — **MISSED**, **INVALID** (the mutation broke the
+import, proving nothing) and **UNKNOWN** (the suite died without naming a case) all exit
+1. This is a step you run, not an artefact you leave behind, so say in the pull request
+which checks you mutated and what caught each.
+
+**One blind spot to know about.** A run is itself a bounded, flagged subprocess, so
+anything the child *inherits* from it — a resource limit, an environment variable — reads
+the same whether or not the check that sets it is present, and mutating that check reports
+MISSED. Those checks are still worth testing; verify them by running their tests directly
+rather than through a mutation, and say so where the reader would otherwise read MISSED as
+a gap.
 
 A check nothing can catch is untested however many tests surround it — but the failure
 this finds most often is the other one: **a test that passes whether the check is there

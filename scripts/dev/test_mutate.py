@@ -17,14 +17,19 @@ the parsing this module exists to do.
 
 import contextlib
 import io
+import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from scripts.dev.mutate import (
     DEFAULT_TEST_COMMAND,
+    MEMORY_LIMIT_BYTES,
+    RECURSION_FLAG,
     apply_mutation,
     find_occurrences,
+    guard_against_recursion,
     main,
     mutate,
     report,
@@ -120,32 +125,28 @@ class FindOccurrencesTests(unittest.TestCase):
 class ApplyMutationTests(SourceFileTestCase):
     """Unit tests for ``apply_mutation()``."""
 
-    def test_replaces_only_the_first_occurrence_by_default(self):
-        """Mutating every match would disable several checks and blame one test."""
-        self.quietly(lambda: apply_mutation(self.path, ANCHOR, REPLACEMENT))
-        self.assertEqual(self.source(), f"{REPLACEMENT}\n    raise ValueError\n{ANCHOR}\n    pass\n")
+    def test_replaces_the_one_match(self):
+        """The artefact is asserted entire: a stray second replacement would show here."""
+        apply_mutation(self.path, "raise ValueError", "pass")
+        self.assertEqual(self.source(), f"{ANCHOR}\n    pass\n{ANCHOR}\n    pass\n")
 
-    def test_replaces_the_occurrence_asked_for(self):
-        """A check is often the second of its shape in a file, and must be reachable."""
-        apply_mutation(self.path, ANCHOR, REPLACEMENT, occurrence=2)
-        self.assertEqual(self.source(), f"{ANCHOR}\n    raise ValueError\n{REPLACEMENT}\n    pass\n")
+    def test_replaces_a_match_identified_by_surrounding_lines(self):
+        """Disambiguating by context is the whole alternative to an occurrence index."""
+        apply_mutation(self.path, f"{ANCHOR}\n    pass\n", "if False:\n    pass\n")
+        self.assertEqual(self.source(), f"{ANCHOR}\n    raise ValueError\nif False:\n    pass\n")
 
     def test_returns_the_original_bytes_for_restoring(self):
         """The restore is held in memory, so an interrupted run leaves no stray backup."""
-        original = None
-
-        def run():
-            nonlocal original
-            original = apply_mutation(self.path, ANCHOR, REPLACEMENT)
-
-        self.quietly(run)
+        original = apply_mutation(self.path, "raise ValueError", "pass")
         self.assertEqual(original, SOURCE.encode("utf-8"))
 
-    def test_rejects_an_occurrence_past_the_last(self):
-        """Silently mutating the last one instead would test a check nobody named."""
+    def test_rejects_an_ambiguous_anchor(self):
+        """Mutating the first would test a check the caller never named, and still report."""
         with self.assertRaises(SystemExit) as raised:
-            apply_mutation(self.path, ANCHOR, REPLACEMENT, occurrence=3)
-        self.assertIn("holds 2 of that anchor", str(raised.exception))
+            apply_mutation(self.path, ANCHOR, REPLACEMENT)
+        self.assertIn("appears 2 times", str(raised.exception))
+        self.assertIn("surrounding lines", str(raised.exception))
+        self.assertEqual(self.source(), SOURCE)
 
     def test_rejects_an_anchor_that_is_absent(self):
         """A mistyped anchor would otherwise run the suite unmutated and report CAUGHT."""
@@ -172,26 +173,11 @@ class ApplyMutationTests(SourceFileTestCase):
             apply_mutation(self.path.parent / "absent.py", ANCHOR, REPLACEMENT)
         self.assertIn("is not a file", str(raised.exception))
 
-    def test_warns_when_the_anchor_is_ambiguous(self):
-        """Two matches mean the mutation may not be the one the caller described."""
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            apply_mutation(self.path, ANCHOR, REPLACEMENT)
-        self.assertIn("appears 2 times", err.getvalue())
-        self.assertIn("--occurrence", err.getvalue())
-
     def test_says_nothing_when_the_anchor_is_unique(self):
-        """The warning must mean something, so the ordinary case has to be silent."""
+        """A unique anchor is the ordinary case and must not print advice nobody needs."""
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             apply_mutation(self.path, "raise ValueError", "pass")
-        self.assertEqual(err.getvalue(), "")
-
-    def test_says_nothing_when_the_occurrence_was_chosen(self):
-        """Having named the occurrence, the caller already knows there are several."""
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            apply_mutation(self.path, ANCHOR, REPLACEMENT, occurrence=2)
         self.assertEqual(err.getvalue(), "")
 
     def test_preserves_line_endings_it_did_not_touch(self):
@@ -225,6 +211,57 @@ class RunTestsTests(unittest.TestCase):
         """A runner that reports on stdout must not be invisible to the parsing."""
         _, output = run_tests(("python3", "-c", "print('on stdout')"))
         self.assertIn("on stdout", output)
+
+    def test_stops_a_suite_that_will_not_finish(self):
+        """Disabling a loop guard is a normal mutation, and the suite then never returns."""
+        code, output = run_tests(("python3", "-c", "import time; time.sleep(30)"), timeout=1)
+        self.assertEqual(code, -1)
+        self.assertIn("timed out", output)
+
+    def test_marks_the_child_as_being_inside_a_run(self):
+        """Without the flag reaching the child, the recursion guard can never fire."""
+        _, output = run_tests(
+            ("python3", "-c", f"import os; print(os.environ.get({RECURSION_FLAG!r}))")
+        )
+        self.assertIn("1", output)
+
+    def test_caps_the_memory_the_suite_may_take(self):
+        """Unbounded, a runaway mutation ends in an OOM kill — the one signal restore misses.
+
+        The child reports its own limit rather than allocating: a test that proved the cap
+        by exhausting memory would, with the cap mutated away, do exactly the damage the
+        cap prevents.
+        """
+        _, output = run_tests(
+            ("python3", "-c", "import resource; print(resource.getrlimit(resource.RLIMIT_AS)[0])")
+        )
+        self.assertIn(str(MEMORY_LIMIT_BYTES), output)
+
+
+class GuardAgainstRecursionTests(unittest.TestCase):
+    """Unit tests for ``guard_against_recursion()``.
+
+    Tested here rather than through ``run_tests``, because a test that reaches the
+    subprocess to prove the guard would, with the guard mutated away, run the whole
+    suite from inside the suite — the fork bomb the guard exists to prevent.
+    """
+
+    def test_refuses_the_default_command_inside_a_run(self):
+        """The default is this suite, so a nested one spawns copies without end."""
+        with unittest.mock.patch.dict(os.environ, {RECURSION_FLAG: "1"}):
+            with self.assertRaises(SystemExit) as raised:
+                guard_against_recursion(DEFAULT_TEST_COMMAND)
+        self.assertIn("refusing to run the whole suite", str(raised.exception))
+
+    def test_allows_the_default_command_outside_a_run(self):
+        """The ordinary invocation is the default command, and must not be refused."""
+        with unittest.mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(guard_against_recursion(DEFAULT_TEST_COMMAND))
+
+    def test_allows_an_explicit_command_inside_a_run(self):
+        """These tests pass harmless commands from inside exactly this situation."""
+        with unittest.mock.patch.dict(os.environ, {RECURSION_FLAG: "1"}):
+            self.assertIsNone(guard_against_recursion(PASSES))
 
 
 class ResolveCommandTests(unittest.TestCase):
@@ -371,21 +408,22 @@ class MainTests(SourceFileTestCase):
         self.assertIn("2 failing test(s)", printed)
         self.assertEqual(self.source(), SOURCE)
 
-    def test_carries_the_occurrence_flag(self):
-        """The flag is useless unless it reaches apply_mutation from the command line."""
+    def test_refuses_an_ambiguous_anchor_from_the_command_line(self):
+        """The refusal must reach the caller, not just the function it guards.
+
+        The harmless command is not decoration. Without it this test relies on the guard
+        raising before the command is chosen, so breaking that guard sends the run to
+        `DEFAULT_TEST_COMMAND` — the whole suite, which contains this test, which spawns
+        the suite again. A test must not fork-bomb the machine when its subject breaks.
+        """
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            code = main(
-                [
-                    "--file", str(self.path),
-                    "--anchor", "if guard:",
-                    "--with", "if False:",
-                    "--occurrence", "2",
-                    "--", *PASSES,
-                ]
-            )
-        self.assertEqual(code, 1)
-        self.assertEqual(self.source(), SOURCE)
+            with self.assertRaises(SystemExit) as raised:
+                main(
+                    ["--file", str(self.path), "--anchor", ANCHOR, "--with", REPLACEMENT, "--"]
+                    + list(PASSES)
+                )
+        self.assertIn("appears 2 times", str(raised.exception))
 
 
 if __name__ == "__main__":

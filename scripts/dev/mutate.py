@@ -20,11 +20,24 @@ Stdlib-only, like everything under scripts/ (ADR 007).
 """
 
 import argparse
+import os
 import re
+import resource
 import signal
 import subprocess
 import sys
 from pathlib import Path
+
+# A suite that has not finished by now is not going to: the mutation broke a loop guard
+# or an exit condition. Generous enough that a slow real suite still reports honestly.
+DEFAULT_TIMEOUT_SECONDS = 300.0
+
+# Enough for any suite here, and far below what it takes to trouble the machine.
+MEMORY_LIMIT_BYTES = 2 * 1024 * 1024 * 1024
+
+# Set in the child's environment; its presence means a mutation run is already in
+# progress, and a nested one would be this module testing itself recursively.
+RECURSION_FLAG = "MUTATE_IN_PROGRESS"
 
 DEFAULT_TEST_COMMAND = (
     "python3",
@@ -72,8 +85,14 @@ def find_occurrences(haystack: str, needle: str) -> list[int]:
     return positions
 
 
-def apply_mutation(path: Path, anchor: str, replacement: str, occurrence: int = 1) -> bytes:
-    """Replace one occurrence of `anchor`, returning the file's original bytes.
+def apply_mutation(path: Path, anchor: str, replacement: str) -> bytes:
+    """Replace the anchor, which must match exactly once, returning the original bytes.
+
+    Uniqueness is required rather than offering an index to pick between matches, for
+    the reason the edit tools take the same line: an index is derived from a count the
+    caller made separately, so miscounting mutates a different check and the run still
+    prints a plausible verdict. An ambiguous anchor fails instead, and the caller adds
+    surrounding lines until it identifies one place.
 
     Bytes rather than text, so the restore is exact: reading and writing as text
     translates line endings, which would silently rewrite every line of a CRLF file
@@ -97,30 +116,73 @@ def apply_mutation(path: Path, anchor: str, replacement: str, occurrence: int = 
             f"Error: {path} does not contain the anchor; copy it exactly from the source, "
             "including indentation"
         )
-    if occurrence > len(positions):
+    if len(positions) > 1:
         raise SystemExit(
-            f"Error: --occurrence {occurrence} but {path} holds {len(positions)} of that anchor"
-        )
-    if len(positions) > 1 and occurrence == 1:
-        print(
-            f"Warning: the anchor appears {len(positions)} times in {path}; mutating the "
-            "first — pass --occurrence to target another",
-            file=sys.stderr,
+            f"Error: the anchor appears {len(positions)} times in {path}; extend it with "
+            "surrounding lines until it identifies one place, as you would for an edit"
         )
 
-    index = positions[occurrence - 1]
+    index = positions[0]
     mutated = text[:index] + replacement + text[index + len(anchor) :]
     path.write_bytes(mutated.encode("utf-8"))
     return original
 
 
-def run_tests(command: tuple[str, ...]) -> tuple[int, str]:
+def guard_against_recursion(command: tuple[str, ...]) -> None:
+    """Refuse to run the *whole suite* from inside a mutation run.
+
+    The default command is this repository's suite, which includes the tests for this
+    module. If one of those reaches `run_tests` with the default — because a guard it
+    relied on has just been mutated away — the suite spawns the suite, and each copy
+    spawns more. That is a fork bomb produced by testing a guard, so it is stopped here
+    rather than left to every test to remember.
+
+    Only the default is refused. An explicit command is a deliberate choice, and the
+    tests in this module pass harmless ones from inside exactly this situation.
+    """
+    if command == DEFAULT_TEST_COMMAND and os.environ.get(RECURSION_FLAG):
+        raise SystemExit(
+            "Error: refusing to run the whole suite from inside a mutation run; pass an "
+            "explicit command after `--` if this is deliberate"
+        )
+
+
+def bound_child() -> None:
+    """Cap the child's address space, so a runaway mutation cannot take the machine.
+
+    Mutating this away reports MISSED rather than CAUGHT, and the test is still worth
+    keeping. A mutation run is itself capped, so its child inherits the same limit and a
+    grandchild reports it either way — the effect is unobservable from inside an already
+    capped process. Run standalone the test does catch removal, and the cap was verified
+    directly: a child asking for 3 GiB raises MemoryError instead of taking the host.
+    """
+    resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT_BYTES, MEMORY_LIMIT_BYTES))
+
+
+def run_tests(command: tuple[str, ...], timeout: float = DEFAULT_TIMEOUT_SECONDS) -> tuple[int, str]:
     """Run the suite, returning its exit code and both streams joined.
 
     unittest writes its whole result block to stderr, so a caller reading stdout alone
     sees nothing and reports every run as having caught no tests.
+
+    Bounded in both time and memory, because the mutation being tested is by definition
+    a deliberate breakage: disabling a loop guard is a normal thing to try, and the
+    result is a suite that never returns. Unbounded, that ends as an out-of-memory kill
+    — which is a SIGKILL, the one signal the restore cannot catch, so the run that most
+    needs the source put back is the one that leaves it mutated.
     """
-    result = subprocess.run(command, capture_output=True, text=True)
+    guard_against_recursion(command)
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            preexec_fn=bound_child,
+            env=os.environ | {RECURSION_FLAG: "1"},
+        )
+    except subprocess.TimeoutExpired:
+        return -1, f"timed out after {timeout:g}s without finishing"
     return result.returncode, result.stdout + result.stderr
 
 
@@ -161,10 +223,9 @@ def mutate(
     anchor: str,
     replacement: str,
     command: tuple[str, ...] = DEFAULT_TEST_COMMAND,
-    occurrence: int = 1,
 ) -> int:
     """Mutate, test, restore, report. The source is restored however this exits."""
-    original = apply_mutation(path, anchor, replacement, occurrence)
+    original = apply_mutation(path, anchor, replacement)
 
     def restore_and_resume(number, _frame):
         """Put the file back, then let the signal do what it would have done."""
@@ -187,16 +248,10 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--file", required=True, type=Path, help="source file to mutate")
     parser.add_argument(
-        "--anchor", required=True, help="exact text to replace, indentation included"
+        "--anchor", required=True, help="exact text to replace; must match once, indentation included"
     )
     parser.add_argument(
         "--with", dest="replacement", required=True, help="text to put in the anchor's place"
-    )
-    parser.add_argument(
-        "--occurrence",
-        type=int,
-        default=1,
-        help="which occurrence of the anchor to mutate, counting from 1",
     )
     # REMAINDER rather than nargs="+", so a command carrying its own flags — which most
     # test runners do — is passed through instead of being parsed as this script's.
@@ -206,13 +261,7 @@ def main(argv: list[str]) -> int:
         help="command to run instead of the whole suite, last and after a `--`",
     )
     args = parser.parse_args(argv)
-    return mutate(
-        args.file,
-        args.anchor,
-        args.replacement,
-        resolve_command(args.test_command),
-        args.occurrence,
-    )
+    return mutate(args.file, args.anchor, args.replacement, resolve_command(args.test_command))
 
 
 if __name__ == "__main__":
