@@ -17,6 +17,8 @@ from pathlib import Path
 from scripts.ci.versions import RE_VERSION
 from scripts.frontmatter import parse_frontmatter
 
+# These stay relative to the working directory; ADR 015 forbids anchoring them to
+# `__file__`, which would leave the tests reading the real repository while still passing.
 MARKETPLACE_FILE = Path(".claude-plugin/marketplace.json")
 PLUGIN_FILE = Path(".claude-plugin/plugin.json")
 

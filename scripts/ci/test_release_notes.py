@@ -4,6 +4,11 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 (ADR 007). Run from the repo root:
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+
+The subject reads module-level relative paths as its argparse and function defaults, so
+the tests covering those defaults `chdir` into a fixture repo rather than patching each
+constant. Those constants must stay relative for that to work: anchoring one to `__file__`
+(ADR 015) would leave these tests reading the real repository while still passing.
 """
 
 import contextlib

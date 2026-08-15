@@ -247,7 +247,26 @@ def generate(adr_dir: Path = ADR_DIR, repo_root: Path = REPO_ROOT) -> int:
     return 0
 
 
-def report_scoped_to(paths: list[str], adr_dir: Path = ADR_DIR) -> int:
+def relative_to_repo(path: str, repo_root: Path = REPO_ROOT) -> str:
+    """Return `path` as the repo-relative form scope entries are written in.
+
+    An absolute path is what an editor or an agent has to hand, and left alone it matches
+    no scope entry — so the lookup would answer "nothing binds this file" for a file
+    several decisions bind. A confident false negative is worse than an error, which is
+    why a path outside the repository raises rather than returning nothing.
+    """
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        return path
+    try:
+        return str(candidate.resolve().relative_to(repo_root.resolve()))
+    except ValueError:
+        raise SystemExit(f"Error: {path} is outside {repo_root.resolve()}")
+
+
+def report_scoped_to(
+    paths: list[str], adr_dir: Path = ADR_DIR, repo_root: Path = REPO_ROOT
+) -> int:
     """Print the binding decisions covering any of `paths`. Always returns 0.
 
     This is the direction the index cannot serve. A reader scanning INDEX.md has to
@@ -257,6 +276,7 @@ def report_scoped_to(paths: list[str], adr_dir: Path = ADR_DIR) -> int:
     too, which is the whole point of them: in force, out of the index, and met at the
     moment someone edits what they bind.
     """
+    subjects = [relative_to_repo(path, repo_root) for path in paths]
     for path in sorted(adr_dir.iterdir()):
         if path.name.startswith(".") or not RE_ADR_FILENAME.match(path.name):
             continue
@@ -271,7 +291,7 @@ def report_scoped_to(paths: list[str], adr_dir: Path = ADR_DIR) -> int:
         if fields["status"] not in BINDING_STATUSES:
             continue
         if any(
-            scope_matches(entry, subject) for entry in fields[SCOPE_FIELD] for subject in paths
+            scope_matches(entry, subject) for entry in fields[SCOPE_FIELD] for subject in subjects
         ):
             number = RE_FILE_NUMBER.match(path.name).group(1)
             print(f"{number} ({fields['status']}): {title} — docs/adr/{path.name}")

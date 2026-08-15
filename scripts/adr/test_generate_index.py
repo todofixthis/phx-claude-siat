@@ -35,6 +35,7 @@ from scripts.adr.generate_index import (
     generate,
     main,
     parse_adr,
+    relative_to_repo,
     report_scoped_to,
     scope_matches,
     scope_problems,
@@ -304,6 +305,29 @@ class ScopeProblemsTests(unittest.TestCase):
         self.assertEqual(len(scope_problems(["a.py", "b.py"], self.root)), 2)
 
 
+class RelativeToRepoTests(unittest.TestCase):
+    """Unit tests for ``relative_to_repo()``."""
+
+    def setUp(self) -> None:
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.root = Path(directory)
+
+    def test_leaves_a_relative_path_alone(self):
+        """Scope entries are written repo-relative, so that form is already the answer."""
+        self.assertEqual(relative_to_repo("scripts/ci/versions.py", self.root), "scripts/ci/versions.py")
+
+    def test_converts_an_absolute_path_inside_the_repo(self):
+        """An editor or an agent hands you an absolute path, which matches no scope entry."""
+        absolute = str(self.root / "scripts" / "ci" / "versions.py")
+        self.assertEqual(relative_to_repo(absolute, self.root), "scripts/ci/versions.py")
+
+    def test_rejects_a_path_outside_the_repo(self):
+        """Answering "nothing binds this" for a file we cannot even see is a false negative."""
+        with self.assertRaises(SystemExit) as raised:
+            relative_to_repo("/etc/hosts", self.root)
+        self.assertIn("is outside", str(raised.exception))
+
+
 class ScopeMatchesTests(unittest.TestCase):
     """Unit tests for ``scope_matches()``."""
 
@@ -500,7 +524,7 @@ class ReportScopedToTests(AdrDirTestCase):
         """Run report_scoped_to() against the fixture, returning its code and output."""
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            code = report_scoped_to(list(paths), self.root)
+            code = report_scoped_to(list(paths), self.root, self.repo_root)
         return code, out.getvalue()
 
     def test_warns_that_an_unreadable_adr_binds_nothing(self):
@@ -508,7 +532,7 @@ class ReportScopedToTests(AdrDirTestCase):
         self.write("001-bad.md", adr(status="Draft"))
         err = io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
-            report_scoped_to(["scripts/versions.py"], self.root)
+            report_scoped_to(["scripts/versions.py"], self.root, self.repo_root)
         self.assertIn("001-bad.md could not be read, so it binds nothing here", err.getvalue())
 
     def test_names_the_decision_binding_the_path(self):
@@ -544,6 +568,13 @@ class ReportScopedToTests(AdrDirTestCase):
         for name in ("001-first.md", "002-second.md"):
             self.write(name, adr(**{SCOPE_FIELD: "[scripts/]"}))
         self.assertEqual(len(self.report("scripts/versions.py")[1].splitlines()), 2)
+
+    def test_finds_a_decision_from_an_absolute_path(self):
+        """The hook and a human both hand this absolute paths; a miss reads as "nothing binds"."""
+        self.write_scoped("scripts/versions.py")
+        self.write("001-first.md", adr(**{SCOPE_FIELD: "[scripts/]"}))
+        absolute = str(self.repo_root / "scripts" / "versions.py")
+        self.assertIn("001", self.report(absolute)[1])
 
     def test_matches_any_of_several_paths(self):
         """The hook passes every staged path at once, so one match in the set is enough."""
