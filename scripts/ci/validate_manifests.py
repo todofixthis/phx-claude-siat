@@ -17,8 +17,13 @@ from pathlib import Path
 from scripts.ci.versions import RE_VERSION
 from scripts.frontmatter import parse_frontmatter
 
-# These stay relative to the working directory; ADR 015 forbids anchoring them to
-# `__file__`, which would leave the tests reading the real repository while still passing.
+# Every path constant below stays repo-relative and is joined to a `repo_root` at the
+# call that touches the filesystem, so error messages name a repo-relative path rather
+# than a temp directory or a CI container path. `REPO_ROOT` is read only on the
+# `__main__` line (ADR 016): no default path resolves against the caller's tree, and a
+# test that omits its fixture root fails rather than reading the real repository.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 MARKETPLACE_FILE = Path(".claude-plugin/marketplace.json")
 PLUGIN_FILE = Path(".claude-plugin/plugin.json")
 
@@ -43,19 +48,22 @@ TOOLING_MARKERS = ("package.json", PYPROJECT_FILENAME)
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
 
-def load_json(path: Path, errors: list) -> dict | None:
+def load_json(path: Path, repo_root: Path, errors: list) -> dict | None:
     """Read and parse a JSON manifest, recording an error if it is unusable.
+
+    `path` is repo-relative and names the file in every message; `repo_root` locates it.
 
     Well-formed JSON of the wrong shape is rejected here rather than left to the
     caller: a manifest holding a list or a string parses cleanly, and every caller
     then reaches for `.get`, so without this the run ends in a traceback instead of
     a message naming the file.
     """
-    if not path.exists():
+    target = repo_root / path
+    if not target.exists():
         errors.append(f"{path} is missing")
         return None
     try:
-        content = json.loads(path.read_text(encoding="utf-8"))
+        content = json.loads(target.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         errors.append(f"{path} is not valid JSON: {exc}")
         return None
@@ -89,7 +97,7 @@ def check_plugin(plugin_manifest: dict | None, errors: list) -> None:
         )
 
 
-def check_marketplace(plugin_manifest: dict | None, errors: list) -> None:
+def check_marketplace(plugin_manifest: dict | None, repo_root: Path, errors: list) -> None:
     """The catalogue lists this plugin alone, versionless, pinned to the release ref.
 
     The version resolves plugin.json -> marketplace entry -> SHA, so duplicating it
@@ -106,7 +114,7 @@ def check_marketplace(plugin_manifest: dict | None, errors: list) -> None:
     Each condition is checked independently: an entry that breaks two invariants
     should report both, rather than revealing the second only once the first is fixed.
     """
-    marketplace = load_json(MARKETPLACE_FILE, errors)
+    marketplace = load_json(MARKETPLACE_FILE, repo_root, errors)
     if marketplace is None:
         return
 
@@ -155,20 +163,31 @@ def check_marketplace(plugin_manifest: dict | None, errors: list) -> None:
         )
 
 
-def check_skills(errors: list) -> None:
+def skill_dirs(root: Path, repo_root: Path) -> list[Path]:
+    """Return the skill directories under `root`, repo-relative and sorted.
+
+    `iterdir` on the joined root yields absolute paths, which would reach both the error
+    messages and the workflow substring match downstream — where the workflow names skills
+    repo-relative, so every comparison would miss. Rebuilding from the name keeps the
+    repo-relative form the only one that leaves this function.
+    """
+    return sorted(root / d.name for d in (repo_root / root).iterdir() if d.is_dir())
+
+
+def check_skills(repo_root: Path, errors: list) -> None:
     """Every skill must declare a name matching its directory, plus a description."""
     for root in SKILL_ROOTS:
-        if not root.is_dir():
+        if not (repo_root / root).is_dir():
             errors.append(f"{root} is missing")
             continue
 
-        for skill_dir in sorted(d for d in root.iterdir() if d.is_dir()):
+        for skill_dir in skill_dirs(root, repo_root):
             path = skill_dir / SKILL_FILENAME
-            if not path.exists():
+            if not (repo_root / path).exists():
                 errors.append(f"{path} is missing")
                 continue
 
-            match = RE_FRONTMATTER.match(path.read_text(encoding="utf-8"))
+            match = RE_FRONTMATTER.match((repo_root / path).read_text(encoding="utf-8"))
             if not match:
                 errors.append(f"{path} has no frontmatter block")
                 continue
@@ -184,7 +203,7 @@ def check_skills(errors: list) -> None:
                 errors.append(f"{path} has no description")
 
 
-def declared_tools(skill_dir: Path, errors: list) -> list:
+def declared_tools(skill_dir: Path, repo_root: Path, errors: list) -> list:
     """Return the tool names a skill declares in [tool.autohooks], if any.
 
     `autohooks.plugins.black` names the tool `black`. Skills declaring tooling any
@@ -196,11 +215,11 @@ def declared_tools(skill_dir: Path, errors: list) -> list:
     workflow, so the mirror check downstream passes having verified nothing.
     """
     path = skill_dir / PYPROJECT_FILENAME
-    if not path.exists():
+    if not (repo_root / path).exists():
         return []
 
     try:
-        with path.open("rb") as handle:
+        with (repo_root / path).open("rb") as handle:
             config = tomllib.load(handle)
     except tomllib.TOMLDecodeError as exc:
         errors.append(f"{path} is not valid TOML: {exc}")
@@ -241,7 +260,7 @@ def declared_tools(skill_dir: Path, errors: list) -> list:
     return names
 
 
-def check_skill_tooling(errors: list) -> None:
+def check_skill_tooling(repo_root: Path, errors: list) -> None:
     """A skill's declared tooling must be gated by the PR workflow — see docs/adr/006.
 
     The workflow mirrors each skill's declaration by hand, so it would otherwise fail
@@ -249,17 +268,17 @@ def check_skill_tooling(errors: list) -> None:
     grew a tool its job never runs. The second is a substring match over the whole
     workflow, so a tool named only in a comment satisfies it.
     """
-    if not WORKFLOW_FILE.exists():
+    if not (repo_root / WORKFLOW_FILE).exists():
         errors.append(f"{WORKFLOW_FILE} is missing")
         return
 
-    workflow = WORKFLOW_FILE.read_text(encoding="utf-8")
+    workflow = (repo_root / WORKFLOW_FILE).read_text(encoding="utf-8")
     for root in SKILL_ROOTS:
-        if not root.is_dir():
+        if not (repo_root / root).is_dir():
             continue
 
-        for skill_dir in sorted(d for d in root.iterdir() if d.is_dir()):
-            markers = [m for m in TOOLING_MARKERS if (skill_dir / m).exists()]
+        for skill_dir in skill_dirs(root, repo_root):
+            markers = [m for m in TOOLING_MARKERS if (repo_root / skill_dir / m).exists()]
             if not markers:
                 continue
 
@@ -270,7 +289,7 @@ def check_skill_tooling(errors: list) -> None:
                 )
                 continue
 
-            for tool in declared_tools(skill_dir, errors):
+            for tool in declared_tools(skill_dir, repo_root, errors):
                 if tool not in workflow:
                     errors.append(
                         f"{skill_dir} declares {tool} but {WORKFLOW_FILE} never runs it; "
@@ -278,16 +297,16 @@ def check_skill_tooling(errors: list) -> None:
                     )
 
 
-def validate() -> int:
+def validate(repo_root: Path) -> int:
     """Validate every manifest invariant. Return 0 on success, 1 on error."""
     errors: list = []
     # Loaded once and shared, so a missing manifest is reported once and the
     # marketplace check can compare names against it.
-    plugin = load_json(PLUGIN_FILE, errors)
+    plugin = load_json(PLUGIN_FILE, repo_root, errors)
     check_plugin(plugin, errors)
-    check_marketplace(plugin, errors)
-    check_skills(errors)
-    check_skill_tooling(errors)
+    check_marketplace(plugin, repo_root, errors)
+    check_skills(repo_root, errors)
+    check_skill_tooling(repo_root, errors)
 
     for error in errors:
         print(f"Error: {error}", file=sys.stderr)
@@ -300,4 +319,4 @@ def validate() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(validate())
+    sys.exit(validate(REPO_ROOT))

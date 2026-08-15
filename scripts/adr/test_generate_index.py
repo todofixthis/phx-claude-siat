@@ -5,11 +5,11 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 
-`generate()` takes its directories as arguments, so these tests never chdir and never
-call it without them: the defaults resolve from the module (ADR 015), so an argumentless
-call rewrites the real docs/adr/INDEX.md whatever the working directory is. The one test
-that does chdir asserts precisely that — that moving cwd cannot redirect the defaults —
-and never calls `generate()`.
+Every function here requires its directories (ADR 016), so these tests pass a fixture
+root and never chdir; there is no argumentless call that could rewrite the real
+docs/adr/INDEX.md. The one test that does chdir asserts precisely that — that moving cwd
+cannot redirect the module's anchors — and reads the constants rather than calling
+anything.
 """
 
 import contextlib
@@ -586,11 +586,14 @@ class ReportScopedToTests(AdrDirTestCase):
 class ArgumentTests(unittest.TestCase):
     """Unit tests for ``main()``: which mode each invocation selects."""
 
+    def setUp(self) -> None:
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
     def test_rejects_for_with_no_path(self):
         """`--for` with nothing after it would otherwise report against an empty set."""
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            code = main(["--for"])
+            code = main(["--for"], self.root, self.root)
         self.assertEqual(code, 1)
         self.assertIn("--for needs at least one path", err.getvalue())
 
@@ -598,27 +601,26 @@ class ArgumentTests(unittest.TestCase):
         """A typo must fail rather than silently regenerating the index instead."""
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            code = main(["--wat"])
+            code = main(["--wat"], self.root, self.root)
         self.assertEqual(code, 1)
         self.assertIn("unrecognised arguments", err.getvalue())
 
 
-class DefaultDirectoryTests(unittest.TestCase):
-    """Integration test: what the no-argument invocation resolves to."""
+class RepoRootTests(unittest.TestCase):
+    """Unit tests for ``REPO_ROOT`` and ``ADR_DIR``: the paths the module resolves itself."""
 
-    def test_a_working_directory_holding_its_own_docs_adr_cannot_capture_the_defaults(self):
-        """A relative default resolves against the caller's tree, silently editing it instead."""
+    def test_chdir_cannot_redirect_the_anchor(self):
+        """A cwd-relative anchor would resolve against the caller's tree, silently editing it."""
         directory = self.enterContext(tempfile.TemporaryDirectory())
-        (Path(directory) / "docs" / "adr").mkdir(parents=True)
+        (Path(directory) / ADR_DIR).mkdir(parents=True)
         with contextlib.chdir(directory):
-            self.assertTrue(ADR_DIR.is_absolute())
-            self.assertFalse(ADR_DIR.is_relative_to(directory))
+            self.assertTrue(REPO_ROOT.is_absolute())
+            self.assertFalse(REPO_ROOT.is_relative_to(directory))
 
     def test_the_root_is_the_repo_rather_than_the_package_inside_it(self):
         """One `.parent` too few lands on scripts/, where docs/adr does not exist."""
-        self.assertEqual(ADR_DIR, REPO_ROOT / "docs" / "adr")
-        self.assertTrue(ADR_DIR.is_dir())
         self.assertTrue(Path(__file__).resolve().is_relative_to(REPO_ROOT))
+        self.assertTrue((REPO_ROOT / ADR_DIR).is_dir())
 
 
 if __name__ == "__main__":

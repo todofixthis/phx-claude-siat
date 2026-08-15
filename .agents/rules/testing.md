@@ -66,20 +66,30 @@ broken makes every negative test pass for the wrong reason.
 
 ## Say what the module does about the working directory, and why
 
-Where the subject resolves paths, the module docstring states its stance on `chdir`
-and what the stance rests on. Modules here take opposite stances for the same reason, and
-ADR 015 is what decides which applies.
+Where the subject takes paths at all, the module docstring states its stance on `chdir`:
+cite ADR 016, and say that the subject requires a root so no call can reach the real
+repository. There is one stance, and no working-directory-relative alternative — ADR 015
+described one and is superseded, so a rule found there is not in force.
 
-Where the subject takes its directories as arguments, pass a fixture and never chdir.
-Its defaults are anchored to the module, so an argumentless call rewrites the real file
-the subject generates no matter where the test stands; the only test that changes
-directory is the one asserting that a `chdir` *cannot* redirect the defaults, and it
-asserts the paths rather than calling the subject.
+**Pass a fixture root and never chdir.** The subject anchors itself with
+`REPO_ROOT = Path(__file__).resolve().parents[2]`, read on the `__main__` line and nowhere
+else; every function below it requires the root, entry points included, and joins it to
+repo-relative constants where each is read. So omitting the fixture root is a `TypeError`
+rather than a test that passes while reading the real repository — the guarantee a `chdir`
+used to buy with an assertion someone had to remember. Don't add a default back and reopen
+it. Where the subject takes a second anchor as well (`generate_index`'s `adr_dir`), the
+entry point derives it from the root and the tests inject each separately, so a fixture
+can point them at unrelated directories.
 
-Where the subject reads module-level relative paths instead, chdir into a fixture repo
-rather than patching each path, and assert the chdir took, or a positive test can pass
-by reading the real repo. Those constants must stay relative for that to work, and the test module's docstring
-says so, because anchoring one to `__file__` would break it silently.
+Two tests cover the anchor itself, and a module resolving paths owes both. Neither calls
+the subject; they read the constants, so they belong to a unit class named for the
+constant rather than for an invocation:
+
+- a `chdir` into a temp directory, asserting the anchor is absolute and does not fall
+  inside it — that a moved cwd *cannot* redirect it;
+- no `chdir` at all, asserting the anchor reaches this repository (`__file__` is relative
+  to it, and a file the subject expects is really there). This is the one that catches
+  `parents[1]` for `parents[2]`, which the first test passes happily.
 
 ## Guard against a partial pass
 
