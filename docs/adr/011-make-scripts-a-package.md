@@ -90,6 +90,13 @@ Every caller now runs `python3 -m scripts.<area>.<name>` from the repo root: the
 skill, and the README — each from the repo root, which all of them already used. Running a
 script by path now fails with an import error, which is loud rather than subtle.
 
+The hook satisfies that rule without doing anything: Git runs a hook with the working
+directory at the top of the working tree, whatever directory the committer typed `git
+commit` in. Worth stating because the failure it implies is a phantom — run the module
+by hand from a subdirectory and it raises `ModuleNotFoundError`, which reads as a bug in
+the hook and is not one. Reproduce through an actual commit before changing anything
+here.
+
 One test command covers the lot — `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`
 — where discovery previously had to run once per script directory.
 

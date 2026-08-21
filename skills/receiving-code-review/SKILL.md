@@ -41,6 +41,10 @@ overlooked, and the reviewer cannot resolve it. Skip a bot unless it asked somet
 skip threads you opened yourself — the `select` above keeps those too, since it filters
 replies rather than authors.
 
+Add a single pull-request comment on top only for what spans threads or exceeds what was
+asked: findings you made beyond the review, decisions the reviewer must weigh, and a map
+from comment to commit. Per-thread replies carry everything else.
+
 Feedback also lands on two surfaces the gather above misses. Read both, and answer a
 direct question on either — there is no thread to reply into, so answer in the conversation:
 
