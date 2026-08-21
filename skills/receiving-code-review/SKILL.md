@@ -35,7 +35,7 @@ means replying to replies, including your own from the last sitting.
 
 ## Additional Convention: Answer Every Thread
 
-Reply in the thread (`gh api .../pulls/{pr}/comments/{id}/replies`), one per inline review
+Reply in the thread (`gh api .../pulls/$PR/comments/$ID/replies`), one per inline review
 comment, even where the reply is just "Applied." A thread with no reply reads as
 overlooked, and the reviewer cannot resolve it. Skip a bot unless it asked something, and
 skip threads you opened yourself — the `select` above keeps those too, since it filters
