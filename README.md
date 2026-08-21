@@ -152,14 +152,40 @@ Activate them once per clone:
 git config core.hooksPath .githooks
 ```
 
-The `pre-commit` hook regenerates `docs/adr/INDEX.md` from ADR frontmatter
-whenever an ADR is staged. The setting lives in the clone's shared config and
-the path is relative, so a single activation also covers every worktree. To
-regenerate the index by hand:
+The `pre-commit` hook does two things. It regenerates `docs/adr/INDEX.md` from ADR
+frontmatter whenever an ADR is staged, and **refuses the commit if that fails** —
+a malformed ADR stops you there. It then reports any decision whose `scope` covers
+a staged path, which is advisory and never blocks:
+
+```
+Decisions binding these paths:
+007 (Accepted): Keep repo scripts stdlib-only — docs/adr/007-keep-repo-scripts-stdlib-only.md
+```
+
+That report is the only place `Archived` decisions appear — they are still in force
+but kept out of `INDEX.md`. Skipping the hook is not free: `pr.yml` regenerates the
+index on every pull request touching `docs/adr/` or `scripts/` and fails the build
+if it differs, so a missing hook shows up as a red gate rather than a stale file.
+
+The setting lives in the clone's shared config and the path is relative, so a single
+activation also covers every worktree. To regenerate the index by hand:
 
 ```bash
 python3 -m scripts.adr.generate_index
 ```
+
+To ask which decisions bind a file before changing it, from the repo root:
+
+```bash
+python3 -m scripts.adr.generate_index --for scripts/ci/versions.py
+```
+
+Paths may be repo-relative or absolute; one outside the repository is refused rather
+than answered with silence.
+
+Contributions go to `develop` — `main` carries releases only. Run the suite with
+`python3 -m unittest discover -s scripts -t . -p 'test_*.py'`; `AGENTS.md` has the
+rest of the maintainer guidance.
 
 ## Licence
 

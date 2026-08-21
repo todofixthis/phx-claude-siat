@@ -123,7 +123,24 @@ Each reviewer must also check **breaking-change completeness** for its block: wo
 someone in that audience be caught out by a change that isn't under that block's
 Breaking changes — an altered contract, type surface, build/test/contributor workflow,
 or dropped version support? Anything missing, under-called, or misclassified into the
-wrong audience gets flagged. Address the feedback from both reviewers before continuing.
+wrong audience gets flagged.
+
+Each reviewer also **checks the block's claims against the thing each describes** — the
+code at both ends of the range, the workflow file, the live setting via `gh` — rather than
+against the draft's account of them. Reading only that block keeps the other audience's
+prose away from the reviewer; it does not deny it the repository, which it needs for this.
+Where a claim rests on prior behaviour, hand it the pre-image (`git show <base>:<path>`):
+the diff shows what a change became, never what it displaced, and prior behaviour is the
+half no gather subagent saw either.
+
+> *"the validator now rejects a manifest of the wrong shape"* — true, and the entry implies
+> it used to accept one. It crashed. A reader who upgrades to fix silent acceptance was
+> never exposed to it.
+
+Where a reviewer's budget runs out, verification outranks the rest: an unclear entry costs
+a reader a minute, a false one sends them the wrong way.
+
+Address the feedback from both reviewers before continuing.
 
 ### 6. Quality pass
 

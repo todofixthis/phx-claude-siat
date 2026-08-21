@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-07-16
-tags: [autohooks, branch-protection, ci, github-actions, hooks, linting, pull-requests, python, releases, renovate, skills, testing, tooling, uv]
+scope: [.github/workflows/pr.yml, skills/]
 summary: Gate every pull request in CI with checks mirroring the tooling each skill declares, making CI the authoritative enforcement layer rather than local git hooks or release-time validation — hooks stay welcome as a faster-failing local aid, just no longer the layer enforcement depends on — so a skill that gains tooling gains matching checks in the same change, with branch protection requiring only the aggregate gate job.
 ---
 

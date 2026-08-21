@@ -1,5 +1,67 @@
 # Changelog
 
+## 4.0.0 - 2026-08-21
+
+### For phx plugin users
+
+#### Breaking changes
+
+- **`phx:nz-english` now renames the identifiers a repo defines** — parameters, methods, classes, attributes, locals and filenames — where it previously refused to touch a public API identifier. A sweep that used to edit prose alone can now rename symbols across a tree.
+
+  *Migration:* a project wanting US-spelled identifiers states that convention in its `AGENTS.md` or `CLAUDE.md`, in a line such as "This project follows US English spelling, identifiers included". The skill reads both at the root plus any nested file covering the subtree it is sweeping, and a nested file governs its own subtree. Doing nothing is the risk, and deliberately so: an already US-spelled tree is what the skill is invoked to change, so it cannot double as the opt-out signal. There is no dry-run — run it on a clean tree and read `git diff`, which will be larger than this change alone accounts for, because the substitution table grew too (below).
+
+  Whole trees are excluded, which is also new: vendored and third-party directories, test fixtures that assert on US spelling, `CHANGELOG.md` and past release notes, and the skill's own directory. Names fixed outside the repo are still skipped, and a third category is new: names the repo defines that something outside holds a copy of — a serialised field name or database column, the repo's own CLI flags and environment variables, public API, a filename a branch-protection rule names. Those are skipped and listed in the agent's report, each needing its own migration.
+
+- **`phx:writing-adrs` replaces the `tags` frontmatter field with `scope`**, which names the paths a decision binds, so a decision is found from the file you are editing rather than from a word you guess.
+
+  *Migration:* replace each ADR's `tags` with the paths it binds — exact paths or directory prefixes, never globs, and give a directory its trailing `/`. Where you generate an index from that frontmatter, the field it reads has moved; [this repo's own generator](https://github.com/todofixthis/phx-claude-siat/blob/4575ec935b5cb0ddcb651c47eace7b7bafa6acd7/scripts/adr/generate_index.py) is a working example, and it rejects a stale `tags`, a glob, an entry naming nothing on disk, and a directory missing its slash. Without a generator none of that is checked — see the note under Added.
+
+#### Added
+
+- **`phx:nz-english` gained seven substitutions it never had**: `-yze`→`-yse`, `skeptic`→`sceptic`, `judgment`/`acknowledgment`→`judgement`/`acknowledgement`, `pretense`→`pretence`, `sizable`→`sizeable`, `-eler`→`-eller`, and the bare verbs `fulfill`/`enroll`→`fulfil`/`enrol`, whose inflections keep the double `l` and stay as they are. These are conversions the skill never previously made, so a sweep will change words earlier sweeps left alone. One caveat on the new `judgment` row: a court's `judgment` keeps that spelling in NZ legal usage.
+- **`phx:receiving-code-review` gained the machinery it only ever described.** It now documents a helper for posting replies, each carrying a signed footer; a verification step that asks which threads you do not have the last word on, rather than whether you replied at all; a guard naming the repository before anything is read or posted, since `GH_REPO` silently outranks the checkout you are standing in; issue comments as a further feedback surface, and a command for the review bodies it previously only warned were easy to miss; and rules for skipping bot threads and your own. Every block is POSIX shell and behaves identically under `bash`, `zsh` and `dash`.
+- **`phx:writing-adrs` records revisit triggers in frontmatter.** `revisit-when` names the condition that would reopen a decision and `revisit-discharged-by` names the ADR that spent it, with a workflow for discharging, narrowing, arming and superseding a trigger. It also gained a rule for citing decisions from code comments — including that the comments are written in the same change that archives a decision, or the decision is not archived — and requires any cost two or more options share to be stated once, above Option 1, rather than repeated in each.
+
+  These are conventions, not checks. The skill says so plainly: without a generator reading the frontmatter, anything it describes as failing goes unnoticed instead.
+
+- **`phx:writing-release-notes` makes its reviewers verify rather than read.** Each audience-surrogate reviewer now checks the block's claims against the thing described — the code at both ends of the range, the workflow file, the live setting — and is handed the pre-image, since a diff shows what a change became and never what it displaced. Where a reviewer's budget runs short, verification outranks clarity.
+
+#### Fixed
+
+- **`phx:nz-english`'s searches hung, and missed words its own table promised.** None of its five commands took a path, so ripgrep read standard input — a terminal for a human, an open pipe for an agent, where it blocks until killed rather than searching. Separately, the searches never covered much of the table: bare `catalog`, `dialog` and `analog` had no search at all, `-ize` reached only seven stems plus `ization`, and `cataloged`, `cataloging`, `tumor`, `rumor`, `savior` and `meager` escaped every command. Coverage is now a stated rule — a row and its search ship together — and two control files, one US-spelled and one NZ-spelled, prove the searches can fail before you believe a clean result.
+- **`phx:receiving-code-review`'s documented `gh api` calls 404'd.** Both left `{pr}` as a placeholder, and `gh` substitutes only `{owner}`, `{repo}` and `{branch}`.
+
+### For contributors
+
+#### Breaking changes
+
+- **Every function in `scripts/` that resolves a *default* path now requires a `repo_root` argument**, read from `__file__` at one place per module — the `__main__` line. A script whose path is a required argument, like `scripts/dev/mutate.py`, is outside the rule and threads no root. Expect rebase conflicts on an in-flight branch touching `scripts/`. The visible fix: `python3 -m scripts.ci.validate_manifests` run from another directory used to validate whichever tree the caller stood in, and now validates the one it ships in. Recorded as ADR 016, superseding ADR 015.
+
+  One CLI contract moved with it: `release_notes.py` resolves a relative `--changelog` and `--plugin-manifest` against the repo root now, where they used to resolve against the working directory. `--out` still resolves against the working directory, deliberately, so a caller can write notes where it stands.
+
+- **Test modules must pass a fixture root and never `chdir`**, reversing `.agents/rules/testing.md`, which previously *required* a `chdir` into a fixture repo for a module holding relative path constants. A path-resolving module now owes two anchor tests, and only the second — asserting the anchor reaches this repository — catches `parents[1]` written for `parents[2]`. An in-flight branch whose new tests `chdir` is written against a superseded rule, and ADR 015, where a contributor would go looking, is now `Superseded`.
+
+- **ADR frontmatter must carry `scope`, and `tags` is now rejected outright** rather than ignored, so a half-finished migration fails in both directions. `scope` takes exact paths and directory prefixes ending in `/`, never globs, and every entry must exist on disk. `scope: []` is valid and means the decision binds no path. This is the enforcement side; the convention itself ships in `phx:writing-adrs`.
+
+  **Those last three checks fire only on a full index run** — locally when you stage an ADR, in CI when the change touches `docs/adr/`, `scripts/` or `.github/workflows/` — and none apply to a `Superseded` ADR. So renaming or deleting a path some ADR scopes, and `AGENTS.md`, `.githooks/`, `.claude-plugin/marketplace.json` and `skills/creative-commits/` are all scoped today, passes your commit and your pull request, then fails for whoever next stages an ADR, in a file they did not touch.
+
+#### Added
+
+- **`python3 -m scripts.dev.mutate`** disables one check in place, runs the suite, and reports CAUGHT, MISSED, INVALID or UNKNOWN — only CAUGHT exits 0, so a sequence can be scripted rather than read by eye. It edits the working tree in place: the source is restored from a `finally` and from SIGTERM/SIGHUP, and after a hard kill the recovery is `git restore <file>`, the mutation being one anchor replaced once.
+- **`python3 -m scripts.adr.generate_index --for <path>`** reports which decisions bind a path, `Archived` ones included — the only surface on which those appear at all.
+- **`revisit-when` and `revisit-discharged-by` ADR frontmatter fields**, the first naming the condition that would reopen a decision and the second the ADR that spent it. Declaring a discharge with no trigger to spend is an error, and a discharged trigger blanks the row's Revisit cell rather than filling it.
+- **ADRs 013–016**: keying decisions to paths, citing decisions from code comments, and the two path-anchoring decisions.
+
+#### Changed
+
+- **`.githooks/pre-commit` now reports binding decisions on every commit**, where it used to exit early unless an ADR was staged. The report is advisory and never blocks. It only runs in a clone that has had `git config core.hooksPath .githooks` set, which remains a per-clone step.
+- `docs/adr/INDEX.md` trades its Tags column for Scope and gains a Revisit column.
+- The project-local `releasing` skill no longer asks for `--plugin-dir ./` except where the release itself changes `phx:writing-release-notes` or `phx:creative-commits`; it requires the version bump to be an in-place string replace rather than a re-serialise, which would reformat the manifest around the one line that changed; and it gains a diagnosis step for a pull request whose checks are green but whose merge state is `BLOCKED`.
+- `python3 -m scripts.adr.generate_index` now rejects an unrecognised argument rather than ignoring it.
+- `.agents/rules/testing.md` makes the mutation step a scripted one and adds a subagent test-coverage audit where a change adds a module and its tests together.
+- `astral-sh/setup-uv` moves from v9.0.0 to v10.0.1, digest-pinned as the repo pins every action. No workflow here is affected by v10's caching change, which applies to `pull_request_target`, `workflow_run` and `release` events; the only workflow using the action runs on `pull_request`.
+- `ruff` moves from 0.15.21 to 0.16.4, whose nested-context-manager and non-raising-subprocess lints the `creative-commits` package now satisfies.
+
 ## 3.0.0 - 2026-08-05
 
 ### For phx plugin users

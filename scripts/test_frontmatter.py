@@ -34,18 +34,18 @@ class ScalarTests(unittest.TestCase):
 
 
 class InlineListTests(unittest.TestCase):
-    """`tags: [a, b]`, the only inline list any frontmatter here uses."""
+    """`scope: [a, b]`, the only inline list any frontmatter here uses."""
 
     def test_parses_an_inline_list_into_stripped_items(self):
-        """`tags: [a, b]` becomes a list, which is the only list-valued field in use."""
-        fields, problems = parse_frontmatter("tags: [ci,  releases , adr]")
-        self.assertEqual(fields, {"tags": ["ci", "releases", "adr"]})
+        """`scope: [a, b]` becomes a list, which is the only list-valued field in use."""
+        fields, problems = parse_frontmatter("scope: [scripts/,  CHANGELOG.md , docs/adr/]")
+        self.assertEqual(fields, {"scope": ["scripts/", "CHANGELOG.md", "docs/adr/"]})
         self.assertEqual(problems, [])
 
     def test_parses_an_empty_list_as_empty(self):
-        """`tags: []` yields no tags rather than one empty tag."""
-        fields, problems = parse_frontmatter("tags: []")
-        self.assertEqual(fields, {"tags": []})
+        """`scope: []` yields no entries rather than one empty entry, which is a real value."""
+        fields, problems = parse_frontmatter("scope: []")
+        self.assertEqual(fields, {"scope": []})
         self.assertEqual(problems, [])
 
 

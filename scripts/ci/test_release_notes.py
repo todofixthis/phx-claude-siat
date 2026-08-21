@@ -4,6 +4,11 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 (ADR 007). Run from the repo root:
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+
+The subject joins every path to a `repo_root` its entry point requires (ADR 016), so these
+tests pass a fixture root and never `chdir`. The one test that does change directory
+asserts that a `chdir` *cannot* redirect the anchored root, and reads the constant rather
+than calling the subject.
 """
 
 import contextlib
@@ -15,7 +20,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from scripts.ci import release_notes
-from scripts.ci.release_notes import main, plugin_version, top_entry
+from scripts.ci.release_notes import REPO_ROOT, main, plugin_version, top_entry
 
 CHANGELOG = """# Changelog
 
@@ -95,25 +100,25 @@ class PluginVersionTests(unittest.TestCase):
         """The version comes from the manifest's `version` field."""
         with release_files(version="9.9.9") as root:
             self.assertEqual(
-                plugin_version(root / release_notes.DEFAULT_PLUGIN_FILE), "9.9.9"
+                plugin_version(release_notes.DEFAULT_PLUGIN_FILE, root), "9.9.9"
             )
 
     def test_unusable_version_raises(self):
         """A manifest missing a usable version is an error, not an empty string."""
         with release_files(version="") as root:
             with self.assertRaises(ValueError):
-                plugin_version(root / release_notes.DEFAULT_PLUGIN_FILE)
+                plugin_version(release_notes.DEFAULT_PLUGIN_FILE, root)
 
 
 class CliTests(unittest.TestCase):
     """Integration tests: the command line, end to end over real files."""
 
-    def test_defaults_resolve_against_the_working_directory(self):
-        """With no path arguments, the default paths locate the repo's own files."""
-        with release_files() as root, contextlib.chdir(root):
+    def test_defaults_resolve_against_the_injected_root(self):
+        """With no path arguments, the defaults locate the files under the root passed in."""
+        with release_files() as root:
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
-                code = main([])
+                code = main([], root)
         self.assertEqual(code, 0)
         self.assertEqual(stdout.getvalue(), f"1.3.0\n{TOP_NOTES}\n")
 
@@ -126,12 +131,13 @@ class CliTests(unittest.TestCase):
                 code = main(
                     [
                         "--changelog",
-                        str(root / release_notes.DEFAULT_CHANGELOG_FILE),
+                        str(release_notes.DEFAULT_CHANGELOG_FILE),
                         "--plugin-manifest",
-                        str(root / release_notes.DEFAULT_PLUGIN_FILE),
+                        str(release_notes.DEFAULT_PLUGIN_FILE),
                         "--out",
                         str(out),
-                    ]
+                    ],
+                    root,
                 )
             self.assertEqual(code, 0)
             self.assertEqual(stdout.getvalue(), "1.3.0\n")
@@ -139,10 +145,26 @@ class CliTests(unittest.TestCase):
 
     def test_version_mismatch_returns_nonzero(self):
         """A changelog ahead of (or behind) the manifest fails the release."""
-        with release_files(version="1.2.0") as root, contextlib.chdir(root):
+        with release_files(version="1.2.0") as root:
             with contextlib.redirect_stderr(io.StringIO()):
-                code = main([])
+                code = main([], root)
             self.assertEqual(code, 1)
+
+
+class RepoRootTests(unittest.TestCase):
+    """Unit tests for ``REPO_ROOT``: the one path the module resolves for itself."""
+
+    def test_chdir_cannot_redirect_the_anchor(self):
+        """The anchor names the tree the module ships in, wherever the caller stands."""
+        with tempfile.TemporaryDirectory() as directory:
+            with contextlib.chdir(directory):
+                self.assertTrue(REPO_ROOT.is_absolute())
+                self.assertFalse(REPO_ROOT.is_relative_to(directory))
+
+    def test_root_is_this_repository(self):
+        """The anchor has to reach the real repo, not merely some absolute directory."""
+        self.assertTrue(Path(__file__).resolve().is_relative_to(REPO_ROOT))
+        self.assertTrue((REPO_ROOT / release_notes.DEFAULT_PLUGIN_FILE).is_file())
 
 
 if __name__ == "__main__":

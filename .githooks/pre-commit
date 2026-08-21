@@ -1,16 +1,37 @@
 #!/bin/sh
 # Regenerate the ADR index when any ADR file is staged, then re-stage it so the
-# refreshed index lands in the same commit. This is the adr-index hook the
-# writing-adrs skill assumes. Activate per clone with:
+# refreshed index lands in the same commit, and report any decision whose scope
+# covers a staged path. This is the adr-index hook the writing-adrs skill assumes.
+# Activate per clone with:
 #   git config core.hooksPath .githooks
-adr_staged=0
-for path in $(git diff --cached --name-only --diff-filter=ACMR); do
+
+# Collect staged paths into the positional parameters, one per line. `for path in
+# $(...)` would word-split a path containing whitespace into fragments matching
+# nothing, and xargs is avoided because the flag for "skip an empty list" differs
+# between GNU and BSD.
+set --
+while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    set -- "$@" "$path"
+done <<STAGED
+$(git diff --cached --name-only --diff-filter=ACMR)
+STAGED
+
+[ "$#" -gt 0 ] || exit 0
+
+for path in "$@"; do
     case "$path" in
-        docs/adr/[0-9]*-*.md) adr_staged=1 ;;
+        docs/adr/[0-9]*-*.md)
+            python3 -m scripts.adr.generate_index || exit 1
+            git add docs/adr/INDEX.md
+            break
+            ;;
     esac
 done
 
-[ "$adr_staged" -eq 1 ] || exit 0
-
-python3 -m scripts.adr.generate_index || exit 1
-git add docs/adr/INDEX.md
+# Advisory: a decision worth reading is not a commit worth refusing. This reports
+# Archived decisions too, which are in force but kept out of INDEX.md, so it is the
+# only place they surface (ADR 013).
+bound=$(python3 -m scripts.adr.generate_index --for "$@") || exit 0
+[ -n "$bound" ] || exit 0
+printf 'Decisions binding these paths:\n%s\n' "$bound"

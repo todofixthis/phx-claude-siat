@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-06-27
-tags: [changelog, release-notes, releases, unreleased, keep-a-changelog, single-source-of-truth]
+scope: [.agents/skills/releasing/, CHANGELOG.md, scripts/ci/release_notes.py]
 summary: Generate each CHANGELOG entry from history at release time; do not maintain a hand-written [Unreleased] section.
 ---
 

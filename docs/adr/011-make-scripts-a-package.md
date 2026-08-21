@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-08-01
-tags: [adr, ci, duplication, frontmatter, imports, packaging, python, scripts, stdlib, testing, unittest]
+scope: [scripts/]
 summary: Make scripts/ a Python package and run every script as `python3 -m scripts.<area>.<name>`, so the frontmatter parser can be imported once instead of adapted per directory; this amends ADR 007's plain-file invocation and retires its parser-duplication trigger, leaving its stdlib-only constraint intact; run the suite with `python3 -m unittest discover -s scripts -t .`.
 ---
 
@@ -89,6 +89,13 @@ Every caller now runs `python3 -m scripts.<area>.<name>` from the repo root: the
 [`.githooks/pre-commit`][] hook, [`pr.yml`][] and the release workflow, the [`releasing`][]
 skill, and the README — each from the repo root, which all of them already used. Running a
 script by path now fails with an import error, which is loud rather than subtle.
+
+The hook satisfies that rule without doing anything: Git runs a hook with the working
+directory at the top of the working tree, whatever directory the committer typed `git
+commit` in. Worth stating because the failure it implies is a phantom — run the module
+by hand from a subdirectory and it raises `ModuleNotFoundError`, which reads as a bug in
+the hook and is not one. Reproduce through an actual commit before changing anything
+here.
 
 One test command covers the lot — `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`
 — where discovery previously had to run once per script directory.

@@ -13,6 +13,8 @@ def main() -> None:
         result = subprocess.run(
             ["git", "log", "--oneline", "-25"],
             capture_output=True,
+            # A non-zero exit is handled below, so don't raise on it
+            check=False,
             text=True,
         )
     except OSError as exc:

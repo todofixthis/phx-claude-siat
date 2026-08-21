@@ -1,11 +1,12 @@
 ---
 status: Accepted
 date: 2026-08-05
-tags: [catalogue, ci, manifests, marketplace, plugins, releases]
+scope: [.claude-plugin/, scripts/ci/validate_manifests.py]
 summary: Advertise exactly one marketplace entry; a second fails the manifest check, so adding a plugin means an ADR plus a release flow that names both — not a generalised flow built up front.
+revisit-when: A second plugin joins the marketplace.
 ---
 
-# 012: Advertise One Plugin Per Catalogue
+# 012: Advertise one plugin per catalogue
 
 ## Context
 
