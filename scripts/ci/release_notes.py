@@ -14,6 +14,11 @@ from pathlib import Path
 
 from scripts.ci.versions import RE_VERSION, VERSION
 
+# Every path below is repo-relative and joined to a `repo_root` where it is read, and
+# `REPO_ROOT` is read only on the `__main__` line (ADR 016): nothing resolves a default
+# path against whichever tree the caller happens to be standing in.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 DEFAULT_CHANGELOG_FILE = Path("CHANGELOG.md")
 DEFAULT_PLUGIN_FILE = Path(".claude-plugin/plugin.json")
 
@@ -30,13 +35,16 @@ RE_ENTRY = re.compile(rf"^## (?P<version>{VERSION}) - {DATE}\s*$")
 RE_ANY_ENTRY = re.compile(rf"^## (?P<version>\S+) - {DATE}\s*$")
 
 
-def plugin_version(plugin_file: Path = DEFAULT_PLUGIN_FILE) -> str:
+def plugin_version(plugin_file: Path, repo_root: Path) -> str:
     """Return the version the plugin manifest declares.
+
+    `plugin_file` is repo-relative and names the file in the error; `repo_root` locates it.
 
     This is the plugin's version, not the marketplace's — the marketplace entry
     carries no version at all (ADR 001).
     """
-    version = json.loads(plugin_file.read_text(encoding="utf-8")).get("version", "")
+    content = (repo_root / plugin_file).read_text(encoding="utf-8")
+    version = json.loads(content).get("version", "")
     if not RE_VERSION.match(version):
         raise ValueError(f"{plugin_file} declares no usable version: {version!r}")
     return version
@@ -74,15 +82,19 @@ def top_entry(changelog: str) -> tuple[str, str]:
     return version, notes
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], repo_root: Path) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    # Both stay repo-relative and are joined to `repo_root` where they are read (ADR 016),
+    # so an error names the path a reader can act on. Joining an absolute path a caller
+    # passed is a no-op, and a relative one they passed resolves against the repo, which
+    # is the whole point of the anchor.
     parser.add_argument("--changelog", type=Path, default=DEFAULT_CHANGELOG_FILE)
     parser.add_argument("--plugin-manifest", type=Path, default=DEFAULT_PLUGIN_FILE)
     parser.add_argument("--out", type=Path, help="write notes here instead of stdout")
     args = parser.parse_args(argv)
 
-    version, notes = top_entry(args.changelog.read_text(encoding="utf-8"))
-    declared = plugin_version(args.plugin_manifest)
+    version, notes = top_entry((repo_root / args.changelog).read_text(encoding="utf-8"))
+    declared = plugin_version(args.plugin_manifest, repo_root)
     if version != declared:
         print(
             f"CHANGELOG top entry is {version} but plugin.json is {declared}",
@@ -98,4 +110,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:], REPO_ROOT))

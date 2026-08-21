@@ -5,11 +5,11 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 
-`generate()` takes its directories as arguments, so these tests never chdir and never
-call it without them: the defaults resolve from the module (ADR 015), so an argumentless
-call rewrites the real docs/adr/INDEX.md whatever the working directory is. The one test
-that does chdir asserts precisely that — that moving cwd cannot redirect the defaults —
-and never calls `generate()`.
+Every function here requires its directories (ADR 016), so these tests pass a fixture
+root and never chdir; there is no argumentless call that could rewrite the real
+docs/adr/INDEX.md. The one test that does chdir asserts precisely that — that moving cwd
+cannot redirect the module's anchors — and reads the constants rather than calling
+anything.
 """
 
 import contextlib
@@ -35,6 +35,7 @@ from scripts.adr.generate_index import (
     generate,
     main,
     parse_adr,
+    relative_to_repo,
     report_scoped_to,
     scope_matches,
     scope_problems,
@@ -304,6 +305,29 @@ class ScopeProblemsTests(unittest.TestCase):
         self.assertEqual(len(scope_problems(["a.py", "b.py"], self.root)), 2)
 
 
+class RelativeToRepoTests(unittest.TestCase):
+    """Unit tests for ``relative_to_repo()``."""
+
+    def setUp(self) -> None:
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.root = Path(directory)
+
+    def test_leaves_a_relative_path_alone(self):
+        """Scope entries are written repo-relative, so that form is already the answer."""
+        self.assertEqual(relative_to_repo("scripts/ci/versions.py", self.root), "scripts/ci/versions.py")
+
+    def test_converts_an_absolute_path_inside_the_repo(self):
+        """An editor or an agent hands you an absolute path, which matches no scope entry."""
+        absolute = str(self.root / "scripts" / "ci" / "versions.py")
+        self.assertEqual(relative_to_repo(absolute, self.root), "scripts/ci/versions.py")
+
+    def test_rejects_a_path_outside_the_repo(self):
+        """Answering "nothing binds this" for a file we cannot even see is a false negative."""
+        with self.assertRaises(SystemExit) as raised:
+            relative_to_repo("/etc/hosts", self.root)
+        self.assertIn("is outside", str(raised.exception))
+
+
 class ScopeMatchesTests(unittest.TestCase):
     """Unit tests for ``scope_matches()``."""
 
@@ -500,7 +524,7 @@ class ReportScopedToTests(AdrDirTestCase):
         """Run report_scoped_to() against the fixture, returning its code and output."""
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            code = report_scoped_to(list(paths), self.root)
+            code = report_scoped_to(list(paths), self.root, self.repo_root)
         return code, out.getvalue()
 
     def test_warns_that_an_unreadable_adr_binds_nothing(self):
@@ -508,7 +532,7 @@ class ReportScopedToTests(AdrDirTestCase):
         self.write("001-bad.md", adr(status="Draft"))
         err = io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
-            report_scoped_to(["scripts/versions.py"], self.root)
+            report_scoped_to(["scripts/versions.py"], self.root, self.repo_root)
         self.assertIn("001-bad.md could not be read, so it binds nothing here", err.getvalue())
 
     def test_names_the_decision_binding_the_path(self):
@@ -545,6 +569,13 @@ class ReportScopedToTests(AdrDirTestCase):
             self.write(name, adr(**{SCOPE_FIELD: "[scripts/]"}))
         self.assertEqual(len(self.report("scripts/versions.py")[1].splitlines()), 2)
 
+    def test_finds_a_decision_from_an_absolute_path(self):
+        """The hook and a human both hand this absolute paths; a miss reads as "nothing binds"."""
+        self.write_scoped("scripts/versions.py")
+        self.write("001-first.md", adr(**{SCOPE_FIELD: "[scripts/]"}))
+        absolute = str(self.repo_root / "scripts" / "versions.py")
+        self.assertIn("001", self.report(absolute)[1])
+
     def test_matches_any_of_several_paths(self):
         """The hook passes every staged path at once, so one match in the set is enough."""
         self.write_scoped("scripts/versions.py")
@@ -555,11 +586,14 @@ class ReportScopedToTests(AdrDirTestCase):
 class ArgumentTests(unittest.TestCase):
     """Unit tests for ``main()``: which mode each invocation selects."""
 
+    def setUp(self) -> None:
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
     def test_rejects_for_with_no_path(self):
         """`--for` with nothing after it would otherwise report against an empty set."""
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            code = main(["--for"])
+            code = main(["--for"], self.root, self.root)
         self.assertEqual(code, 1)
         self.assertIn("--for needs at least one path", err.getvalue())
 
@@ -567,27 +601,26 @@ class ArgumentTests(unittest.TestCase):
         """A typo must fail rather than silently regenerating the index instead."""
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            code = main(["--wat"])
+            code = main(["--wat"], self.root, self.root)
         self.assertEqual(code, 1)
         self.assertIn("unrecognised arguments", err.getvalue())
 
 
-class DefaultDirectoryTests(unittest.TestCase):
-    """Integration test: what the no-argument invocation resolves to."""
+class RepoRootTests(unittest.TestCase):
+    """Unit tests for ``REPO_ROOT`` and ``ADR_DIR``: the paths the module resolves itself."""
 
-    def test_a_working_directory_holding_its_own_docs_adr_cannot_capture_the_defaults(self):
-        """A relative default resolves against the caller's tree, silently editing it instead."""
+    def test_chdir_cannot_redirect_the_anchor(self):
+        """A cwd-relative anchor would resolve against the caller's tree, silently editing it."""
         directory = self.enterContext(tempfile.TemporaryDirectory())
-        (Path(directory) / "docs" / "adr").mkdir(parents=True)
+        (Path(directory) / ADR_DIR).mkdir(parents=True)
         with contextlib.chdir(directory):
-            self.assertTrue(ADR_DIR.is_absolute())
-            self.assertFalse(ADR_DIR.is_relative_to(directory))
+            self.assertTrue(REPO_ROOT.is_absolute())
+            self.assertFalse(REPO_ROOT.is_relative_to(directory))
 
     def test_the_root_is_the_repo_rather_than_the_package_inside_it(self):
         """One `.parent` too few lands on scripts/, where docs/adr does not exist."""
-        self.assertEqual(ADR_DIR, REPO_ROOT / "docs" / "adr")
-        self.assertTrue(ADR_DIR.is_dir())
         self.assertTrue(Path(__file__).resolve().is_relative_to(REPO_ROOT))
+        self.assertTrue((REPO_ROOT / ADR_DIR).is_dir())
 
 
 if __name__ == "__main__":

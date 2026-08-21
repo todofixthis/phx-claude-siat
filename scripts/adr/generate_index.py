@@ -21,11 +21,13 @@ from pathlib import Path
 
 from scripts.frontmatter import parse_frontmatter
 
-# Resolved from this file rather than the working directory (ADR 015): a path relative to
-# the caller's cwd points at whichever repo they happen to be standing in, and scope
-# entries are checked against it.
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-ADR_DIR = REPO_ROOT / "docs" / "adr"
+# Resolved from this file rather than the working directory: a path relative to the
+# caller's cwd points at whichever repo they happen to be standing in, and scope entries
+# are checked against it. `REPO_ROOT` is read only on the `__main__` line (ADR 016), where
+# the repo-relative `ADR_DIR` is joined to it, so every function below requires the root
+# and none can fall back to this repository.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ADR_DIR = Path("docs") / "adr"
 ADR_INDEX_FILENAME = "INDEX.md"
 
 STATUSES = ("Accepted", "Archived", "Superseded")
@@ -181,12 +183,11 @@ def cell(value: str | list[str]) -> str:
     return value.replace("|", "\\|")
 
 
-def generate(adr_dir: Path = ADR_DIR, repo_root: Path = REPO_ROOT) -> int:
+def generate(adr_dir: Path, repo_root: Path) -> int:
     """Regenerate INDEX.md from ADR frontmatter. Return 0 on success, 1 on error.
 
-    `adr_dir` and `repo_root` are parameters so tests can point at a fixture directory.
-    Both default to paths resolved from this module, so a caller needs no arguments and
-    no particular working directory (ADR 015).
+    Neither directory is defaulted (ADR 016): `main` supplies the module's anchors, and a
+    test that forgot its fixture would otherwise rewrite this repository's own index.
     """
     index_file = adr_dir / ADR_INDEX_FILENAME
 
@@ -247,8 +248,25 @@ def generate(adr_dir: Path = ADR_DIR, repo_root: Path = REPO_ROOT) -> int:
     return 0
 
 
-def report_scoped_to(paths: list[str], adr_dir: Path = ADR_DIR) -> int:
-    """Print the binding decisions covering any of `paths`. Return 0, or 1 on a bad ADR.
+def relative_to_repo(path: str, repo_root: Path) -> str:
+    """Return `path` as the repo-relative form scope entries are written in.
+
+    An absolute path is what an editor or an agent has to hand, and left alone it matches
+    no scope entry — so the lookup would answer "nothing binds this file" for a file
+    several decisions bind. A confident false negative is worse than an error, which is
+    why a path outside the repository raises rather than returning nothing.
+    """
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        return path
+    try:
+        return str(candidate.resolve().relative_to(repo_root.resolve()))
+    except ValueError:
+        raise SystemExit(f"Error: {path} is outside {repo_root.resolve()}")
+
+
+def report_scoped_to(paths: list[str], adr_dir: Path, repo_root: Path) -> int:
+    """Print the binding decisions covering any of `paths`. Always returns 0.
 
     This is the direction the index cannot serve. A reader scanning INDEX.md has to
     already suspect a decision exists; this answers the question they actually hold —
@@ -257,6 +275,7 @@ def report_scoped_to(paths: list[str], adr_dir: Path = ADR_DIR) -> int:
     too, which is the whole point of them: in force, out of the index, and met at the
     moment someone edits what they bind.
     """
+    subjects = [relative_to_repo(path, repo_root) for path in paths]
     for path in sorted(adr_dir.iterdir()):
         if path.name.startswith(".") or not RE_ADR_FILENAME.match(path.name):
             continue
@@ -271,25 +290,25 @@ def report_scoped_to(paths: list[str], adr_dir: Path = ADR_DIR) -> int:
         if fields["status"] not in BINDING_STATUSES:
             continue
         if any(
-            scope_matches(entry, subject) for entry in fields[SCOPE_FIELD] for subject in paths
+            scope_matches(entry, subject) for entry in fields[SCOPE_FIELD] for subject in subjects
         ):
             number = RE_FILE_NUMBER.match(path.name).group(1)
             print(f"{number} ({fields['status']}): {title} — docs/adr/{path.name}")
     return 0
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], adr_dir: Path, repo_root: Path) -> int:
     """Regenerate the index, or with `--for`, report the decisions binding some paths."""
     if argv[:1] == ["--for"]:
         if len(argv) < 2:
             print("Error: --for needs at least one path", file=sys.stderr)
             return 1
-        return report_scoped_to(argv[1:])
+        return report_scoped_to(argv[1:], adr_dir, repo_root)
     if argv:
         print(f"Error: unrecognised arguments {argv}", file=sys.stderr)
         return 1
-    return generate()
+    return generate(adr_dir, repo_root)
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:], REPO_ROOT / ADR_DIR, REPO_ROOT))

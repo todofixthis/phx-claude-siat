@@ -1,6 +1,7 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-08-11
+superseded-by: 16
 scope: [.agents/rules/testing.md, scripts/]
 summary: Anchor a script's default paths to `__file__` where the paths are injectable parameters, and keep them relative to the working directory where they are module-level constants the tests chdir around — the discriminator is whether a test can inject a fixture path, not which form reads better.
 revisit-when: A script must deliberately act on whichever checkout the caller is standing in, rather than on the one it ships inside.

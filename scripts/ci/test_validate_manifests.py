@@ -5,15 +5,16 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 
-Every path this module reads is a module-level relative `Path`, resolved afresh on
-each call, so these tests `chdir` into a fixture repo rather than patching five
-constants and risking a half-applied patch. That works only while those constants
-stay relative — anchoring one to `__file__` would break it silently.
+The subject joins every path constant to a `repo_root` its checks require (ADR 016), so
+these tests pass the fixture root and never `chdir`. Nothing here can fall back to the
+real repository: the checks carry no default, so omitting the root is a `TypeError`
+rather than a test that passes against the wrong tree. The only test that changes
+directory is the one asserting a `chdir` *cannot* redirect the anchor, and it reads the
+constant rather than calling the subject.
 
 Each test starts from a fixture that validates clean and breaks exactly one thing,
 so a single reported error is meaningful. `test_pristine_fixture_is_valid` is what
-makes that true; it also guards against a lost chdir, which would otherwise let a
-positive test pass by reading the real repo.
+makes that true.
 """
 
 import contextlib
@@ -38,8 +39,6 @@ class ManifestTestCase(unittest.TestCase):
     def setUp(self) -> None:
         directory = self.enterContext(tempfile.TemporaryDirectory())
         self.root = Path(directory)
-        self.enterContext(contextlib.chdir(self.root))
-        self.assertNotEqual(Path.cwd(), Path(vm.__file__).parents[2], "fixture chdir failed")
 
         self.write_plugin_manifest()
         self.write_marketplace()
@@ -82,10 +81,10 @@ class ManifestTestCase(unittest.TestCase):
         return errors
 
     def run_validate(self) -> tuple[int, str, str]:
-        """Run validate(), returning its exit code with stdout and stderr."""
+        """Run validate() over the fixture, returning its exit code with both streams."""
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = vm.validate()
+            code = vm.validate(self.root)
         return code, out.getvalue(), err.getvalue()
 
 
@@ -95,13 +94,14 @@ class LoadJsonTests(ManifestTestCase):
     def test_reports_a_missing_file(self):
         """A manifest that does not exist is named rather than crashing on open."""
         errors: list = []
-        self.assertIsNone(vm.load_json(Path("nope.json"), errors))
+        self.assertIsNone(vm.load_json(Path("nope.json"), self.root, errors))
         self.assertEqual(errors, ["nope.json is missing"])
 
     def test_reports_malformed_json(self):
         """A syntax error is attributed to the file that holds it."""
         errors: list = []
-        self.assertIsNone(vm.load_json(self.write("bad.json", "{oops"), errors))
+        self.write("bad.json", "{oops")
+        self.assertIsNone(vm.load_json(Path("bad.json"), self.root, errors))
         self.assertIn("bad.json is not valid JSON", errors[0])
 
     def test_rejects_json_that_is_not_an_object(self):
@@ -109,7 +109,10 @@ class LoadJsonTests(ManifestTestCase):
         for payload in ("[1, 2, 3]", '"a string"', "42"):
             with self.subTest(payload=payload):
                 errors: list = []
-                self.assertIsNone(vm.load_json(self.write("odd.json", payload), errors))
+                self.write("odd.json", payload)
+                self.assertIsNone(
+                    vm.load_json(Path("odd.json"), self.root, errors)
+                )
                 self.assertIn("must hold a JSON object", errors[0])
 
 
@@ -119,7 +122,7 @@ class CheckPluginTests(ManifestTestCase):
     def check(self) -> list:
         """Load the fixture's plugin manifest and run the plugin check over it."""
         errors: list = []
-        vm.check_plugin(vm.load_json(vm.PLUGIN_FILE, errors), errors)
+        vm.check_plugin(vm.load_json(vm.PLUGIN_FILE, self.root, errors), errors)
         return errors
 
     def test_reports_a_missing_version(self):
@@ -151,7 +154,9 @@ class CheckMarketplaceTests(ManifestTestCase):
     def check(self) -> list:
         """Run the marketplace check against the fixture's two manifests."""
         errors: list = []
-        vm.check_marketplace(vm.load_json(vm.PLUGIN_FILE, errors), errors)
+        vm.check_marketplace(
+            vm.load_json(vm.PLUGIN_FILE, self.root, errors), self.root, errors
+        )
         return errors
 
     def test_rejects_an_entry_carrying_a_version(self):
@@ -238,7 +243,7 @@ class CheckSkillsTests(ManifestTestCase):
 
     def check(self) -> list:
         """Run the skill check over the fixture's skill roots."""
-        return self.errors_from(vm.check_skills)
+        return self.errors_from(vm.check_skills, self.root)
 
     def test_reports_a_directory_with_no_skill_file(self):
         """Every directory under a skill root is a skill and must declare itself."""
@@ -303,7 +308,7 @@ class DeclaredToolsTests(ManifestTestCase):
         if toml is not None:
             (skill / vm.PYPROJECT_FILENAME).write_text(toml, encoding="utf-8")
         errors: list = []
-        return vm.declared_tools(Path("skills/tooled"), errors), errors
+        return vm.declared_tools(Path("skills/tooled"), self.root, errors), errors
 
     def test_returns_nothing_without_a_pyproject(self):
         """Most skills ship no tooling, and that is not an error."""
@@ -357,7 +362,7 @@ class CheckSkillToolingTests(ManifestTestCase):
 
     def check(self) -> list:
         """Run the tooling-mirror check over the fixture."""
-        return self.errors_from(vm.check_skill_tooling)
+        return self.errors_from(vm.check_skill_tooling, self.root)
 
     def test_ignores_skills_that_ship_no_tooling(self):
         """The fixture's plain skills must not trip a check about tooling they lack."""
@@ -429,6 +434,22 @@ class ValidateTests(ManifestTestCase):
         self.assertIn("is not releasable", err)
         self.assertIn("docs/adr/010", err)
         self.assertIn("does not match", err)
+
+
+class RepoRootTests(unittest.TestCase):
+    """Unit tests for ``REPO_ROOT``: the one path the module resolves for itself."""
+
+    def test_chdir_cannot_redirect_the_anchor(self):
+        """The anchor names the tree the module ships in, wherever the caller stands."""
+        with tempfile.TemporaryDirectory() as directory:
+            with contextlib.chdir(directory):
+                self.assertTrue(vm.REPO_ROOT.is_absolute())
+                self.assertFalse(vm.REPO_ROOT.is_relative_to(directory))
+
+    def test_root_is_this_repository(self):
+        """The anchor has to reach the real repo, not merely some absolute directory."""
+        self.assertTrue(Path(__file__).resolve().is_relative_to(vm.REPO_ROOT))
+        self.assertTrue((vm.REPO_ROOT / vm.PLUGIN_FILE).is_file())
 
 
 if __name__ == "__main__":
