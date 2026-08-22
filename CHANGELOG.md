@@ -1,5 +1,30 @@
 # Changelog
 
+## 4.1.0 - 2026-08-22
+
+### For phx plugin users
+
+> **Check the notes you have already published.** The two `phx:writing-release-notes`
+> changes below correct output that 4.0.0 and earlier produced, and neither repairs an
+> entry already written. Notes drafted before this release may carry a `Fixed` entry for a
+> defect that never shipped, and any link in them pointing at a **branch** rather than a
+> commit or tag — `…/blob/main/…` and its equivalent on whatever host and default branch
+> you use — is not guaranteed to serve what it served when you published it.
+
+#### Added
+
+- **`phx:writing-release-notes` now requires every link in the notes to be pinned to a commit or a tag, and read rather than merely resolved.** A branch reference is wrong at both moments it is read: while the release is under review it still serves the pre-change file, and once the entry is frozen the branch moves on without it. Where a project squash- or rebase-merges, a commit on the release branch does not survive either, so pin an already-published tag or add the link after the release commit exists.
+
+#### Changed
+
+- **`phx:writing-adrs` marks its linking rule as out of reach of the one above.** Without this, an agent that has just read the pinning rule has every reason to start pinning an ADR's links too. The added clause explains why it should not: an ADR describes a decision still in force, so following a moved path keeps it true, where an entry about one released version would be falsified by the same repair.
+
+#### Fixed
+
+- **`phx:writing-release-notes` reported defects that never shipped as fixes.** It reads pull-request bodies to work out what changed, and a pull request describes the *work* rather than the released state — so a defect the same branch introduced and repaired arrived looking exactly like a fix. The notes then carried migration steps sending readers to audit work they never did, against tooling no released version ever had.
+
+  4.0.0 left this to a reviewer's judgement at the review pass. It is now a gate at drafting, ahead of the two that judge length: a `Fixed` entry survives only where the defect is genuinely in the base's copy of the file, read rather than assumed. Its verdict is final — where 4.0.0 would publish anything a pull request called a breaking change, the gate can now suppress one, because a break introduced and repaired before release broke nobody.
+
 ## 4.0.0 - 2026-08-21
 
 ### For phx plugin users
