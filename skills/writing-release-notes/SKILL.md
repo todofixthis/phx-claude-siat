@@ -193,7 +193,8 @@ Address the feedback from both reviewers before continuing.
 Remove repetition, regroup related items, and tighten without losing clarity. **Re-apply
 step 4's three gates over the reviewed draft, and re-check every link it gained** — a
 reviewer asking for a migration step is how an unpinned link enters after the only check
-has run. Surrogate reviewers optimise for completeness and reliably ask for more, so the draft reaches this step longer than it
+has run. Surrogate reviewers optimise for completeness and reliably ask for more, so
+the draft reaches this step longer than it
 left step 4, and some of what they added earns its place while some does not. Then,
 **only if the project uses NZ English** (per its stated convention or agent
 instructions), run `phx:nz-english`. Other locales — including US English — get no

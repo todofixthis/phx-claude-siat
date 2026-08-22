@@ -145,8 +145,7 @@ of context, link it.
   still in force, so following a moved path keeps the ADR true. The rule inverts wherever
   an entry describes a moment instead: a changelog entry is about one released version,
   so healing its links would make it describe a version that never existed — which is why
-  `phx:writing-release-notes` requires a pinned ref there. The axis is what the artefact
-  claims, not whether the file can be edited; both files sit in this repo.
+  `phx:writing-release-notes` requires a pinned ref there.
 - **Paths resolve from the ADR, not the repo root** — the ADR lives in `docs/adr/`, so a
   path from the repo root needs the `../../` prefix (e.g.
   `../../skills/writing-adrs/SKILL.md`), and a peer ADR is bare (`001-some-decision.md`).
