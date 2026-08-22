@@ -52,6 +52,11 @@ it, and keeps the context each gather reads out of this session:
 - **Significant-but-uncovered:** read commit message bodies for notable changes the
   diff and PR/issue summaries don't explain.
 
+A pull request describes the *work*, not the released state, so its body routinely
+recounts defects the same pull request introduced and fixed. Treat everything a PR or
+commit body calls a bug as a candidate whose provenance is unestablished until gate 0
+settles it against the base.
+
 Normalise non-English source material to the notes' language.
 
 ### 3. Sense-check
@@ -76,10 +81,31 @@ Write to the template below: high-level, grouped logically within each audience.
 security-sensitive or embargoed material (CVE details, undisclosed advisories) for
 human decision rather than publishing it unreviewed.
 
-**Two gates decide what reaches the reader.** Notes are read by humans under time
-pressure, and length is what gets them skimmed or skipped. Put every candidate entry
-through both, in order:
+**Three gates decide what reaches the reader.** Gate 0 decides whether an entry is true;
+gates 1 and 2 decide whether it earns its length, which is what gets notes skimmed or
+skipped. Put every candidate entry through all three, in order:
 
+0. **Was the reader ever exposed to this?** A defect introduced *and* fixed inside the
+   range never shipped, so no released version carries it and no reader can have met it.
+   It is not a fix, and an entry describing it sends people to audit work they never did.
+   This gate governs every `Fixed` entry and every claim that something used to be
+   broken; `Added` and `Changed` entries do not pass through it.
+
+   Establish it from the base, not from the story: **read** the base's copy of the file —
+   `git show <base>:<path>` — and satisfy yourself that what you read carries the defect.
+   A file that exists is not a file that is broken, and stopping at "the command returned
+   something" is the same mistake as trusting a link because it returned 200.
+
+   Two results are not absence. Where the file was **renamed** inside the range, `git
+   show` fails on its new name; recover the old one with
+   `git log --follow --name-status --diff-filter=R <range> -- <path>` before concluding it
+   was absent. Where the path genuinely did not exist at the base, `git show` exits
+   non-zero, and here that exit **is the answer rather than an error to stop on**: the
+   range built the thing, so the entry belongs under `Added` where the machinery is
+   something a reader invokes, and nowhere at all where it is not.
+
+   This is the one gate a PR body cannot answer, since a PR body records the work rather
+   than the released state.
 1. **Does this belong in a changelog at all?** The reader wants what changed for them
    and what to do about it. Refactors nobody outside can observe, dead code removed,
    rewordings that changed no behaviour, and caveats the runtime environment already
@@ -89,10 +115,24 @@ through both, in order:
    instead of restating the argument.
 
 These gates decide *publication*, not investigation: step 3's "err toward inclusion"
-still governs the sense-check, so nothing is cut before it is understood. Neither gate
-can drop a breaking change or trim its migration steps. And neither licenses cutting an
+still governs the sense-check, so nothing is cut before it is understood. **Gates 1 and 2**
+cannot drop a breaking change or trim its migration steps, and neither licenses cutting an
 entry for being awkward to explain — gate 1 turns on the reader's interest, not the
-writer's convenience.
+writer's convenience. Gate 0 is not in that exemption and outranks it: a break the range
+introduced and repaired before releasing broke nobody, whatever a PR body calls it.
+
+**Pin every link in the notes to a commit or a tag, never a branch** — migration steps
+and gate 2's links-out alike, since all of them freeze when the changelog does. A
+`…/blob/main/…` link is wrong at both moments it is read: during review the release has
+not merged, so the branch still serves the pre-change file, and afterwards the branch
+moves on while the entry does not.
+
+Two things to check, because a link that loads is not a link that is right. **Read what it
+serves** — `git show <sha>:<path>` locally reads the same bytes — since the wrong file
+behind a working URL is the harder error to spot. And **pick a ref that survives the
+merge**: a commit on the release branch is durable where the project merges with a merge
+commit, and gone where it squashes or rebases, so in a squashing project link the tag of
+an already-published release, or add the link once the release commit exists.
 
 **Breaking changes — flag, don't dismiss.** "Breaking" is broader than runtime API
 breaks, and applies independently within *each* audience. The test: **if the consumer
@@ -137,6 +177,12 @@ half no gather subagent saw either.
 > it used to accept one. It crashed. A reader who upgrades to fix silent acceptance was
 > never exposed to it.
 
+Each reviewer also re-runs gate 0 over its block: for every `Fixed` entry, the defect must
+be findable in the pre-image, and an entry whose defect is not there is reporting work the
+range did to itself. This is the failure a draft is most likely to reach the reviewer
+carrying, because the gather subagents read pull requests, which describe exactly that
+work.
+
 Where a reviewer's budget runs out, verification outranks the rest: an unclear entry costs
 a reader a minute, a false one sends them the wrong way.
 
@@ -145,8 +191,10 @@ Address the feedback from both reviewers before continuing.
 ### 6. Quality pass
 
 Remove repetition, regroup related items, and tighten without losing clarity. **Re-apply
-step 4's two gates over the reviewed draft** — surrogate reviewers optimise for
-completeness and reliably ask for more, so the draft reaches this step longer than it
+step 4's three gates over the reviewed draft, and re-check every link it gained** — a
+reviewer asking for a migration step is how an unpinned link enters after the only check
+has run. Surrogate reviewers optimise for completeness and reliably ask for more, so
+the draft reaches this step longer than it
 left step 4, and some of what they added earns its place while some does not. Then,
 **only if the project uses NZ English** (per its stated convention or agent
 instructions), run `phx:nz-english`. Other locales — including US English — get no

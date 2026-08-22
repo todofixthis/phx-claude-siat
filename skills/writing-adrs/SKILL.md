@@ -141,7 +141,11 @@ of context, link it.
   not its position, so it applies across sections too — a repeat in Decision stays
   plain even if the first mention was back in Context.
 - **Symbols link to the file, not the line** — no line numbers or commit SHAs; both go
-  stale and are not worth keeping in sync.
+  stale and are not worth keeping in sync. That holds because an ADR describes a decision
+  still in force, so following a moved path keeps the ADR true. The rule inverts wherever
+  an entry describes a moment instead: a changelog entry is about one released version,
+  so healing its links would make it describe a version that never existed — which is why
+  `phx:writing-release-notes` requires a pinned ref there.
 - **Paths resolve from the ADR, not the repo root** — the ADR lives in `docs/adr/`, so a
   path from the repo root needs the `../../` prefix (e.g.
   `../../skills/writing-adrs/SKILL.md`), and a peer ADR is bare (`001-some-decision.md`).
