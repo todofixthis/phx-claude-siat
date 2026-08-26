@@ -11,7 +11,7 @@ revisit-when: A third skill ships tooling, so the per-skill coupling assertions 
 ## Context
 
 [`phx:nz-english`][`nz-english`] asked an agent to type nine `rg` commands, build two
-control files by hand to prove those commands could fail, recognise about forty
+control files by hand to prove those commands could fail, recognise about sixty
 documented false positives in the output, and derive a right-end guard character for
 each rename it verified. None of that is judgement, and every part of it has failed in practice:
 
@@ -22,9 +22,9 @@ each rename it verified. None of that is judgement, and every part of it has fai
 - A command with no trailing path blocked on an open pipe until killed.
 - `cataloged` and `cataloging` went missing for a month behind a right-anchored pattern.
 
-Each was answered with more prose, until three of the skill's five sections existed to
-stop an agent typing a command wrongly. That prose is unverifiable: nothing fails when it
-is wrong, and a clean report is what stops anyone looking again.
+Each was answered with more prose, until two of the skill's five sections existed
+largely to stop an agent typing a command wrongly. That prose is unverifiable: nothing
+fails when it is wrong, and a clean report is what stops anyone looking again.
 
 The general question is which parts of an LLM-run skill belong in the skill at all.
 [ADR 005][] established that a skill gaining tooling gains a matching pull-request
