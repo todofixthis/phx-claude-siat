@@ -45,8 +45,11 @@ jobs:
           # the same characteristic; if one is ever added, both need a null-
           # delimited read (git diff -z) rather than word splitting.
           for path in $changed; do
+              # Both prefixes are spelled out rather than collapsed to skills/*: only
+              # the skills shipping a pyproject.toml have a job to run, and a wider
+              # glob would run the matrix for every skill edit.
               case "$path" in
-                  skills/creative-commits/*)
+                  skills/creative-commits/*|skills/nz-english/*)
                       python=true ;;
               esac
               case "$path" in
@@ -111,14 +114,26 @@ jobs:
       - name: Check the release notes resolve
         run: python3 -m scripts.ci.release_notes
 
-  # Mirrors the tooling skills/creative-commits/pyproject.toml already declares.
+  # Mirrors the tooling each skill's pyproject.toml already declares. The matrix values
+  # are full paths on purpose: validate_manifests.py looks for each skill directory as a
+  # plain substring of this file, so composing them from a bare name would leave
+  # `skills/nz-english` absent and fail the manifest check with a message about missing
+  # gating. A change to either skill runs both legs, which is cheap and keeps the filter
+  # simple.
   python:
     needs: changes
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      # Report both, rather than hiding the second failure behind the first.
+      fail-fast: false
+      matrix:
+        skill:
+          - skills/creative-commits
+          - skills/nz-english
     defaults:
       run:
-        working-directory: skills/creative-commits
+        working-directory: ${{ matrix.skill }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -129,7 +144,7 @@ jobs:
       # manager keeps both digest and comment current.
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          cache-dependency-glob: skills/creative-commits/uv.lock
+          cache-dependency-glob: ${{ matrix.skill }}/uv.lock
           enable-cache: true
           python-version: "3.12"
 
