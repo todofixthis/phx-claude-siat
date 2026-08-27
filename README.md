@@ -11,7 +11,7 @@ accessibility, documentation, and more.
 
 ## Skills
 
-_\* denotes a skill that requires setup.
+_\* denotes a skill that requires setup or has prerequisites.
 See [notes on specific skills](#notes-on-specific-skills) below._
 
 | Skill                    | Trigger                                                         |
@@ -19,7 +19,7 @@ See [notes on specific skills](#notes-on-specific-skills) below._
 | `accessibility-review`   | Auditing a React codebase for WCAG AA issues                    |
 | `creative-commits`*      | Creating Git commits with distinctive emoji-adorned messages    |
 | `domain-breakdown`       | Writing or updating a project's architecture/domain map         |
-| `nz-english`             | Scanning for and correcting US English spellings                |
+| `nz-english`*            | Scanning for and correcting US English spellings                |
 | `receiving-code-review`* | Responding to review feedback on a pull request                 |
 | `reflection`             | Reviewing a session for friction and improving ecosystem files  |
 | `writing-adrs`           | Documenting significant architectural or tooling decisions      |
@@ -48,6 +48,16 @@ it requires [uv](https://docs.astral.sh/uv/) to be installed.
 > ````markdown
 > **Always** use `phx:creative-commits` to create Git commits.
 > ````
+
+#### nz-english
+
+`nz-english` ships a tool that performs the sweep, so the skill needs **`python3`
+(3.10 or newer) and `git`** on your `PATH`. There is nothing to install beyond
+those two — the tool uses only the standard library, and builds no virtualenv.
+
+`git` is needed even for a tree that is not a repository, because the tool runs
+it to find that out: an absent `git` stops the sweep before the non-repository
+path is reached. Where either program is missing, the skill says so and stops.
 
 #### Superpowers wrapper scripts
 
@@ -87,7 +97,8 @@ Then restart Claude Code.
 > [!IMPORTANT]
 > Some skills need an instruction before an agent will reach for them. Put those
 > in `~/.claude/CLAUDE.md` so a once-and-for-all install behaves the same in every
-> project. Review [notes on specific skills](#notes-on-specific-skills) above.
+> project. Others need a program on your `PATH`. Review
+> [notes on specific skills](#notes-on-specific-skills) above for both.
 
 ### Project-level
 
