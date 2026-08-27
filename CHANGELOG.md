@@ -1,5 +1,51 @@
 # Changelog
 
+## 5.0.0 - 2026-08-26
+
+### For phx plugin users
+
+#### Breaking changes
+
+- **`phx:nz-english` now requires `python3` and `git`, and runs a tool that ships beside the skill.** The skill previously asked you to type nine `rg` commands by hand; it now runs one bundled command. There is nothing to *install* — the tool is standard-library only, with no virtualenv to build — but both programs must be on your `PATH`. It needs **Python 3.10 or newer**, checked at startup, and shells out to `git ls-files` to decide which files to sweep.
+
+  **Migration:** none, where `python3` and `git` are both present. Where either is missing, or the run fails for any other reason, the skill now **stops and tells you** rather than falling back to the old commands. Those commands encoded a guard character and a sixty-word false-positive list that a retyped search does not reproduce, so improvising them back would cover less than the sweep it replaced.
+
+#### Changed
+
+- **One invocation replaces the nine searches.** The skill reports its own base directory when it loads; the tool lives there, and the path you pass is the tree being swept — rarely the same place. The report is grouped by substitution row, and prints **every** row including those with nothing to show, so a silent row is visible rather than absent. Exit codes: `0` nothing to triage, `1` hits to triage, `2` the run failed, `3` usage error.
+- **Read the report's header, not just its rows.** It names the path swept, how many files were read, and whether `git` or a directory walk supplied them. A file count far below what you expected is the one failure the tool cannot catch for you — an ignored subtree is invisible to it, exactly as it was to `rg`.
+- **Known false positives are collapsed rather than printed**, so the report is far shorter than the old commands' output; `--show-noise` expands them. Rows needing a decision — `license`, `program`, `practice`, `meter`, `judgment` — are marked read-don't-apply rather than left for you to remember.
+- **Verifying a rename no longer needs a guard character worked out by hand.** `--verify <old_name>` finds the row, computes the guard, and reports every surviving reference.
+- **Proving the searches still work is a flag.** `--self-check` runs the patterns over controls that ship with the skill, replacing the two files you wrote by hand before every sweep.
+- **A sweep that reads no files is an error rather than a clean result.** Point the tool at an excluded path and it exits `2` saying nothing was read, instead of reporting a clean tree it never looked at.
+- **Long reports stay bounded.** Hits are capped per row — 50 by default, `--limit` sets it higher or lower — while the counts stay exact.
+- **A sweep takes longer than nine `rg` processes**: seconds on an ordinary repository, minutes on a very large monorepo. It always finishes, so give it room rather than interrupting it.
+
+#### Fixed
+
+- **The `-og` row now catches camel-cased names such as `dialogUrl`.** The hand-run search was case-insensitive, so its guard excluded a following `U` as well as a `u` and the name reached no search at all — a miss the skill documented and asked you to convert by hand. The cost is that a SCREAMING_CASE `DIALOGUE` is now reported; over-reporting is the direction this skill prefers.
+
+### For contributors
+
+#### Breaking changes
+
+- **Editing `skills/nz-english` now needs `uv` and Python 3.12 or newer**, including for prose-only edits. The directory previously had no tooling at all; it now ships a `pyproject.toml` and a committed `uv.lock`, and CI runs `pytest`, `ruff`, `black` and `uv lock --check` against it. Change its `pyproject.toml` without re-locking and the build goes red.
+- **`skills/nz-english/*` is newly in `pr.yml`'s path filter.** A prose-only edit to that skill now runs the whole Python job where it previously ran nothing.
+- **The substitution table in `SKILL.md` is parsed by a test**, so its *structure* is now a contract. Cosmetic reformatting is safe; what breaks the suite is renaming or removing the `## Substitutions` heading, moving the table out of that section, converting it away from pipe-delimited rows, or inserting a column before the US column.
+- **Adding or changing a row is a three-place edit**: the table in `SKILL.md`, `table.py`, and `tests/fixtures/us/prose.md` — every word inside an alternation must appear in the US fixture. Check `tests/fixtures/nz/prose.md` too where the new word has an already-correct form. The coupling tests in `tests/test_table.py` fail when these drift.
+
+#### Added
+
+- **`skills/nz-english` gains a uv dev project and 95 tests.** It is not an installable package — no `[build-system]`, no console script, no runtime dependencies — it exists to give the bundled tool a dev toolchain matching `skills/creative-commits`.
+- **[ADR 017](https://github.com/todofixthis/phx-claude-siat/blob/d65cb1b/docs/adr/017-move-a-skills-deterministic-steps-into-shipped-code.md) records the general rule** this is the first instance of: a skill's deterministic steps move into code that ships with the skill, needs no install step, and reports rather than edits. It also records why Vale was assessed and rejected.
+
+#### Changed
+
+- **A second skill now ships tooling, and both gates widened to take it.** `pr.yml`'s `python` job is a matrix over the two skill directories, spelled as full paths because `validate_manifests.py` looks for each one as a plain substring of the workflow; a change to either skill runs both legs. The release gate runs each skill package's suite from inside its own directory, over a list derived from the skills that ship a `pyproject.toml`.
+
+  A third tooling skill is half automatic: the release gate picks it up with no edit, the `pr.yml` matrix leg ADR 005 requires is still added by hand, and a skill shipping a `package.json` rather than a `pyproject.toml` needs its own command in both.
+- **ADR 006's revisit trigger is narrower.** Its "a second skill ships tooling" arm fired here and is spent; the `package.json` arm is still live.
+
 ## 4.1.0 - 2026-08-22
 
 ### For phx plugin users
