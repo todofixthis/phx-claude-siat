@@ -190,13 +190,43 @@ only way it is current:
 - the chosen version is greater than `origin/main`'s current version and not already
   tagged. (The number isn't known until step 3, so this check is evaluated there — still
   before the first mutation in step 4.)
-- the `creative-commits` package tests pass —
-  `uv run --project skills/creative-commits pytest` — checking the exit code explicitly.
-  CI is not a substitute here: its `python` job is path-filtered, so a release touching
-  nothing under `skills/creative-commits` skips it and `gate` passes the skip. This run is
-  unconditional. Nor does CI check the version bump above — `validate_manifests.py` has no
-  git access and checks semver *shape* only, so an unbumped or already-tagged release PR
-  goes green. Both bullets look redundant with CI and are not.
+- every skill package's tests pass. Run this **from the repo root**, and read its exit
+  status rather than its output:
+
+  ```bash
+  failed=""
+  for skill in skills/*/; do
+    [ -f "${skill}pyproject.toml" ] || continue
+    if (cd "$skill" && timeout 300 uv run pytest); then echo "✅ $skill"
+    else echo "❌ $skill"; failed="$failed $skill"
+    fi
+  done
+  [ -z "$failed" ] || echo "❌ failed:$failed"
+  [ -z "$failed" ]
+  ```
+
+  The `cd` is what makes this work: `--project` selects the environment, but pytest still
+  collects from the working directory, so one run from the repo root pulls every skill's
+  tests in under one skill's configuration and dies on collection. The directory list is
+  derived, so a skill that starts shipping a `pyproject.toml` is picked up without
+  editing this file — the matrix leg ADR 005 requires in `pr.yml` is still added by hand.
+
+  A failing leg is not always a failing test: `uv run pytest` installs the whole dev
+  group first, so a corrupt cache entry or an unpackable wheel reds the leg over a tool
+  the tests never call. Read the output before stopping the release — a test failure
+  stops it, a toolchain failure is yours to clear and re-run.
+
+  This covers tests only, and CI is no substitute for them: its `python` job is
+  path-filtered, so a release touching nothing under a skill skips that leg and `gate`
+  passes the skip, where this run is unconditional. CI's `uv lock --check`, `ruff` and
+  `black` legs are skipped the same way and are deliberately not reproduced — a lint
+  slipping through costs a follow-up, where a failing test ships broken. Nor does CI
+  check the version bump above: `validate_manifests.py` has no git access and checks
+  semver *shape* only, so an unbumped or already-tagged release PR goes green. Both
+  bullets look redundant with CI and are not.
+
+  A skill shipping a `package.json` ships tooling too, and this loop will not see it.
+  Give it its own command when the first one appears.
 
 ## Defaults
 
