@@ -6,24 +6,26 @@
 
 #### Breaking changes
 
-- **`phx:nz-english` now requires `python3` and `git`, and runs a tool that ships beside the skill.** The skill previously asked you to type nine `rg` commands by hand; it now runs one bundled command. There is nothing to *install* — the tool is standard-library only, with no virtualenv to build — but both programs must be on your `PATH`. It needs **Python 3.10 or newer**, checked at startup, and shells out to `git ls-files` to decide which files to sweep.
+- **`phx:nz-english` now requires `python3` and `git`, and runs a tool that ships beside the skill.** The skill previously required the coding agent to execute nine `rg` commands by hand; it now runs one bundled command. There is nothing to *install* — the tool is standard-library only, with no virtualenv to build — but both programs must be on your `PATH`. It needs **Python 3.10 or newer**, checked at startup, and shells out to `git ls-files` to decide which files to sweep.
 
-  **Migration:** none, where `python3` and `git` are both present. Where either is missing, or the run fails for any other reason, the skill now **stops and tells you** rather than falling back to the old commands. Those commands encoded a guard character and a sixty-word false-positive list that a retyped search does not reproduce, so improvising them back would cover less than the sweep it replaced.
+  **Migration:** none, where `python3` and `git` are both present. Where either is missing, or the run fails for any other reason, the skill now **stops and reports the problem** rather than falling back to the old commands. Those commands encoded a guard character and a sixty-word false-positive list that a retyped search does not reproduce, so improvising them back would cover less than the sweep it replaced.
 
 #### Changed
 
-- **One invocation replaces the nine searches.** The skill reports its own base directory when it loads; the tool lives there, and the path you pass is the tree being swept — rarely the same place. The report is grouped by substitution row, and prints **every** row including those with nothing to show, so a silent row is visible rather than absent. Exit codes: `0` nothing to triage, `1` hits to triage, `2` the run failed, `3` usage error.
-- **Read the report's header, not just its rows.** It names the path swept, how many files were read, and whether `git` or a directory walk supplied them. A file count far below what you expected is the one failure the tool cannot catch for you — an ignored subtree is invisible to it, exactly as it was to `rg`.
-- **Known false positives are collapsed rather than printed**, so the report is far shorter than the old commands' output; `--show-noise` expands them. Rows needing a decision — `license`, `program`, `practice`, `meter`, `judgment` — are marked read-don't-apply rather than left for you to remember.
-- **Verifying a rename no longer needs a guard character worked out by hand.** `--verify <old_name>` finds the row, computes the guard, and reports every surviving reference.
-- **Proving the searches still work is a flag.** `--self-check` runs the patterns over controls that ship with the skill, replacing the two files you wrote by hand before every sweep.
-- **A sweep that reads no files is an error rather than a clean result.** Point the tool at an excluded path and it exits `2` saying nothing was read, instead of reporting a clean tree it never looked at.
-- **Long reports stay bounded.** Hits are capped per row — 50 by default, `--limit` sets it higher or lower — while the counts stay exact.
-- **A sweep takes longer than nine `rg` processes**: seconds on an ordinary repository, minutes on a very large monorepo. It always finishes, so give it room rather than interrupting it.
+- **One invocation replaces the nine searches.** The agent runs the bundled tool once and reads its report, which is grouped by substitution row and prints **every** row including those with nothing to show — so a search that found nothing is visible rather than absent, which is how a sweep that never ran used to pass for a clean one. Its exit code distinguishes a clean tree from hits to triage, a failed run, and a malformed invocation.
+- **The report's header carries the diagnostics.** It names the path swept, how many files were read, and whether `git` or a directory walk supplied them. A file count far below what the repository holds is the one failure the tool cannot catch by itself — an ignored subtree is invisible to it, exactly as it was to `rg`.
+- **Known false positives are collapsed rather than printed**, so the report is far shorter than the old commands' output, and a flag expands them again. Rows needing a decision — `license`, `program`, `practice`, `meter`, `judgment` — are marked read-don't-apply rather than left to the agent's memory.
+- **Verifying a rename no longer needs a guard character worked out by hand.** Given the old spelling, the tool finds its row, computes the guard, and reports every surviving reference.
+- **Proving the searches still work is a flag.** The tool runs its patterns over controls that ship with the skill, replacing the two control files the agent used to write by hand before every sweep.
+- **A sweep that reads no files is an error rather than a clean result.** Aimed at a path it excludes, the tool says nothing was read instead of reporting a clean tree it never looked at.
+- **Long reports stay bounded.** Hits are capped per row while the counts stay exact, so a tree with a great many of them still produces a report worth reading.
+- **Sweeping a very large repository can take minutes**, where an ordinary one takes seconds. A single Python pass is slower than nine `rg` processes, though not obviously slower than the whole exchange it replaces, since generating nine commands cost tokens and a round trip of their own. Where it does matter, the tool accepts explicit paths rather than a whole tree — a pre-commit hook can hand it just the staged files.
+
+- **`phx:writing-release-notes` now writes for a human reader explicitly.** Agents read release notes too, and disambiguate better than people do, so writing for the person is what makes the notes serve both. The rule names the trap it exists to catch: where a product is invoked *through* a coding agent, "you" slides onto whoever performs each step, and the reader ends up told they used to type commands an agent typed.
 
 #### Fixed
 
-- **The `-og` row now catches camel-cased names such as `dialogUrl`.** The hand-run search was case-insensitive, so its guard excluded a following `U` as well as a `u` and the name reached no search at all — a miss the skill documented and asked you to convert by hand. The cost is that a SCREAMING_CASE `DIALOGUE` is now reported; over-reporting is the direction this skill prefers.
+- **The `-og` row now catches camel-cased names such as `dialogUrl`.** The hand-run search was case-insensitive, so its guard excluded a following `U` as well as a `u` and the name reached no search at all — a miss the skill documented and had the agent convert by hand. The cost is that a SCREAMING_CASE `DIALOGUE` is now reported; over-reporting is the direction this skill prefers.
 
 ### For contributors
 
@@ -44,7 +46,7 @@
 - **A second skill now ships tooling, and both gates widened to take it.** `pr.yml`'s `python` job is a matrix over the two skill directories, spelled as full paths because `validate_manifests.py` looks for each one as a plain substring of the workflow; a change to either skill runs both legs. The release gate runs each skill package's suite from inside its own directory, over a list derived from the skills that ship a `pyproject.toml`.
 
   A third tooling skill is half automatic: the release gate picks it up with no edit, the `pr.yml` matrix leg ADR 005 requires is still added by hand, and a skill shipping a `package.json` rather than a `pyproject.toml` needs its own command in both.
-- **ADR 006's revisit trigger is narrower.** Its "a second skill ships tooling" arm fired here and is spent; the `package.json` arm is still live.
+- **ADR 006's revisit trigger is narrower.** It named two conditions, either of which reopens the decision on its own. "A second skill ships tooling" fired here and has been cut; "a skill ships a `package.json` rather than a `pyproject.toml`" is untouched and still live.
 
 ## 4.1.0 - 2026-08-22
 

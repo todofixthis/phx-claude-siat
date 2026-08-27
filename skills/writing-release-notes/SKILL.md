@@ -77,6 +77,15 @@ installs or calls. A change touching both gets one entry per affected audience �
 force a single framing. When genuinely unclear which audience a change belongs to,
 default to user-facing (the more visible, harder-to-miss placement).
 
+**Write for a human reader, whichever audience the entry is in.** Agents read release
+notes too and disambiguate better than people do, so writing for the person is what makes
+the notes serve both. The trap is person rather than vocabulary: in a project whose
+product is invoked *through* a coding agent, "you" slides onto whoever performs each step,
+and the reader is told they used to type commands an agent typed. Address the reader for
+what is theirs — their machine, their repository, their upgrade — and name the agent as
+the actor everywhere it acts. Where a detail exists only so an agent can execute the step,
+it belongs in the skill rather than the notes.
+
 Write to the template below: high-level, grouped logically within each audience. Flag
 security-sensitive or embargoed material (CVE details, undisclosed advisories) for
 human decision rather than publishing it unreviewed.
