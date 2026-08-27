@@ -65,16 +65,19 @@ python3 <skilldir>/scan.py .
 ```
 
 `<skilldir>` is where the tool lives; the trailing `.` is the tree being swept. They are
-rarely the same place. Name paths instead of `.` to sweep a subtree.
+rarely the same place. Name paths instead of `.` to sweep less — any number of them, and
+individual files as well as directories.
 
 Read the exit code, not the output — a shell pipeline throws that distinction away.
 **0** nothing to triage, **1** hits to triage, **2** the run failed, **3** a bad argument
 (yours to fix, not a breakage to escalate).
 
-It runs at about 28,000 lines a second — seconds for an ordinary repository, minutes
-for a very large monorepo — and always finishes, so give it room rather than interrupting
-it. Each row lists at most 50 hits and counts the rest; `--limit N` raises that, and the
-header counts are complete whatever the listing shows.
+A sweep reads tens of thousands of lines a second — faster on code than on prose — so it
+takes seconds on an ordinary repository and minutes on a very large monorepo. It always
+finishes: give it room rather than interrupting it, and where the wait would be minutes,
+count the lines and decide whether to name a subtree instead. Each row lists at most 50
+hits and counts the rest; `--limit N` raises that, and the header
+counts are complete whatever the listing shows.
 
 The report lists every row of the table above, including rows that found nothing, so a
 silent row is visible rather than absent. Each hit gives `path:line`, the **matched
@@ -104,8 +107,11 @@ gitignored. Nothing was searched, so nothing was proved.
   `.gitignore` covers is invisible. That keeps `node_modules` out, and it also hides a
   generated subtree you *did* want swept. Ten files in a tree of seven thousand is not an
   error, and only `N` will tell you.
-- `walk` where you expected `git` means the path is outside a repository: nothing was
-  filtered, so you may be sweeping build output.
+- `git` means at least one target was a directory inside a repository. `walk` means none
+  was — either you named files yourself, which is fine and filters nothing because there
+  is nothing to filter, or the tree is outside a repository, where nothing was filtered
+  and you may be sweeping build output. Which one you are looking at is not in the header;
+  you know which arguments you passed.
 
 Compare `N` against what you expected before believing a clean result. Where it is short,
 name the paths explicitly — the tool takes several.
