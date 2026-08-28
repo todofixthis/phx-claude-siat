@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-07-16
 scope: [.github/workflows/pr.yml, scripts/ci/validate_manifests.py]
 summary: Catch mirror drift by having CI check each skill's declaration against the workflow — failing the build when a declared tool is never run — rather than making the declaration executable and retiring the mirror.
-revisit-when: A second skill ships tooling, or a skill ships a package.json rather than a pyproject.toml.
+revisit-when: A skill ships a package.json rather than a pyproject.toml.
 ---
 
 # 006: Validate the declaration to catch mirror drift
@@ -86,8 +86,10 @@ reading is nearly free.
 
 Option 3 is refused on timing, not merit. A schema wants more than one example to be
 designed against; with a single package it would encode guesses about tools nobody has
-adopted yet. Revisit at the second package with tooling — the first point the mapping has
-anything real to answer to.
+adopted yet. ~~Revisit at the second package with tooling — the first point the mapping
+has anything real to answer to.~~ Spent by ADR 017, which reached the second package and
+generalised the mirror into a matrix rather than making the declaration executable. The
+`package.json` arm of the trigger is still live.
 
 Option 1 loses on this repo's evidence rather than on principle. Trusting prose is the
 specific bet already lost here, and it would be a strange ADR that answered a rotted
