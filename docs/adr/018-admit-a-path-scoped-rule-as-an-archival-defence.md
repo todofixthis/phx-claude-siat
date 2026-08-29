@@ -86,7 +86,7 @@ archival, and there is none here; a check specified without one is believed anyw
 
 ### Option 4: Generate the rule from the ADR's frontmatter
 
-A generator writes `.claude/rules/adr-NNN.md` from each decision's `scope` and `summary`, so
+A generator writes `.agents/rules/adr-NNN.md` from each decision's `scope` and `summary`, so
 coverage holds by construction.
 
 **Pros:** Coverage cannot drift from `scope`, one being derived from the other, and no
