@@ -158,10 +158,10 @@ a pull-request number rather than rejecting it, so the instruction can act on th
 object. Recorded in `docs/backlog/`; unrelated to where deferred work lives, but found
 while writing this.
 
-Issues #28, #38 and #39 must be closed with a pointer to where their content went, on the
-branch that lands this. Left open they are live duplicates of backlog items, and a session
-finding one first works from a copy no branch will ever delete. #2 is Renovate's
-dependency dashboard and stays open by design.
+Issues #28, #38 and #39 must be closed with a pointer to where their content went, once
+this lands, so the pointer resolves against `main`. Left open they are live duplicates of
+backlog items, and a session finding one first works from a copy no branch will ever
+delete. #2 is Renovate's dependency dashboard and stays open by design.
 
 [#27]: https://github.com/todofixthis/phx-claude-siat/pull/27
 [#37]: https://github.com/todofixthis/phx-claude-siat/pull/37
