@@ -132,17 +132,20 @@ A comment naming an ADR reaches a reader the index cannot: someone editing the f
 
 ## Defending a decision with a path-scoped rule
 
-A rule is a Markdown file in `.claude/rules/` whose frontmatter carries a `paths:` list of
-globs; the harness injects the whole file when its read tool touches a file one of them
-matches. A rule reaches files nobody has written yet — from whatever read comes first,
-never from their creation — which a comment cannot. So where a decision binds a set you
-cannot call closed, and no breach of it would be large enough to need its own ADR, the
-rule is the defence left. It defends only what its harness reaches, where a comment sits
-in the bytes and so meets every reader by every route. Archive on a rule alone only where
-the breaches you are defending against would be authored by an agent that reaches the file
-through the tool its harness loads rules on — see what loads it, below, because the routes
-that miss are ordinary ones. Where a person in an editor would author a breach, the files
-they touch need a comment too.
+A rule is a Markdown file whose frontmatter carries a `paths:` list of globs; the harness
+injects the whole file when its read tool touches a file one of them matches. Keep it in
+`.agents/rules/`, the home for agent metadata no single harness owns, and symlink
+`.claude/rules` to that directory: Claude Code scans the `.claude` path alone, so
+`.agents/rules/` without the symlink loads nothing and says nothing.
+
+A rule reaches files nobody has written yet — from whatever read comes first, never from their creation — which
+a comment cannot. So where a decision binds a set you cannot call closed, and no breach of
+it would be large enough to need its own ADR, the rule is the defence left. It defends
+only what its harness reaches, where a comment sits in the bytes and so meets every reader
+by every route. Archive on a rule alone only where the breaches you are defending against
+would be authored by an agent that reaches the file through the tool its harness loads
+rules on — see what loads it, below, because the routes that miss are ordinary ones. Where
+a person in an editor would author a breach, the files they touch need a comment too.
 
 Written in the same change as the archival, naming the ADR's number and stating what the
 decision forbids while the reasoning stays in the ADR, and named in `archived-because` —
@@ -156,9 +159,9 @@ as for a comment. Beyond that:
   matching read; that is what the coverage costs. `scope` holds prefixes and never
   globs, so the translation is yours to make: `test/` needs `test/**`, where a rule
   matching only `**/test_*.py` leaves the rest of that prefix uncovered.
-- **Name the rule file in `scope` as well**, by the path the repository stores — where
-  `.claude/rules` is a symlink to another directory, that is the target's path, which is
-  what gets staged and what a lookup matches. Deleting the rule removes the defence, and
+- **Name the rule file in `scope` as well**, by the path the repository stores — with the
+  layout above, the `.agents/rules/` one, since that is what gets staged and what a lookup
+  matches. Deleting the rule removes the defence, and
   the ADR being out of the index by design, nothing obvious reports the loss. A reverse
   lookup from a path reports the ADR to whoever *narrows* the rule; whether it reports a
   deletion depends on the lookup, and one keyed to added and modified paths will not.

@@ -145,6 +145,9 @@ lookup will match.
 - ADR 014's deferred liveness check now has two defence shapes to specify for rather than
   one. Its trigger — an ADR archived on a defence resting on a comment in code — is
   untouched: this decision neither meets it nor closes a way it could arrive.
+- The `.claude/rules` symlink is load-bearing here rather than tidying: Claude Code scans
+  that path alone, so removing it stops every rule loading, and says nothing. Measured by
+  parking the symlink and re-reading a matching test file, which injected nothing.
 
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: 014-cite-adrs-from-code-comments.md
