@@ -152,6 +152,12 @@ of context, link it.
   A repo-root-relative path renders as a broken link.
 - **Targets by type** — GitHub issue/PR → the full issue/PR URL; web page → its
   canonical URL; code symbol → the path to the defining file; peer ADR → its filename.
+- **A code symbol from a dependency not vendored in this repo** links to that
+  dependency's own upstream source (e.g. its GitHub repo, on its default branch) —
+  never to a local install path (`.venv`, `node_modules`, etc.). That path is
+  typically gitignored, so the link renders fine in your own checkout and is broken
+  for everyone else's. Verify the branch and path resolve before citing them, the
+  same as any other factual premise.
 - **Order definitions alphabetically by label**, ignoring surrounding markup (so
   `` [`ClassRegistry`] `` sorts under C) — consistent with the repo-wide convention to
   alphabetise unordered collections.
