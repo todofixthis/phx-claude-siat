@@ -9,6 +9,8 @@ ADRs record _why_ things are the way they are, so future contributors don't reli
 
 **What this assumes.** ADRs live in `docs/adr/`, and a generator maintains an `INDEX.md` beside them from their frontmatter, enforcing the field rules below. Where a repo has no such generator, every rule here still holds as a convention — write the frontmatter the same way — but nothing checks it, so anything below that says a breach "fails" or "is reported" means "goes unnoticed" instead. Check for the generator before relying on it, and don't tell a reader a check exists that doesn't.
 
+Building or updating a generator against this contract: this repo's own [`generate_index.py`](../../scripts/adr/generate_index.py) — together with its line parser, [`frontmatter.py`](../../scripts/frontmatter.py) — is the reference implementation of the Frontmatter Fields rules below (status pairing, revisit pairing, `scope` validation), and [its test suite](../../scripts/adr/test_generate_index.py) exercises each one. Port these rather than reverse-engineering the rules from prose, but expect to strip what's specific to this repo: the stdlib-only parsing, the `python3 -m scripts.adr.generate_index` invocation and `.githooks/pre-commit` wiring, and the ADR citations in its comments are how this repo satisfies the contract, not part of the contract itself.
+
 ## Format
 
 File: `docs/adr/NNN-<slug>.md` (zero-padded, kebab-case)
