@@ -76,7 +76,7 @@ truncated index row.
 
 - **`status`** — `Accepted`, `Archived`, or `Superseded`. All three stay in the repo; the last two are excluded from `docs/adr/INDEX.md`, which is what an agent loads by default.
   - `Accepted` — in force, and worth carrying in context.
-  - `Archived` — in force, but defended by something other than being read, so it need not be carried in context. Archive only when you can **name a defence the breach path passes through while the work is still being planned**. Only three qualify, unless another meets that same timing test: a comment wherever a breach would be authored, met as an agent explores the code; a path-scoped rule covering the scope, met when an agent reads a file the decision binds and qualifying only on the terms set out below; and a breach so large it needs its own ADR, met when the archived-decisions check below runs. An automated check is not enough on its own — a failing hook or pull request arrives after the wrong work is built, protecting the branch rather than the effort. Judge a defence by whether a breacher meets it in time; how tempting the rejected option is decides nothing. Four ways one fails: a comment covers only the sites it sits in, so treat a set of files as growing unless you can call it closed; a rule reaches only the reader whose tools load it, so a file read from a shell meets nothing and one created new meets nothing until something reads it back; a note in the files that *keep* a decision does not guard the new file that would break it; and where an ADR rejects several options, a defence covering one covers none. **Name the defence in `archived-because`**; archiving without one is a bet nobody recorded. Set the status whenever a defence that passes the timing test exists, including long after writing.
+  - `Archived` — in force, but defended by something other than being read, so it need not be carried in context. Archive only when you can **name a defence the breach path passes through while the work is still being planned**. Only three qualify, unless another meets that same timing test: a comment wherever a breach would be authored, met as an agent explores the code; a path-scoped rule covering the scope, met when an agent reads a file the decision binds and qualifying only on the terms set out below; and a breach so large it needs its own ADR, met when the archived-decisions check below runs. An automated check is not enough on its own — a failing hook or pull request arrives after the wrong work is built, protecting the branch rather than the effort. Judge a defence by whether a breacher meets it in time; how tempting the rejected option is decides nothing. Four ways one fails: a comment covers only the sites it sits in, so treat a set of files as growing unless you can call it closed; a rule reaches only the reader whose tools load it, so a file read from a shell meets nothing and one created new meets nothing until something reads it back, which may be after the breach is authored; a note in the files that *keep* a decision does not guard the new file that would break it; and where an ADR rejects several options, a defence covering one covers none. **Name the defence in `archived-because`**; archiving without one is a bet nobody recorded. Set the status whenever a defence that passes the timing test exists, including long after writing.
   - `Superseded` — replaced by a later ADR; set `superseded-by`.
 
   Status tracks only whether a decision is in force and how it is defended. A provisional decision, or one near its revisit trigger, stays `Accepted` — nearly reopenable makes it more worth carrying, not less.
@@ -98,7 +98,7 @@ truncated index row.
   - `archived-because: .claude/rules/testing.md states the convention for every test file, met when an agent reads one.`
 - **`superseded-by`** — the superseding ADR's number, as a bare integer; omit unless status is `Superseded`.
 
-`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. A generator reports a breach of that pairing, where one is wired in, so a status changed without its field can't leave the old one behind reading as current. The revisit fields pair with each other rather than with a status: the breach reported is a `revisit-discharged-by` with no `revisit-when` to spend, and neither field is constrained by status — though a discharge on a `Superseded` ADR is dead metadata, for the reason the discharge workflow gives. `generate_index` runs on every pull request touching `docs/adr/`, and locally only where the pre-commit hook is installed.
+`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. A generator reports a breach of that pairing, where one is wired in, so a status changed without its field can't leave the old one behind reading as current. The revisit fields pair with each other rather than with a status: the breach reported is a `revisit-discharged-by` with no `revisit-when` to spend, and neither field is constrained by status — though a discharge on a `Superseded` ADR is dead metadata, for the reason the discharge workflow gives. Find out what triggers the generator you have rather than assuming it sees every change: this skill's reference implementation runs in CI on a pull request touching `docs/adr/` or `scripts/`, and locally only from a pre-commit hook, and only when the commit stages an ADR.
 
 ## Conventions
 
@@ -136,46 +136,50 @@ A rule is a Markdown file in `.claude/rules/` whose frontmatter carries a `paths
 globs; the harness injects the whole file when its read tool touches a file one of them
 matches. A rule reaches files nobody has written yet, which a comment cannot — so where a
 decision binds a set you cannot call closed, and no breach of it would be large enough to
-need its own ADR, the rule is the defence left. It defends only what its harness reaches: a
-comment sits in the bytes, so every reader meets it by every route, where a rule reaches an
-agent whose harness loads rules and nobody else. Archive on a rule alone only where the
-breaches you are defending against would be authored by such an agent; where a person in an
-editor would author one, the files they touch need a comment too.
+need its own ADR, the rule is the defence left. It defends only what its harness reaches,
+where a comment sits in the bytes and so meets every reader by every route. Archive on a
+rule alone only where the breaches you are defending against would be authored by an agent
+that reaches the file through the tool its harness loads rules on — see what loads it,
+below, because the routes that miss are ordinary ones. Where a person in an editor would
+author a breach, the files they touch need a comment too.
 
-Written in the same change as the archival, naming the ADR and stating what the decision
-forbids while the reasoning stays in the ADR, and named in `archived-because` — as for a
-comment. Beyond that:
+Written in the same change as the archival, naming the ADR's number and stating what the
+decision forbids while the reasoning stays in the ADR, and named in `archived-because` —
+as for a comment. Beyond that:
 
 - **Every path in `scope` needs a defence reaching it**, bar the rule's own entry, which
-  the next bullet puts there. Defences compose, so a rule for the growing part and comments
-  in the files that are fixed is a complete answer; a rule whose globs stop short of a path
-  nothing else covers is not. `scope` holds prefixes and never globs, so the translation is
-  yours to make and yours to get wrong: `test/` needs `test/**`, where a rule matching only
-  `**/test_*.py` leaves the rest of that prefix to a second defence or to nothing.
+  the next bullet puts there. Defences compose, so a rule for the growing part and
+  comments in the files that are fixed is a complete answer — but only where that second
+  part is closed, and a directory prefix rarely is, which usually leaves widening the
+  globs as the only way to cover one. `scope` holds prefixes and never globs, so the
+  translation is yours to make: `test/` needs `test/**`, where a rule matching only
+  `**/test_*.py` leaves the rest of that prefix uncovered.
 - **Name the rule file in `scope` as well**, by the path the repository stores — where
   `.claude/rules` is a symlink to another directory, that is the target's path, which is
   what gets staged and what a lookup matches. Deleting the rule removes the defence, and
-  the ADR being out of the index by design, nothing obvious reports the loss. Where a
-  generator checks that scope entries resolve on disk, the entry turns the deletion into a
-  build failure. A reverse lookup from a path reports the ADR to whoever *narrows* the
-  rule; whether it reports a deletion depends on the lookup, and one keyed to added and
-  modified paths will not — check yours rather than assuming. Neither catches the symlinked
-  form of the entry, which resolves on disk and quietly matches nothing.
-- **A rule outside the repository defends nobody else** — one in `~/.claude/rules/` loads
-  on your machine and on nobody else's. Never archive on one.
+  the ADR being out of the index by design, nothing obvious reports the loss. A reverse
+  lookup from a path reports the ADR to whoever *narrows* the rule; whether it reports a
+  deletion depends on the lookup, and one keyed to added and modified paths will not.
+  Where a generator checks that scope entries resolve on disk, the deletion breaks the
+  build — but on whichever later change runs the generator, which is rarely the one that
+  deleted the rule. Neither mechanism catches the symlinked form of the entry, which
+  resolves on disk and quietly matches nothing. Find out what each of yours does before
+  counting on either.
+- **Never archive on a rule outside the repository** — one in `~/.claude/rules/` loads on
+  your machine and on nobody else's.
 - **Read the file your globs cover least obviously, and watch the rule arrive**, before
-  archiving on it. Any matching file proves the harness loads rules at all; the awkward one
-  — the file at the edge of the prefix, the extension you nearly forgot — is what proves
-  the coverage you are about to claim.
+  archiving on it. Any matching file proves the harness loads rules at all; the awkward
+  one — the file at the edge of the prefix, the extension you nearly forgot — is what
+  proves the coverage you are about to claim.
 
 **What loads it, verified in Claude Code on 2026-08-29 and worth re-checking:** the read
 tool, in a subagent as much as a main session. Not a shell read (`cat`, `sed`, `grep`),
 which is no edge case: a harness mode that steers reading to the shell makes it the common
 path. Not the `Write` that creates a matching file either
 ([anthropics/claude-code#23478](https://github.com/anthropics/claude-code/issues/23478),
-closed as not planned), so a rule reaches a new file only through whatever read comes after
-it — and where a breach is authored file-first with nothing read beforehand, it arrives
-after the work and defends nothing.
+closed as not planned), so a rule reaches a new file only through whatever read comes
+after it — and where a breach is authored file-first with nothing read beforehand, it
+arrives after the work and defends nothing.
 
 ## Linking references
 

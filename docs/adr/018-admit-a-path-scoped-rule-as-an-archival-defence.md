@@ -127,9 +127,10 @@ or script commit — loud, and late.
   and the rule file itself, a `.md` no `*.py` glob reaches.
 - `scope` now carries entries naming where a defence lives, not only where a breach is
   authored. [`generate_index.py`][] validates such an entry for `Archived` decisions as well
-  as `Accepted` ones, so a deleted rule fails the build; it cannot tell that the entry names
-  a rule, that its globs cover anything, or that a symlinked form of the path reaches the
-  file the lookup will match.
+  as `Accepted` ones, so a deleted rule fails the build — on whichever later change runs the
+  generator, since deleting the rule alone triggers neither the hook nor the `adr` job. It
+  cannot tell that the entry names a rule, that its globs cover anything, or that a
+  symlinked form of the path reaches the file the lookup will match.
 - `docs/adr/` and `skills/writing-adrs/` in scope means an ADR commit now reports three
   decisions rather than two. ADR 013 answers that per-ADR: a scope wider than the decision
   is that ADR's to narrow, and this one is as wide as the decision.
