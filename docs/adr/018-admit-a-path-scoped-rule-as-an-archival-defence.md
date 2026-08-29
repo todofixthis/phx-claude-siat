@@ -78,11 +78,11 @@ who trusts them archives on a rule the harness has stopped loading.
 
 **Pros:** Catches the one failure Context names as the natural mistake, and needs no new
 grammar, `scope` rejecting globs.
-**Cons:** Every answer it needs is currently a guess. Whether covering a prefix means the
-files on disk today or the files that could be written under it, and what a rule owes a path
-some other defence covers, are questions no archival here has yet posed.
-**Risks:** A check specified against no real instance encodes the guess, and a check that
-passes is believed.
+**Cons:** A check sees globs and prefixes, never comments — so it fails every archival that
+legitimately composes a rule with comments in the files a rule cannot reach, which is the
+shape the skill recommends.
+**Risks:** What it should do about a composed defence has to be decided against a real
+archival, and there is none here; a check specified without one is believed anyway.
 
 ### Option 4: Generate the rule from the ADR's frontmatter
 
@@ -106,11 +106,12 @@ written. [ADR 014][] made the same call against a checked citation schema: a mec
 buys the cheap half and reports a defended corpus is worse than none, because it is
 believed.
 
-Option 3 is postponed rather than rejected, and for 014's reason rather than that one —
-its predicate cannot be written down yet. Coverage is mechanically decidable; what is
-missing is a real instance to specify against, and no decision here is archived on a rule.
-Writing the check now would settle by guess what the first archival will settle by
-example, so `revisit-when` carries it instead.
+Option 3 is postponed rather than rejected, and for 014's reason rather than that one. Glob
+coverage is mechanically decidable, and saying otherwise would be wrong — but coverage is
+not the whole bar, because defences compose, and the half a check cannot see is the same
+half 014 could not check: where a comment sits, and whether it reaches. What such a check
+should do with a rule that legitimately stops short has to be settled against a real
+archival, and there is none here, so `revisit-when` carries it.
 
 Listing the rule's own path in `scope` follows [ADR 013][], which puts [`pr.yml`][] in its
 own scope because narrowing that filter is how the decision gets breached. Narrowing a
@@ -125,8 +126,8 @@ elsewhere.
   in `scope`, and the rule watched as it loads.
 - No archival meets the bar this sets, the precedent included. The sibling ADR's coverage
   falls short, and [ADR 016][] cannot archive on this repository's `testing.md` for the same
-  reason — that rule matches `**/test_*.py` and `**/*_test.py`, while 016 scopes `scripts/`
-  and the rule file itself, a `.md` no `*.py` glob reaches.
+  reason — that rule matches `**/test_*.py` and `**/*_test.py`, while 016 scopes `scripts/`,
+  where ten modules are neither.
 - `scope` now carries entries naming where a defence lives, not only where a breach is
 authored — an extension of ADR 013's field for one case, leaving its test intact for every
 other entry, so 013 is neither superseded nor discharged. `generate_index` validates such

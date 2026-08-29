@@ -76,7 +76,7 @@ truncated index row.
 
 - **`status`** — `Accepted`, `Archived`, or `Superseded`. All three stay in the repo; the last two are excluded from `docs/adr/INDEX.md`, which is what an agent loads by default.
   - `Accepted` — in force, and worth carrying in context.
-  - `Archived` — in force, but defended by something other than being read, so it need not be carried in context. Archive only when you can **name a defence the breach path passes through while the work is still being planned**. Only three qualify, unless another meets that same timing test: a comment wherever a breach would be authored, met as an agent explores the code; a path-scoped rule covering the scope, met when an agent reads a file the decision binds and qualifying only on the terms set out below; and a breach so large it needs its own ADR, met when the archived-decisions check below runs. An automated check is not enough on its own — a failing hook or pull request arrives after the wrong work is built, protecting the branch rather than the effort. Judge a defence by whether a breacher meets it in time; how tempting the rejected option is decides nothing. Four ways one fails: a comment covers only the sites it sits in, so treat a set of files as growing unless you can call it closed; a rule reaches only the reader whose tools load it, so a file read from a shell meets nothing and one created new meets nothing until something reads it back, which may be after the breach is authored; a note in the files that *keep* a decision does not guard the new file that would break it; and where an ADR rejects several options, a defence covering one covers none. **Name the defence in `archived-because`**; archiving without one is a bet nobody recorded. Set the status whenever a defence that passes the timing test exists, including long after writing.
+  - `Archived` — in force, but defended by something other than being read, so it need not be carried in context. Archive only when you can **name a defence the breach path passes through while the work is still being planned**. Only three qualify, unless another meets that same timing test: a comment wherever a breach would be authored, met as an agent explores the code; a path-scoped rule reaching what the decision binds, met when an agent reads one of those files and qualifying only on the terms set out below; and a breach so large it needs its own ADR, met when the archived-decisions check below runs. An automated check is not enough on its own — a failing hook or pull request arrives after the wrong work is built, protecting the branch rather than the effort. Judge a defence by whether a breacher meets it in time; how tempting the rejected option is decides nothing. Four ways one fails: a comment covers only the sites it sits in, so treat a set of files as growing unless you can call it closed; a rule reaches only the reader whose tools load it, so a breacher reading from a shell meets nothing, and one creating a file meets nothing until something reads it back, which may come after the breach is authored; a note in the files that *keep* a decision does not guard the new file that would break it; and where an ADR rejects several options, a defence covering one covers none. **Name the defence in `archived-because`**; archiving without one is a bet nobody recorded. Set the status whenever a defence that passes the timing test exists, including long after writing.
   - `Superseded` — replaced by a later ADR; set `superseded-by`.
 
   Status tracks only whether a decision is in force and how it is defended. A provisional decision, or one near its revisit trigger, stays `Accepted` — nearly reopenable makes it more worth carrying, not less.
@@ -95,15 +95,15 @@ truncated index row.
 - **`archived-because`** — one sentence naming the defence and where a breacher meets it, so whether and why an ADR left the index reads at a glance. Required when status is `Archived`; omit otherwise. One line, whichever defence applies:
   - `archived-because: A comment at the top of every workflow file names the pin, met while the workflow is being edited.`
   - `archived-because: Nothing breaches this without its own ADR, met at the archived-decisions check.`
-  - `archived-because: .claude/rules/testing.md states the convention for every test file, met when an agent reads one.`
+  - `archived-because: The testing-conventions rule states the convention for every test file, met when an agent reads one.`
 - **`superseded-by`** — the superseding ADR's number, as a bare integer; omit unless status is `Superseded`.
 
-`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. A generator reports a breach of that pairing, where one is wired in, so a status changed without its field can't leave the old one behind reading as current. The revisit fields pair with each other rather than with a status: the breach reported is a `revisit-discharged-by` with no `revisit-when` to spend, and neither field is constrained by status — though a discharge on a `Superseded` ADR is dead metadata, for the reason the discharge workflow gives. Find out what triggers the generator you have rather than assuming it sees every change: this skill's reference implementation runs in CI on a pull request touching `docs/adr/` or `scripts/`, and locally only from a pre-commit hook, and only when the commit stages an ADR.
+`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. A generator reports a breach of that pairing, where one is wired in, so a status changed without its field can't leave the old one behind reading as current. The revisit fields pair with each other rather than with a status: the breach reported is a `revisit-discharged-by` with no `revisit-when` to spend, and neither field is constrained by status — though a discharge on a `Superseded` ADR is dead metadata, for the reason the discharge workflow gives. Find out what triggers the generator you have rather than assuming it sees every change: this skill's reference implementation runs in CI on a pull request touching `docs/adr/` or `scripts/`, and locally only from a pre-commit hook, and only when the commit stages an ADR — where the reverse lookup below is the same script in another mode, running on any staged path.
 
 ## Conventions
 
 - **Option 1 is always "Do nothing"** — sets the stakes. Describe the status quo and let its Pros/Cons/Risks show what deciding nothing costs; don't explain the option's purpose in the ADR — that's guidance to you, not content.
-- **Option 2 is the accepted option** — except where the decision is to keep the status quo, when Option 1 is, and the ADR is `Accepted` like any other. Recording an existing constraint is not a different approach from keeping it, so don't split the two into rival options to satisfy the numbering. Rejected alternatives appear as Options 2, 3, etc. Trivial mitigations (e.g. adding a comment or a rule) are implementation details of the "do nothing" choice and do not warrant their own option — unless the ADR archives itself on one, which makes it load-bearing, and the Decision must name it as the defence. Numbering and the `(Accepted)` marker are fixed when the ADR is written; `status` changes later, so never derive one from the other — a superseded ADR keeps the marker on the option that won.
+- **Option 2 is the accepted option** — except where the decision is to keep the status quo, when Option 1 is, and the ADR is `Accepted` like any other. Recording an existing constraint is not a different approach from keeping it, so don't split the two into rival options to satisfy the numbering. Rejected alternatives appear as Options 2, 3, etc. Trivial mitigations (e.g. adding a comment) are implementation details of the "do nothing" choice and do not warrant their own option — unless the ADR archives itself on one, which makes it load-bearing, and the Decision must name it as the defence. Numbering and the `(Accepted)` marker are fixed when the ADR is written; `status` changes later, so never derive one from the other — a superseded ADR keeps the marker on the option that won.
 - **Options must be mutually exclusive** — each must represent a fundamentally different approach. Test: could any two options be combined without contradiction? If yes, they aren't mutually exclusive. Two failure modes:
   - _Implementation details as options_ — if two options share the same core approach but differ in implementation, the variant belongs as a sub-heading within the parent option, not a top-level option
   - _Multi-dimensional problems_ — if what looks like a list of options is actually two separate decisions, structure around the primary; handle the secondary as a sub-question in the Decision section or write a follow-up ADR
@@ -134,14 +134,15 @@ A comment naming an ADR reaches a reader the index cannot: someone editing the f
 
 A rule is a Markdown file in `.claude/rules/` whose frontmatter carries a `paths:` list of
 globs; the harness injects the whole file when its read tool touches a file one of them
-matches. A rule reaches files nobody has written yet, which a comment cannot — so where a
-decision binds a set you cannot call closed, and no breach of it would be large enough to
-need its own ADR, the rule is the defence left. It defends only what its harness reaches,
-where a comment sits in the bytes and so meets every reader by every route. Archive on a
-rule alone only where the breaches you are defending against would be authored by an agent
-that reaches the file through the tool its harness loads rules on — see what loads it,
-below, because the routes that miss are ordinary ones. Where a person in an editor would
-author a breach, the files they touch need a comment too.
+matches. A rule reaches files nobody has written yet — from whatever read comes first,
+never from their creation — which a comment cannot. So where a decision binds a set you
+cannot call closed, and no breach of it would be large enough to need its own ADR, the
+rule is the defence left. It defends only what its harness reaches, where a comment sits
+in the bytes and so meets every reader by every route. Archive on a rule alone only where
+the breaches you are defending against would be authored by an agent that reaches the file
+through the tool its harness loads rules on — see what loads it, below, because the routes
+that miss are ordinary ones. Where a person in an editor would author a breach, the files
+they touch need a comment too.
 
 Written in the same change as the archival, naming the ADR's number and stating what the
 decision forbids while the reasoning stays in the ADR, and named in `archived-because` —
@@ -151,9 +152,10 @@ as for a comment. Beyond that:
   the next bullet puts there. Defences compose, so a rule for the growing part and
   comments in the files that are fixed is a complete answer — but only where that second
   part is closed, and a directory prefix rarely is, which usually leaves widening the
-  globs as the only way to cover one. `scope` holds prefixes and never globs, so the
-  translation is yours to make: `test/` needs `test/**`, where a rule matching only
-  `**/test_*.py` leaves the rest of that prefix uncovered.
+  globs as the only way to cover one. A wider glob spends the rule's whole length on every
+  matching read; that is what the coverage costs. `scope` holds prefixes and never
+  globs, so the translation is yours to make: `test/` needs `test/**`, where a rule
+  matching only `**/test_*.py` leaves the rest of that prefix uncovered.
 - **Name the rule file in `scope` as well**, by the path the repository stores — where
   `.claude/rules` is a symlink to another directory, that is the target's path, which is
   what gets staged and what a lookup matches. Deleting the rule removes the defence, and
@@ -164,7 +166,7 @@ as for a comment. Beyond that:
   build — but on whichever later change runs the generator, which is rarely the one that
   deleted the rule. Neither mechanism catches the symlinked form of the entry, which
   resolves on disk and quietly matches nothing. Find out what each of yours does before
-  counting on either.
+  counting on any of them.
 - **Never archive on a rule outside the repository** — one in `~/.claude/rules/` loads on
   your machine and on nobody else's.
 - **Read the file your globs cover least obviously, and watch the rule arrive**, before
@@ -273,7 +275,7 @@ Dispatch a subagent to review the draft as a senior engineer would. Give it the 
 - **Soundness** — does the accepted option make sense for _this_ project, given its constraints and prior ADRs? Would a principal engineer choose differently?
 - **Unsurfaced trade-offs** — are there notable costs, risks, or downsides of the accepted option the ADR does not mention?
 - **Implicit assumptions** — what does the decision take for granted that a reader would not know? Each should be stated explicitly.
-- **Archival** — if the ADR is `Archived`, does `archived-because` name a defence that exists and lands early enough to change the plan rather than only reject the result? Push back hard: a decision that merely feels settled is the tempting one to archive, and a wrongly archived one stays invisible until someone re-litigates it. Where the defence is a path-scoped rule, have it open the rule file: does it exist, does it live in the repository, is every path in `scope` bar the rule's own entry reached by the rule's globs or by another named defence, does it state the constraint itself rather than only pointing at the ADR, and did the archiver watch it load? If it is `Accepted`, ask whether a *qualifying* defence could be named — not whether anything defends it, since a real defence can still fail the timing test.
+- **Archival** — if the ADR is `Archived`, does `archived-because` name a defence that exists and lands early enough to change the plan rather than only reject the result? Push back hard: a decision that merely feels settled is the tempting one to archive, and a wrongly archived one stays invisible until someone re-litigates it. Where the defence is a path-scoped rule, have it open the rule file: does it exist, does it live in the repository, did it go in with the archival, is every path in `scope` bar the rule's own entry reached by the rule's globs or by another named defence, does it state the constraint itself rather than only pointing at the ADR, and did the archiver watch it load? Then the gate the rule stands or falls on: would the breaches it defends against be authored by an agent reading through the tool the rule loads on, and do comments cover the files a person editing by hand would author in? If it is `Accepted`, ask whether a *qualifying* defence could be named — not whether anything defends it, since a real defence can still fail the timing test.
 - **Revisit trigger** — does `revisit-when` state a condition whose arrival would change the choice, rather than one the decision already accommodates? Where it is unset, ask what would reopen the decision: nothing reopening it is a real answer, an unstated condition is one nobody will act on.
 - **Factual accuracy** — is every claim about tooling, workflow, or platform behaviour true of the actual configuration? Have it check config, workflow files, and live settings itself rather than review your notes, and report what each claim was verified against.
 - **Frontmatter sufficiency** — would an agent that reads _only_ the frontmatter (`summary`, `scope`, `status`, `revisit-when`) avoid breaching this decision? If the decision constrains future work, the `summary` must make that constraint discoverable and `scope` must name the paths where a breach would be authored — an ADR scoped narrower than it binds is unreachable from the files it governs. This holds for `Archived` ADRs too, even though nothing reads their frontmatter by default: archiving is reversible, and one restored later — perhaps because it was archived in error — carries whatever it was written with.
