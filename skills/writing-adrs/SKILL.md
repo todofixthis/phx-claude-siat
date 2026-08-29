@@ -172,10 +172,11 @@ as for a comment. Beyond that:
   one — the file at the edge of the prefix, the extension you nearly forgot — is what
   proves the coverage you are about to claim.
 
-**What loads it, verified in Claude Code on 2026-08-29 and worth re-checking:** the read
-tool, in a subagent as much as a main session. Not a shell read (`cat`, `sed`, `grep`),
-which is no edge case: a harness mode that steers reading to the shell makes it the common
-path. Not the `Write` that creates a matching file either
+**What loads it, verified in Claude Code on 2026-08-29 and worth re-measuring — read a
+matching file with the read tool, then with `sed`, and watch which one injects the rule:**
+the read tool, in a subagent as much as a main session. Not a shell read (`cat`, `sed`,
+`grep`), which is no edge case: a harness mode that steers reading to the shell makes it
+the common path. Not the `Write` that creates a matching file either
 ([anthropics/claude-code#23478](https://github.com/anthropics/claude-code/issues/23478),
 closed as not planned), so a rule reaches a new file only through whatever read comes
 after it — and where a breach is authored file-first with nothing read beforehand, it
