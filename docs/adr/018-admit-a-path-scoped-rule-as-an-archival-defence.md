@@ -149,13 +149,14 @@ lookup will match.
   that path alone, so removing it stops every rule loading, and says nothing. Measured by
   parking the symlink and re-reading a matching test file, which injected nothing.
 - Option 4's risk overstated the cost, measured later: a rule loads once per session at the
-  first matching read, not once per matching read. ADR 019 carries the measurement and the
+  first matching read, not once per matching read. [ADR 019][] carries the measurement and the
   decision it settled; this one's reasoning is unchanged, Option 4 having lost on the
   judgement a generator cannot make.
 
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: 014-cite-adrs-from-code-comments.md
 [ADR 016]: 016-anchor-every-default-path-to-the-module.md
+[ADR 019]: 019-do-not-generate-path-scoped-rules-from-adr-frontmatter.md
 [anthropics/claude-code#23478]: https://github.com/anthropics/claude-code/issues/23478
 [filters-pydantic ADR 004]: https://github.com/todofixthis/filters-pydantic/blob/main/docs/adr/004-docstring-per-test-function.md
 [`generate_index.py`]: ../../scripts/adr/generate_index.py
