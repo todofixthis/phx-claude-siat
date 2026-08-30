@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-08-30
 scope: [.agents/rules/, docs/adr/, scripts/adr/, skills/writing-adrs/]
 summary: Do not generate path-scoped rule files from ADR frontmatter at any granularity; a hand-written rule stating a constraint stays welcome, and INDEX.md with the `--for` lookup remains how a path reaches the decisions binding it.
-revisit-when: A harness loads a path-scoped rule on the creation of a matching file or on a shell read, so what a rule reaches stops depending on how a session happens to read; or an agent is found breaching a decision a generated rule would have put in front of it.
+revisit-when: A harness loads a path-scoped rule on the creation of a matching file or on a shell read, so what a rule reaches stops depending on how a session happens to read; or the mandated index read is found not to be happening, leaving no complete route for a generated one to displace.
 ---
 
 # 019: Do not generate path-scoped rules from ADR frontmatter
@@ -28,86 +28,83 @@ read pulls in prose nobody wrote", overstates the cost: it is once per rule, per
 What does not load is unchanged from 018 — the `Write` creating a matching file, and any
 read from a shell.
 
-Everything the proposal needs therefore works, and costs less than 018 recorded.
+Everything the proposal needs therefore works.
 
 ## Options
 
 ### Option 1: Do nothing (Accepted)
 
-[`INDEX.md`][] read on demand, the `--for` lookup from a path, and a hand-written rule where an
-area earns one, as [`testing.md`][] does today for [ADR 016][].
+[`INDEX.md`][] read as `AGENTS.md` requires, the `--for` lookup from a path, and a
+hand-written rule where an area earns one, as [`testing.md`][] does today for [ADR 016][].
 
-**Pros:** One representation of a decision's row, so nothing can disagree with it.
+Extending those hand-written rules to every scoped area, as a programme rather than one
+area at a time, is the same approach at a different scale: prose per area with nothing
+forcing it to keep up, and partial coverage indistinguishable from finished coverage. It is
+not a separate option, and one area at a time is what this one already is.
+
+**Pros:** One representation of a decision's row, and an instruction to read it that holds
+whatever the tooling does.
 **Cons:** The prefix-matching error `AGENTS.md` warns about stays the reader's to avoid
-unaided. The one reverse route that fires without being asked for — `--for`, from the
-pre-commit hook — runs over staged paths, so it arrives after the work is authored, which is
-the timing the skill rejects when the same shape is offered as an archival defence.
-**Risks:** A reader who never runs the lookup and never opens the index meets no decision at
-all, and nothing reports that.
+unaided. `--for` runs over staged paths, so the one reverse route that fires unasked arrives
+after the work is authored — the timing the skill rejects when the same shape is offered as
+an archival defence — and its silence is ambiguous, meaning equally that nothing binds, that
+the hook was never installed, or that the generator failed into `|| exit 0`.
+**Risks:** The whole route rests on an instruction being followed, and nothing reports the
+reader who does not.
 
 ### Option 2: Generate rules from ADR frontmatter
 
 The generator writes rule files whose `paths` cover scoped paths and whose bodies list the
-decisions binding them, at one of three granularities:
+decisions binding them. Granularity trades precision against the shape of the tree, and
+neither end escapes both:
 
-- **Per distinct `scope` entry** — the most precise and the most files; the eighteen
-  decisions in force here name twenty-two entries between them, and the count grows with
-  scope breadth rather than with anything a reader wants.
-- **Per top-level directory** — around eight files here, bounded by the repository's shape
-  rather than by the corpus, and still narrowing eighteen decisions to the four binding
-  `scripts/`. This is the strongest form, and the one the option is judged as.
-- **One file covering every bound path** — one file, and every row on a touch of anything,
-  which is `INDEX.md` with a trigger attached.
+- **Per distinct `scope` entry** — exact, and the most files: the eighteen decisions in
+  force here name twenty-two entries between them. File count is hygiene rather than a
+  reader's cost, since an unmatched rule loads nothing, so this end is the precise one.
+- **Per top-level directory** — bounded by the repository rather than by the corpus, about
+  eight files here, but it cannot tell `scripts/adr/` from `scripts/ci/`. Complete, it
+  carries every decision naming anything beneath the directory — ten of the eighteen, for
+  `scripts/`. Incomplete, it is silently partial.
+- **One file covering every bound path** — one file, every row on a touch of anything, which
+  is `INDEX.md` with a trigger attached.
 
 **Pros:** The decisions binding a file arrive while it is being read, before the work is
-authored — earlier than `--for` can reach anyone. Prefixes become globs mechanically,
-retiring a translation 018 books as a cost on the author. Generated files cost a session
-that never touches them nothing at all, loading only on a match.
-**Cons:** A route that usually delivers displaces the one that always does.
+authored, which `--for` cannot reach anyone in time to do. Prefixes become globs
+mechanically, retiring a translation 018 books as a cost on the author.
+**Cons:** An automatic partial route displaces a mandated complete one.
 **Risks:** `.agents/rules/` becomes half authored and half generated, and a hand edit to a
 generated file is regenerated away without a word.
-
-### Option 3: Author a rule per scoped area by hand
-
-Extend what `testing.md` does — prose stating the constraint and citing the decision — to
-every area a decision binds, as a programme rather than where a rule is felt to be earned.
-
-**Pros:** Each file says what to do rather than what was decided, so it can defend an
-archival, which no generated pointer can.
-**Cons:** Prose per area, written and maintained by hand, drifting from its ADR with nothing
-to catch it — the failure 018 avoids by requiring the rule and the archival in one change.
-**Risks:** The programme is as large as the corpus and has no forcing function, so partial
-coverage looks exactly like finished coverage.
 
 ## Decision
 
 Do nothing.
 
-The measurements clear Option 2 of the objections easiest to make. The layout works, the
-files are small, and they cost nothing to a session that never touches them — so their
-number is a question of repository hygiene rather than of a reader's context, and the
-bounded granularity keeps even that in proportion. On delivery alone Option 2 beats the
-accepted option, and says so above: it reaches an author while they are reading, where
-`--for` reaches them only once they stage.
+The measurements clear Option 2 of the objections easiest to make. The layout works, and an
+unmatched rule loads nothing, so file count is a question of repository hygiene rather than
+of a reader's context. On delivery Option 2 beats the accepted option outright: it reaches
+an author while they are reading, where `--for` reaches them only once they stage.
 
-What decides it is displacement. An agent handed the decisions binding the file in front of
-it has been given a reason not to run the lookup and not to open the index — and cannot tell
-from inside the session whether what it was handed is everything or nothing, because a
-session that reads from a shell receives no rule and no notice that it received none. The
-complete route stays available in principle and stops being taken in practice, which is how
-a partial mechanism ends up subtracting. [ADR 014][] rejected a check on the same shape: one
-that reports a defended corpus and is believed is worse than none.
+What decides it is displacement, and the thing displaced is an instruction rather than a
+habit. `AGENTS.md` requires reading `INDEX.md` and working out from its Scope column which
+decisions cover the files being changed. An agent handed the decisions naming the path in
+front of it has been given every reason to treat that instruction as already discharged, and
+no way to tell from inside the session whether what it holds is everything, part, or — in a
+session that read from a shell — nothing at all. [ADR 014][] turned down a check on that
+shape: one reporting a defended corpus is worse than none, being believed.
 
-That the accepted option's own reverse route arrives late is the honest price of this, and
-it is not the same failure. `--for` is late and legible: it prints what binds the staged
-paths, or prints nothing because nothing does. A generated rule is early and silent, and
-silence there is indistinguishable from coverage.
+The obvious repair is a line in each generated file saying it may be incomplete and the
+lookup should still be run. That is the strongest form of the option, and it splits on the
+granularity above rather than surviving it. Made exact, the file is complete for the paths
+it names and the disclaimer carries the rest, so what is delivered is the index read it was
+meant to save. Made bounded, the file cannot be both complete and precise: ten decisions of
+eighteen on a touch of anything under `scripts/`, or fewer and quietly so. Either way the
+mandated read is still owed, and the thing that made the mechanism attractive was that it
+would not be.
 
-Option 3 is not so much rejected as unscheduled. It is what `testing.md` already is, and
-each such rule is worth more than any generated file, only prose stating a constraint being
-able to defend an archival. As a programme it buys that at the price of hand-written prose
-per area with nothing forcing it to keep up; taken one area at a time, as an area earns it,
-it keeps the value without the programme — which is Option 1.
+That `--for` arrives late is the honest price of the accepted option, and it is not the same
+failure, because `--for` is not what Option 1 rests on. The unconditional route is the
+instruction to read the index, which depends on no hook firing and no glob matching. The
+hook is an aid on top of it; the generated rule would be an aid that erodes it.
 
 ## Consequences
 
@@ -116,13 +113,13 @@ it keeps the value without the programme — which is Option 1.
 - Scoping `skills/writing-adrs/` and `.agents/rules/` means an edit to the skill's rule
   section, or to a rules file, reports this decision alongside those already binding them.
   Both are where the guidance to generate these would be written.
-- 018's Option 4 risk overstated the context cost, and its Option 4 con — that a `summary`
-  says what was decided rather than what to do — stands, the bar there being a defence.
-  018 keeps its status and gains a Consequences bullet pointing here.
-- That bullet is a fifth kind of edit to a settled ADR, beside the four [`writing-adrs`][]
-  names: correcting a factual premise a later measurement falsified, without touching the
-  reasoning or the status. Recorded so the next author has a precedent rather than a
-  judgement call.
+- 018 keeps its status and gains a Consequences bullet pointing here, its Option 4 con —
+  that a `summary` says what was decided rather than what to do — standing untouched, the
+  bar there being a defence rather than delivery.
+- That is a kind of edit to a settled ADR [`writing-adrs`][] does not name: correcting a
+  premise a later measurement falsified, leaving the reasoning and the status alone. Like
+  the workflows it does name, it marks the body where the premise is set out and not only
+  the frontmatter, the body being what a reader of that ADR meets.
 - Every delivery claim above rests on the `.claude/rules` symlink 018 found load-bearing.
   Without it nothing loads, so a repository laid out differently has no version of this
   proposal to weigh.
