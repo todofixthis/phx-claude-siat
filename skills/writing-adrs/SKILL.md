@@ -183,9 +183,11 @@ the read tool, in a subagent as much as a main session. Not a shell read (`cat`,
 `grep`), which is no edge case: a harness mode that steers reading to the shell makes it
 the common path. Not the `Write` that creates a matching file either
 ([anthropics/claude-code#23478](https://github.com/anthropics/claude-code/issues/23478),
-closed as not planned), so a rule reaches a new file only through whatever read comes
-after it — and where a breach is authored file-first with nothing read beforehand, it
-arrives after the work and defends nothing.
+closed as not planned). A rule loads once per session, at the first read matching its
+globs, and stays — so any earlier read under the scope covers the work that follows,
+including files created after it. The gap is narrower than the `Write` one sounds, and
+real: where a breach is authored file-first with nothing under the scope read beforehand,
+the rule arrives after the work and defends nothing.
 
 ## Linking references
 

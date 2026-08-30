@@ -148,6 +148,10 @@ lookup will match.
 - The `.claude/rules` symlink is load-bearing here rather than tidying: Claude Code scans
   that path alone, so removing it stops every rule loading, and says nothing. Measured by
   parking the symlink and re-reading a matching test file, which injected nothing.
+- Option 4's risk overstated the cost, measured later: a rule loads once per session at the
+  first matching read, not once per matching read. ADR 019 carries the measurement and the
+  decision it settled; this one's reasoning is unchanged, Option 4 having lost on the
+  judgement a generator cannot make.
 
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: 014-cite-adrs-from-code-comments.md
