@@ -102,9 +102,10 @@ that directory with files carrying less.
 - The measurements are the durable result and live here, where the next person proposing
   this will look: nested directories load, several matching rules load together, and a
   rule loads once per session at the first matching read.
-- `writing-adrs` gains that last fact, which softens the gap it records around files created
-  new: a rule loaded by any earlier read in the session covers the work that follows, so the
-  gap closes for a session that reads anything under the scope before writing.
+- `writing-adrs` gains that last fact, which softens the gap it records around files
+  created new: one read matching the rule's globs covers the work that follows it. That is
+  the globs and not the `scope` — the two differ wherever the translation between them was
+  loose, which is the case the skill already warns about.
 - 018's Option 4 risk overstated the context cost. Its decision does not rest on that line —
 that option lost on the judgement a generator cannot make — so 018 keeps its status and
 gains a pointer here rather than an edit to its reasoning. Its Option 4 con, that a
