@@ -79,7 +79,10 @@ After saving the plan, run a review loop (max 3 iterations) before offering exec
    - The plan file path (the reviewer reads the plan directly — this covers the Intentional Decisions section and any prior fixes)
    - A concise spec summary (valid/invalid configurations — this is external to the plan and needed for coverage checks)
    - Instruction to read the files named in the plan's File Map for codebase context
+   - Where a task names a runnable command (build, lint, type-check, test, a CI step, a bake-and-validate step, ...): instruction to run it in the worktree named in the plan header, not just read it
    - Output format: categorise as **blocker** / **minor** / **suggestion** with quoted plan text and specific fix
+
+   A command that fails only because the task's own code doesn't exist yet isn't a blocker — that's expected before implementation. One that fails to run at all (a bad path, an unknown flag, missing config) is: reading a plan can't catch a broken verification step, only running it does.
 
 2. Fix all **blocker**-severity findings in the plan.
 
@@ -87,4 +90,8 @@ After saving the plan, run a review loop (max 3 iterations) before offering exec
 
 4. If any blockers were fixed, run another iteration (up to the 3-iteration cap).
 
-**Stop** when the reviewer finds no blockers, or after 3 iterations — whichever comes first. Only then offer the execution handoff.
+**Stop** when the reviewer finds no blockers, or after 3 iterations — whichever comes first. Only then offer the execution handoff (skipped in the case below).
+
+## Additional Convention: Execution Mode for Fully-Detailed Plans
+
+Skip the base skill's Execution Handoff question when every task is fully mechanical: file contents are written out in full, and every remaining step is a literal instruction (apply this diff, run this command) with no discovery, interpretation, or decision left to the executor. Default to Inline Execution instead of asking. A fresh subagent per task adds overhead without adding judgement when there's nothing left for it to work out; reserve subagent-driven-development for a plan where some task still leaves the executor a real decision, even one whose file contents are otherwise complete.
