@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-09-01
 scope: [.github/workflows/pr.yml]
 summary: Run `pr.yml`'s `adr` job on every pull request rather than gating it on `docs/adr/` or `scripts/` changing, so a `scope` entry left dangling by an unrelated rename fails at that PR rather than a later, unrelated one.
-revisit-when: The job's runtime grows enough to matter across every PR, or Option 3's session-time hooks are built and taken as the authoritative check instead.
+revisit-when: The job's runtime grows enough to matter across every PR, or a session-time hook system for `writing-adrs` is built and taken as the authoritative check instead.
 ---
 
 # 021: Validate ADR scope on every pull request
