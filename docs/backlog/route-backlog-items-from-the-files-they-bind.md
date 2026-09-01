@@ -1,6 +1,6 @@
 # Route backlog items from the files they bind
 
-> Recorded 2026-08-28, from the reviews of [ADR 018][]. Never filed as a GitHub issue.
+> Recorded 2026-08-28, from the reviews of [ADR 020][]. Never filed as a GitHub issue.
 
 ## What
 
@@ -10,7 +10,7 @@ having to think to look.
 
 ## Why
 
-ADR 018's whole argument is reach. Deferred work failed in the issue tracker because
+ADR 020's whole argument is reach. Deferred work failed in the issue tracker because
 nothing sent a reader there at the moment it mattered — the same gap [ADR 013][] closed
 for decisions with `scope`, and [ADR 014][] closed for the sites they bind, with comments.
 
@@ -40,11 +40,11 @@ in `docs/backlog/`.
 
 - A staged change under a path an item scopes reports that item at commit time, by path.
 - A backlog item naming a path that no longer exists does not fail the build.
-- The ADR recording the mechanism supersedes ADR 018, whose Consequences state the gap
+- The ADR recording the mechanism supersedes ADR 020, whose Consequences state the gap
   as standing. Editing that statement in place would breach supersede-don't-edit.
 
 [ADR 013]: ../adr/013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: ../adr/014-cite-adrs-from-code-comments.md
-[ADR 018]: ../adr/018-track-deferred-work-in-the-repository.md
+[ADR 020]: ../adr/020-track-deferred-work-in-the-repository.md
 [`.githooks/pre-commit`]: ../../.githooks/pre-commit
 [`generate_index.py`]: ../../scripts/adr/generate_index.py

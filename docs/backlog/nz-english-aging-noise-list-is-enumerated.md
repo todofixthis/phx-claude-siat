@@ -17,7 +17,7 @@ has met — `imaging`, `managing`, `messaging`, `packaging`, `staging` — and e
 
 ```
 $ python3 skills/nz-english/scan.py docs/adr
-018-track-deferred-work-in-the-repository.md:6  aging  triaging
+020-track-deferred-work-in-the-repository.md:6  aging  triaging
 ```
 
 `triaging` is correct as it stands: it comes from *triage*, and `ageing` is not the

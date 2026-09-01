@@ -6,7 +6,7 @@ summary: Record deferred work as files under docs/backlog/, leaving the GitHub i
 revisit-when: A second person needs to see what is deferred without cloning, or bug reports start arriving in the tracker and need triaging beside deferred work.
 ---
 
-# 018: Track Deferred Work in the Repository
+# 020: Track Deferred Work in the Repository
 
 ## Context
 

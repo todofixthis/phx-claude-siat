@@ -1,6 +1,6 @@
 # Archival defences that rest on AGENTS.md are a third class the skill does not describe
 
-> Recorded 2026-09-01, from an attempt to archive ADRs 011 and 018 on the ground that
+> Recorded 2026-09-01, from an attempt to archive ADRs 011 and 020 on the ground that
 > `AGENTS.md` is always loaded. Never filed as a GitHub issue.
 
 ## What
@@ -60,7 +60,7 @@ Both candidate archivals were reverted, for reasons specific to each ADR rather 
 defence class — so the class itself is still untested, and the next session to notice that
 `AGENTS.md` restates a decision will reach for it again. Two ADRs already sit close: 011,
 whose `## Python` bullet states the package rule but forbids none of its rejected options,
-and 018, whose `## Deferred work` section covers every rejected option but whose live
+and 020, whose `## Deferred work` section covers every rejected option but whose live
 `revisit-when` would leave the index's Revisit column with nothing carrying it.
 
 That second one generalises past this class: **archiving un-publishes a live revisit

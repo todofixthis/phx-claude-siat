@@ -1,6 +1,6 @@
 # Backlog
 
-Deferred work, one file per item. Deferred work is never a GitHub issue here (ADR 018), so
+Deferred work, one file per item. Deferred work is never a GitHub issue here (ADR 020), so
 an item that is not in this directory is not recorded anywhere.
 
 Read this directory before starting on an area — nothing routes you to it, and

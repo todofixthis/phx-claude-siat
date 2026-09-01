@@ -84,7 +84,7 @@ extended here to specs. Anything in one still worth keeping earns an ADR, not a 
 
 ## Deferred work
 
-**Deferred work is never a GitHub issue here (ADR 018).** The tracker stays enabled — for
+**Deferred work is never a GitHub issue here (ADR 020).** The tracker stays enabled — for
 Renovate's dependency dashboard, and so a user who installed the plugin has a channel — so
 nothing stops you filing one, and `gh issue` will not fail to tell you otherwise. That is
 why this is stated as a prohibition: an issue you file is a note no future session will
@@ -120,7 +120,7 @@ erroring. Read what a number is before closing anything.
 Before proposing architectural or tooling changes, read `docs/adr/INDEX.md` and don't
 relitigate settled decisions; open an individual ADR only for its full rationale.
 Record significant decisions as a new ADR via the `phx:writing-adrs` skill. Its Format
-template does not include `## Revisit watch`, which is repo-local (ADR 018) — keep one
+template does not include `## Revisit watch`, which is repo-local (ADR 020) — keep one
 you find rather than reading it as non-conforming, and add one where Deferred work above
 says to.
 

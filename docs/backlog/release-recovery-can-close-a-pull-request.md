@@ -1,6 +1,6 @@
 # The release recovery path can close a pull request instead of an issue
 
-> Recorded 2026-08-28, found while writing [ADR 018][]. Never filed as a GitHub issue.
+> Recorded 2026-08-28, found while writing [ADR 020][]. Never filed as a GitHub issue.
 
 ## What
 
@@ -22,7 +22,7 @@ $ gh issue view 37 --json number,title
 So a session following the bullet against an unmerged pull request would close it and
 comment on it, then report the step done.
 
-ADR 018 makes this likelier rather than rarer: deferred work no longer becomes an issue, so
+ADR 020 makes this likelier rather than rarer: deferred work no longer becomes an issue, so
 a `#NNN` in the notes is now almost always a pull request.
 
 ## Why it is still worth doing
@@ -45,6 +45,6 @@ harmless is also what stops anyone noticing it.
 - `phx:writing-release-notes` is untouched: it ships to consumers, and how they close
   references is theirs.
 
-[ADR 018]: ../adr/018-track-deferred-work-in-the-repository.md
+[ADR 020]: ../adr/020-track-deferred-work-in-the-repository.md
 [`phx:writing-release-notes`]: ../../skills/writing-release-notes/SKILL.md
 [`releasing`]: ../../.agents/skills/releasing/SKILL.md
