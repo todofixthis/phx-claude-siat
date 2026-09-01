@@ -119,7 +119,10 @@ erroring. Read what a number is before closing anything.
 
 Before proposing architectural or tooling changes, read `docs/adr/INDEX.md` and don't
 relitigate settled decisions; open an individual ADR only for its full rationale.
-Record significant decisions as a new ADR via the `phx:writing-adrs` skill.
+Record significant decisions as a new ADR via the `phx:writing-adrs` skill. Its Format
+template does not include `## Revisit watch`, which is repo-local (ADR 018) — keep one
+you find rather than reading it as non-conforming, and add one where Deferred work above
+says to.
 
 Work out which decisions cover the files you are changing from `INDEX.md`'s Scope column
 (ADR 013). **Entries are exact paths or directory prefixes ending in `/`, never globs, and
