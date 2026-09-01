@@ -82,11 +82,47 @@ is in flight so a fresh session can resume mid-branch, then **delete on the same
 before the PR is created** — the rule `phx:writing-plans` already applies to plans,
 extended here to specs. Anything in one still worth keeping earns an ADR, not a reprieve.
 
+## Deferred work
+
+**Deferred work is never a GitHub issue here (ADR 020).** The tracker stays enabled — for
+Renovate's dependency dashboard, and so a user who installed the plugin has a channel — so
+nothing stops you filing one, and `gh issue` will not fail to tell you otherwise. That is
+why this is stated as a prohibition: an issue you file is a note no future session will
+read, because nothing sends an agent to the tracker.
+
+Asked to "file an issue for that", write the backlog file instead and say that is what you
+did and why. Do it their way only if they say so again, having heard that.
+
+Work you defer goes in `docs/backlog/<slug>.md`, one file per item, saying where it came
+from, what the work is, why it is still worth doing, and what would count as done —
+`docs/backlog/README.md` fixes the shape. That is the default, a
+one-line defect in a single file included. Three cases override it: a condition that would
+reopen a settled decision belongs in that ADR's `revisit-when`; a finding about whether
+such a condition has fired belongs in a `## Revisit watch` section in that ADR's body,
+since `revisit-when` holds the condition rather than the finding about it; and a constraint
+a future editor must meet belongs in a comment where they will meet it.
+
+**Read the backlog before starting on an area, not only when deferring from one.** Nothing
+routes you there: no hook, no index, no Scope column. `rg <area> docs/backlog/` is the
+whole mechanism, which works only because every item names the paths it binds in its prose
+— so name them in one you write, or it is unfindable. The pre-commit hook does report the
+ADRs binding a staged path, but it fires once the change is written and names only their
+titles, so a `## Revisit watch` inside one arrives late and unannounced.
+
+Delete an item on the branch that finishes its work. Nothing checks for stale items.
+
+The reason `gh issue` cannot warn you: `view` and `close` resolve **pull-request** numbers
+through the same endpoint, so a `#NNN` handed to either reaches a pull request rather than
+erroring. Read what a number is before closing anything.
+
 ## Architecture Decision Records
 
 Before proposing architectural or tooling changes, read `docs/adr/INDEX.md` and don't
 relitigate settled decisions; open an individual ADR only for its full rationale.
-Record significant decisions as a new ADR via the `phx:writing-adrs` skill.
+Record significant decisions as a new ADR via the `phx:writing-adrs` skill. Its Format
+template does not include `## Revisit watch`, which is repo-local (ADR 020) — keep one
+you find rather than reading it as non-conforming, and add one where Deferred work above
+says to.
 
 Work out which decisions cover the files you are changing from `INDEX.md`'s Scope column
 (ADR 013). **Entries are exact paths or directory prefixes ending in `/`, never globs, and
