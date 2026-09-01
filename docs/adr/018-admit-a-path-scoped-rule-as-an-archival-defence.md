@@ -154,6 +154,53 @@ lookup will match.
   and the decision it settled; this one's reasoning is unchanged, Option 4 having lost on
   the judgement a generator cannot make.
 
+## Revisit watch
+
+Re-measured 2026-09-01 against `testing.md`, whose globs are `**/test_*.py` and
+`**/*_test.py`. The matching file was `scripts/adr/test_generate_index.py`, the
+non-matching one `scripts/adr/generate_index.py` beside it; each reader then reported what
+had arrived unasked, without opening anything under `.agents/`. Each was also asked for a
+Python line-length rule this repo does not have and said it had none, so the "yes" rows are
+not readers agreeing with the question:
+
+| Reader, tool, file | Rule loaded |
+|---|---|
+| Subagent, read tool, matching | yes — nine headings quoted correctly |
+| Subagent, read tool, non-matching | no |
+| Subagent, `sed -n '1,60p'`, matching | no |
+| Main session, read tool, matching | yes |
+
+Re-running this needs **one fresh context per arm**: a rule loads once per session at the
+first matching read (ADR 019), so arms sharing a context return a spurious yes for whatever
+follows the first.
+
+**Limb 1 — an archival on a rule — is the limb the reader of this section is standing on.**
+It has not fired: nothing here is `Archived` on a rule yet. When yours does, it fires, and
+what it unlocks is Option 3, which the Decision parks precisely because what a coverage
+check "should do with a rule that legitimately stops short has to be settled against a real
+archival, and there is none here". Yours is that case, so settle it rather than only
+re-running the probe.
+
+**Limb 2's first clause — rules ceasing to load in a subagent — has not fired.** The
+subagent arm still loads, and the main-session arm is measured here rather than carried
+over from Context.
+
+**Limb 2's second clause — shell-first reading becoming the default — is live and
+unsettled.** This session ran under a standing instruction, which the harness itself calls
+auto mode, to prefer `cat`, `head` and `sed -n` over the read tool wherever they would do;
+it is the same mode the original measurement ran under, and the second session known to
+run under it. That is enough to say the mode is not a one-off and not enough to call it a
+default: two observations by one author in one repository under one harness configuration
+are not independent samples, and counting further ones the same way never settles it. What
+would: the mode documented as a harness default, or it arriving in a session that did not
+opt into it.
+
+Until then the hazard is per-session rather than global, and it bites at a bar of one.
+**Before you rely on a rule as a defence, check whether your own session is shell-first**
+— under it you read a matching file with `sed`, meet nothing, and the decision you archived
+is undefended for that whole session with nothing reporting it. The third arm above is that
+case exactly.
+
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: 014-cite-adrs-from-code-comments.md
 [ADR 016]: 016-anchor-every-default-path-to-the-module.md
