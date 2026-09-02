@@ -143,11 +143,14 @@ Three steps a green conclusion does not cover:
   gh api /repos/{owner}/{repo}/issues/<NNN> --jq 'has("pull_request")'
   ```
 
-  Read the exit code first: non-zero means the lookup did not answer — a cross-repo or
-  stale reference, or a call that failed — so check that number by hand, never close
-  it. Then `true` is a
-  pull request, so leave it alone, and `false` is an issue to close with a link to the
-  Release: `gh issue close <NNN> --comment "Released in X.Y.Z: <release-url>"`.
+  Read the exit code first: non-zero means the lookup did not answer — a stale reference or
+  a failed call — so check that number by hand and never close it. A zero exit answers for
+  **this** repository and nothing else: issues and pull requests share one number sequence
+  per repository, so a bare `#NNN` that means another repo's issue resolves here to
+  whatever local object holds that number, and answers confidently about the wrong one.
+  Confirm the reference is ours before acting on it. Then `true` is a pull request, so
+  leave it alone, and `false` is an issue to close with a link to the Release:
+  `gh issue close <NNN> --comment "Released in X.Y.Z: <release-url>"`.
 
 ### If the run fails
 
@@ -174,9 +177,8 @@ for when it cannot run at all:
 - **Back-merge missing?** From `develop`: `git fetch origin && git merge --no-edit origin/main && git push`.
   Verify on the remote:
   `git fetch origin && git merge-base --is-ancestor origin/main origin/develop`.
-
-A release finished by hand still owes the steps under **After a successful run**; nothing
-on this path passes through them.
+- **Steps still owed.** Nothing on this path passes through **After a successful run**, so
+  a release finished by hand has done none of them. Go back and work that section.
 
 ## Validation gate
 
