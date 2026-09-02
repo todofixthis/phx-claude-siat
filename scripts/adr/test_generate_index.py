@@ -545,8 +545,8 @@ class GenerateFailureTests(AdrDirTestCase):
         self.write("001-first.md", adr(title="1: Do the thing"))
         self.write("001-second.md", adr(title="1: Do another thing"))
         self.assert_rejected(
-            "001-second.md shares its number with 001-first.md; renumber whichever has "
-            "not merged, since a merged number is already referenced and cannot move"
+            "001-second.md shares its number with 001-first.md; renumber whichever number "
+            "nothing cites yet, since a number already cited cannot move"
         )
 
     def test_every_later_claimant_names_the_first(self):

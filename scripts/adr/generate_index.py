@@ -233,6 +233,9 @@ def generate(adr_dir: Path, repo_root: Path) -> int:
         # way. A Superseded ADR is left alone, since editing one is forbidden.
         if not problems and fields["status"] in BINDING_STATUSES:
             problems = scope_problems(fields[SCOPE_FIELD], repo_root)
+        # The message asks which number is cited rather than which has merged: the two
+        # usually agree, but a branch open long enough to collide has usually cited its own
+        # ADR already. phx:writing-adrs sets out the test and the renumbering procedure.
         # Renumbering an ADR is two edits — the filename and the heading — and the index
         # takes its number from the first and its title from the second, so a half-done one
         # renders a row that is self-consistent and names the wrong decision. Compared by
@@ -249,8 +252,8 @@ def generate(adr_dir: Path, repo_root: Path) -> int:
         claimant = claimed_numbers.setdefault(int(number), path.name)
         if claimant != path.name:
             problems.append(
-                f"shares its number with {claimant}; renumber whichever has not merged, "
-                "since a merged number is already referenced and cannot move"
+                f"shares its number with {claimant}; renumber whichever number nothing "
+                "cites yet, since a number already cited cannot move"
             )
         if problems:
             for problem in problems:
