@@ -56,6 +56,10 @@ ROWS = {
     "002-second.md": (
         f"| [002](002-second.md) | Accepted | Do another thing | {SCOPED_FILE} | A summary. |  |\n"
     ),
+    "002-supersedes-001.md": (
+        f"| [002](002-supersedes-001.md) | Accepted | Do another thing | {SCOPED_FILE} "
+        "| A summary. |  |\n"
+    ),
 }
 
 # A trigger short enough to read inside an asserted row, and recognisably a condition.
@@ -130,11 +134,11 @@ class ParseAdrTests(unittest.TestCase):
 
     def problems(self, content: str) -> list:
         """Return only the problems parse_adr found in one document."""
-        return parse_adr(content)[2]
+        return parse_adr(content)[3]
 
     def test_returns_no_problems_for_a_valid_adr(self):
         """The fields every other case mutates must themselves parse clean."""
-        fields, title, problems = parse_adr(adr())
+        fields, title, _, problems = parse_adr(adr())
         self.assertEqual(problems, [])
         self.assertEqual(title, "Do the thing")
         self.assertEqual(fields["status"], "Accepted")
@@ -150,12 +154,12 @@ class ParseAdrTests(unittest.TestCase):
 
     def test_strips_the_number_prefix_from_the_title(self):
         """The index column carries the title alone; the number is already its own column."""
-        _, title, _ = parse_adr(adr(title="7: Keep repo scripts stdlib-only"))
+        _, title, _, _ = parse_adr(adr(title="7: Keep repo scripts stdlib-only"))
         self.assertEqual(title, "Keep repo scripts stdlib-only")
 
     def test_keeps_a_title_that_has_no_number_prefix(self):
         """A title written without a number is left as it stands."""
-        _, title, _ = parse_adr(adr(title="Keep repo scripts stdlib-only"))
+        _, title, _, _ = parse_adr(adr(title="Keep repo scripts stdlib-only"))
         self.assertEqual(title, "Keep repo scripts stdlib-only")
 
     def test_propagates_frontmatter_problems(self):
@@ -177,13 +181,13 @@ class ParseAdrTests(unittest.TestCase):
     def test_a_horizontal_rule_does_not_extend_the_frontmatter(self):
         """Frontmatter ends at its own closing fence, not at a rule further down."""
         content = "---\nstatus: Accepted\n---\n\n# 1: Title\n\n---\n\nMore body.\n"
-        fields, title, _ = parse_adr(content)
+        fields, title, _, _ = parse_adr(content)
         self.assertEqual((fields, title), ({"status": "Accepted"}, "Title"))
 
     def test_the_first_heading_wins(self):
         """A later level-one heading cannot displace the ADR's own title."""
         content = "---\nstatus: Accepted\n---\n\n# 1: Real title\n\n# Later heading\n"
-        _, title, _ = parse_adr(content)
+        _, title, _, _ = parse_adr(content)
         self.assertEqual(title, "Real title")
 
     def test_rejects_an_unrecognised_status(self):
@@ -384,7 +388,10 @@ class GenerateTests(AdrDirTestCase):
         for status in HIDDEN_STATUSES:
             with self.subTest(status=status):
                 self.write_adrs("001-first.md")
-                self.write("002-hidden.md", adr(status=status, **{STATUS_FIELDS[status]: "12"}))
+                self.write(
+                    "002-hidden.md",
+                    adr(status=status, title="2: Do another thing", **{STATUS_FIELDS[status]: "12"}),
+                )
                 code, out, _ = self.run_generate()
                 self.assertEqual(code, 0)
                 self.assert_index_lists("001-first.md")
@@ -392,8 +399,8 @@ class GenerateTests(AdrDirTestCase):
 
     def test_orders_rows_by_file_number(self):
         """Zero-padded numbers sort as strings, so 009 must precede 010."""
-        self.write("010-later.md", adr())
-        self.write("009-earlier.md", adr())
+        self.write("010-later.md", adr(title="10: Do the thing"))
+        self.write("009-earlier.md", adr(title="9: Do the thing"))
         self.run_generate()
         rows = [line for line in self.index().splitlines() if line.startswith("| [")]
         self.assertEqual([row.split("]")[0] for row in rows], ["| [009", "| [010"])
@@ -447,6 +454,30 @@ class GenerateTests(AdrDirTestCase):
         self.write("001-first.md", adr(**{SCOPE_FIELD: f"[{SCOPED_FILE}, CHANGELOG.md]"}))
         self.run_generate()
         self.assertIn(f"| {SCOPED_FILE}, CHANGELOG.md |", self.index())
+
+    def test_a_number_inside_a_slug_is_not_a_collision(self):
+        """Only the filename's leading number identifies an ADR; one in a slug names another."""
+        self.write("001-first.md", adr(title="1: Do the thing"))
+        self.write("002-supersedes-001.md", adr(title="2: Do another thing"))
+        code, out, err = self.run_generate()
+        self.assertEqual((code, err), (0, ""))
+        self.assert_index_lists("001-first.md", "002-supersedes-001.md")
+        self.assertIn("(2 entries)", out)
+
+    def test_padding_is_not_a_disagreement_between_heading_and_filename(self):
+        """`ADR 1` names one decision however many zeros pad either spelling of it."""
+        self.write("001-first.md", adr(title="1: Do the thing"))
+        code, out, err = self.run_generate()
+        self.assertEqual((code, err), (0, ""))
+        self.assert_index_lists("001-first.md")
+        self.assertIn("(1 entries)", out)
+
+    def test_an_unnumbered_heading_is_left_to_the_existing_rules(self):
+        """With no number in the heading there is nothing to disagree with the filename."""
+        self.write("001-first.md", adr(title="Do the thing"))
+        code, _, err = self.run_generate()
+        self.assertEqual((code, err), (0, ""))
+        self.assert_index_lists("001-first.md")
 
     def test_is_idempotent(self):
         """The CI check diffs this file, so a second run must reproduce it exactly."""
@@ -508,6 +539,58 @@ class GenerateFailureTests(AdrDirTestCase):
         fields = {"archived-because": "A comment.", SCOPE_FIELD: "[scripts/gone.py]"}
         self.write("001-first.md", adr(status="Archived", **fields))
         self.assert_rejected("001-first.md scopes `scripts/gone.py`")
+
+    def test_rejects_two_adrs_sharing_a_number(self):
+        """Concurrent branches allocate the same number, and every reference is by number."""
+        self.write("001-first.md", adr(title="1: Do the thing"))
+        self.write("001-second.md", adr(title="1: Do another thing"))
+        self.assert_rejected(
+            "001-second.md shares its number with 001-first.md; renumber whichever has "
+            "not merged, since a merged number is already referenced and cannot move"
+        )
+
+    def test_every_later_claimant_names_the_first(self):
+        """Three on one number is two errors against the original, not a chain of blame."""
+        for name in ("001-first.md", "001-second.md", "001-third.md"):
+            self.write(name, adr(title="1: Do the thing"))
+        self.assert_rejected(
+            "001-second.md shares its number with 001-first.md",
+            "001-third.md shares its number with 001-first.md",
+        )
+
+    def test_a_collision_masks_none_of_the_files_own_problems(self):
+        """The collision is appended to the problems already found, not raised in place of them."""
+        self.write("001-first.md", adr(title="1: Do the thing"))
+        self.write("001-second.md", adr(status="Draft", title="1: Do another thing"))
+        self.assert_rejected(
+            "001-second.md has status 'Draft'",
+            "001-second.md shares its number with 001-first.md",
+        )
+
+    def test_padding_does_not_hide_a_collision(self):
+        """`ADR 1` names one decision however its file spells the number."""
+        self.write("001-first.md", adr(title="1: Do the thing"))
+        self.write("1-second.md", adr(title="1: Do another thing"))
+        self.assert_rejected("1-second.md shares its number with 001-first.md")
+
+    def test_detects_a_collision_with_an_adr_the_index_hides(self):
+        """A hidden ADR leaves the index but keeps its number, so the clash still stands."""
+        for status in HIDDEN_STATUSES:
+            with self.subTest(status=status):
+                self.write(
+                    "001-hidden.md",
+                    adr(status=status, title="1: Do the thing", **{STATUS_FIELDS[status]: "12"}),
+                )
+                self.write("001-visible.md", adr(title="1: Do another thing"))
+                self.assert_rejected("001-visible.md shares its number with 001-hidden.md")
+
+    def test_rejects_a_heading_numbered_differently_from_its_filename(self):
+        """Renumbering is two edits, and the index takes the number and the title from each."""
+        self.write("002-second.md", adr(title="1: Do another thing"))
+        self.assert_rejected(
+            "002-second.md is numbered 002 by its filename and 1 by its heading; make them "
+            "agree, since the index takes the number from one and the title from the other"
+        )
 
     def test_leaves_the_scope_of_a_superseded_adr_alone(self):
         """Editing a superseded ADR is forbidden, so checking one could only deadlock the build."""

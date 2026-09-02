@@ -80,11 +80,15 @@ RE_ADR_FILENAME = re.compile(r"^\d+-.*\.md$")
 RE_FILE_NUMBER = re.compile(r"^(\d+)")
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
 RE_H1_TITLE = re.compile(r"^# (.+)$", re.MULTILINE)
-RE_NUMBER_PREFIX = re.compile(r"^\d+:\s*")
+RE_NUMBER_PREFIX = re.compile(r"^(\d+):\s*")
 
 
-def parse_adr(content: str) -> tuple[dict, str, list[str]]:
-    """Return (frontmatter, title, problems) for one ADR document.
+def parse_adr(content: str) -> tuple[dict, str, str | None, list[str]]:
+    """Return (frontmatter, title, heading number, problems) for one ADR document.
+
+    The heading number is returned rather than checked here: agreeing with the filename is
+    not a rule a document satisfies by itself, and this function is given no filename. The
+    caller correlates the two.
 
     Every rule a document must satisfy to be an ADR is checked here rather than split
     with the caller, which then only decides what to do with a file that has problems.
@@ -96,13 +100,18 @@ def parse_adr(content: str) -> tuple[dict, str, list[str]]:
     """
     match = RE_FRONTMATTER.match(content)
     if not match:
-        return {}, "", ["has no frontmatter block"]
+        return {}, "", None, ["has no frontmatter block"]
 
     fields, problems = parse_frontmatter(match.group(1))
 
     title_match = RE_H1_TITLE.search(match.group(2))
+    heading_number = None
     if title_match:
-        title = RE_NUMBER_PREFIX.sub("", title_match.group(1).strip())
+        heading = title_match.group(1).strip()
+        number_match = RE_NUMBER_PREFIX.match(heading)
+        if number_match:
+            heading_number = number_match.group(1)
+        title = RE_NUMBER_PREFIX.sub("", heading)
     else:
         title = ""
         problems.append("has no level-one title heading")
@@ -139,7 +148,7 @@ def parse_adr(content: str) -> tuple[dict, str, list[str]]:
             f"declares `{SCOPE_FIELD}` as a scalar; write it as an inline list, e.g. "
             f"`{SCOPE_FIELD}: [scripts/, CHANGELOG.md]`"
         )
-    return fields, title, problems
+    return fields, title, heading_number, problems
 
 
 def scope_problems(entries: list[str], repo_root: Path) -> list[str]:
@@ -193,6 +202,12 @@ def generate(adr_dir: Path, repo_root: Path) -> int:
 
     rows = []
     has_errors = False
+    # The first file seen to claim each number, so a second one can name it. Numbers are
+    # allocated by reading this directory at authoring time, so two open branches allocate
+    # the same one — and since every reference to a decision is by number, both files
+    # resolve and the wrong one reads as correct. Keyed by value rather than text: `ADR 1`
+    # names one decision however many zeros pad its filename.
+    claimed_numbers = {}
     for path in sorted(adr_dir.iterdir()):
         # Dot-files are editor and tooling debris, not documents anyone filed here.
         if path.name.startswith(".") or path.name == ADR_INDEX_FILENAME:
@@ -209,12 +224,34 @@ def generate(adr_dir: Path, repo_root: Path) -> int:
             has_errors = True
             continue
 
-        fields, title, problems = parse_adr(path.read_text(encoding="utf-8"))
+        # RE_ADR_FILENAME already required a leading number, so this always matches.
+        number = RE_FILE_NUMBER.match(path.name).group(1)
+
+        fields, title, heading_number, problems = parse_adr(path.read_text(encoding="utf-8"))
         # Scope is checked for every decision still in force, Archived ones included:
         # they are out of the index but not out of effect, and their paths rot the same
         # way. A Superseded ADR is left alone, since editing one is forbidden.
         if not problems and fields["status"] in BINDING_STATUSES:
             problems = scope_problems(fields[SCOPE_FIELD], repo_root)
+        # Renumbering an ADR is two edits — the filename and the heading — and the index
+        # takes its number from the first and its title from the second, so a half-done one
+        # renders a row that is self-consistent and names the wrong decision. Compared by
+        # value for the same reason the collision check is.
+        if heading_number is not None and int(heading_number) != int(number):
+            problems.append(
+                f"is numbered {number} by its filename and {heading_number} by its heading; "
+                "make them agree, since the index takes the number from one and the title "
+                "from the other"
+            )
+        # Checked here rather than in parse_adr, which sees one document at a time, and
+        # appended after the rules above so a collision masks none of them. A hidden
+        # status is no exemption: such an ADR leaves the index but keeps its number.
+        claimant = claimed_numbers.setdefault(int(number), path.name)
+        if claimant != path.name:
+            problems.append(
+                f"shares its number with {claimant}; renumber whichever has not merged, "
+                "since a merged number is already referenced and cannot move"
+            )
         if problems:
             for problem in problems:
                 print(f"Error: {path.name} {problem}", file=sys.stderr)
@@ -230,8 +267,6 @@ def generate(adr_dir: Path, repo_root: Path) -> int:
             "" if fields.get(REVISIT_DISCHARGED_BY_FIELD) else fields.get(REVISIT_WHEN_FIELD, "")
         )
 
-        # RE_ADR_FILENAME already required a leading number, so this always matches.
-        number = RE_FILE_NUMBER.match(path.name).group(1)
         rows.append(
             f"| [{number}]({path.name}) | {cell(fields['status'])} "
             f"| {cell(title)} | {cell(fields[SCOPE_FIELD])} "
@@ -279,7 +314,7 @@ def report_scoped_to(paths: list[str], adr_dir: Path, repo_root: Path) -> int:
     for path in sorted(adr_dir.iterdir()):
         if path.name.startswith(".") or not RE_ADR_FILENAME.match(path.name):
             continue
-        fields, title, problems = parse_adr(path.read_text(encoding="utf-8"))
+        fields, title, _, problems = parse_adr(path.read_text(encoding="utf-8"))
         # Say so rather than skipping: a malformed ADR silently binds nothing, and this
         # is the one place the lookup speaks, so an invisible gap here reads as "no
         # decision covers your change".
