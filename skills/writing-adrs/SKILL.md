@@ -108,7 +108,7 @@ truncated index row.
   - _Implementation details as options_ — if two options share the same core approach but differ in implementation, the variant belongs as a sub-heading within the parent option, not a top-level option
   - _Multi-dimensional problems_ — if what looks like a list of options is actually two separate decisions, structure around the primary; handle the secondary as a sub-question in the Decision section or write a follow-up ADR
 - **Compare options on what differs, not on what they share** — where two or more options carry the same cost, name it once and set it aside, then rank on the residual. **Put it in a short paragraph directly under `## Options`, before Option 1**, naming which options share the cost and stating that it does not rank them; the per-option Pros/Cons/Risks have no slot for it, so without that paragraph the cost gets restated under each option and the section ranks by total weight rather than by substance — and the heavier-looking option loses without ever being compared. Worked example: two options both move every caller from `python3 x.py` to `uv run x.py`, so say that once; what remains — one of them lets each script pin a shared library independently, the other has a single lockfile — is the whole decision, and it reverses the ranking the migration cost implied.
-- **Number sequentially** — never reuse or renumber
+- **Number sequentially** — never reuse a number: giving a retired one to a new decision leaves every citation of it resolving to the wrong decision, and resolving quietly is what makes that unfindable. Renumbering is a different act: see **Renumbering an ADR** below.
 - **Check archived decisions before recording a new one** — `rg -l 'status: Archived' docs/adr/` and read any whose subject touches yours. They are out of the index by design, so writing an ADR is the one moment they resurface — which is what makes archiving on that defence safe, and unsafe for any breach too small to warrant one. A new decision contradicting an archived one supersedes it rather than sitting alongside it.
 - **Read the live revisit triggers before recording a new decision** — the index carries them in a column where one is generated, and `rg 'revisit-when' docs/adr/` finds them where it is not. Either way they are how a trigger reaches someone who never opens the ADR holding it. Meeting a condition is not by itself discharging it: a decision that *answers* the condition discharges the trigger, one that only makes it fail loudly arms it, one that closes a mechanism by which the condition could arrive narrows it, and one that reverses the older decision supersedes it. Each has its own workflow below; each is a step of the work, not a note in passing.
 - **Never edit INDEX.md** — the generator regenerates it, however this repo runs it; find that out rather than assuming a hook or a workflow does
@@ -128,7 +128,7 @@ A comment naming an ADR reaches a reader the index cannot: someone editing the f
 - **Archiving on a comment defence means writing the comments in the same change.** Archive first and cite later and the decision spends the gap out of the index and undefended. Name in `archived-because` where the comments went, and treat a set of files you cannot call closed as a reason not to archive at all. This is also the moment to ask whether anything verifies those comments still exist — the first archival is what makes such a check specifiable, so decide then and record the answer either way, rather than leaving it to a trigger nobody is reading.
 - **A citation names the ADR number and what the decision forbids at that line — never the reasoning.** The reasoning has a home; a comment repeating it becomes a second source of truth, and the two drift. An error message is the exception, since its reader is already blocked and a clause of *why* is what makes it actionable. Fix one citation form per repo and record it where code authors meet it: two forms in one tree is what leaves a later check with nothing to match.
 - **A citation covers the file it sits in and nothing else.** Citing three of five call sites reads as a defended decision and is not one.
-- **Deletion is the failure to plan for, not staleness** — numbers are never reused, so an ageing citation still points into a chain. But refactor the code and the comment goes with it, and where it was an `Archived` ADR's defence, nothing reports the loss, because the ADR is invisible by design.
+- **Deletion is the failure to plan for, not staleness** — numbers are never reused, so an ageing citation still points into a chain. The one exception is a both-merged renumber (see **Renumbering an ADR**): the vacated number stays with the decision that kept it, so a citation missed there resolves to that other decision instead of dangling where you would notice — which is the silent failure the numbering rule exists to prevent. But refactor the code and the comment goes with it, and where it was an `Archived` ADR's defence, nothing reports the loss, because the ADR is invisible by design.
 
 ## Defending a decision with a path-scoped rule
 
@@ -348,3 +348,46 @@ A new ADR that closes one *mechanism* by which an older condition could arrive h
 An ADR that *arms* an older trigger has not discharged it either. Arming makes the condition fail loudly — a check that rejects the breach and names the ADR to reopen — where discharging answers the question the condition was waiting on. The condition is still the one to revisit on, so leave both fields as they are and record the arming as a Consequences bullet in the older ADR.
 
 None of the edits these four workflows make to an older ADR — marking it superseded, striking a spent condition, cutting a closed mechanism, recording an arming — is a substantial one, so none owes the review passes. The decision is untouched, and the new ADR carries both passes for the pair.
+
+## Renumbering an ADR
+
+Expect to need this. Numbers are allocated by reading the directory, so any two branches open
+at once take the same one. Nothing surfaces that by itself unless your repo checks for it — an
+index generator will write two rows under one number and report success, and a collision can
+sit unnoticed for as long as nobody looks. Read the directory as you allocate, and read it
+again after any rebase or merge from the trunk, before you publish: a collision usually
+arrives when someone else's number lands beside yours, which is after you chose one, so the
+allocation-time read alone would miss it.
+
+The question is not whether the ADR has merged but **whether its number is cited anywhere
+outside the work you are about to publish**. Merged is the usual shorthand, a merged number
+being reachable from peer ADRs, code comments and the index — but a branch open long enough
+to collide has usually cited its own ADR already, so ask the question directly rather than
+reading the shorthand. Where you cannot tell, treat the number as cited.
+
+Renumber the ADR whose number is not cited outside your own work, and move everything naming
+it in the same change:
+
+1. the file, `NNN-<slug>.md`
+2. its `# NNN: Title` heading
+3. the rest of the ADR's own text — a `summary` or `revisit-when` naming its number, and any
+   prose in the body that does
+4. every `superseded-by`, `revisit-discharged-by` and `archived-because` in a peer ADR naming
+   it, and every reference link to it
+5. every other citation of the number anywhere in the repository: a code comment, an
+   agent-facing document such as `AGENTS.md`, a planning or backlog file, a skill. This is the
+   only item you cannot enumerate by inspection, and in most repositories it is the largest.
+   Search for whichever citation form your repo fixed: `rg 'ADR NNN'` and `rg 'NNN-'` are the
+   common ones, and a path form such as `docs/adr/NNN` matches neither
+6. the index, regenerated by your repo's generator where it has one
+
+Miss one and it still resolves — to whichever decision kept the number — which is the silent
+failure the numbering rule exists to prevent.
+
+Where both numbers are cited outside your work, each branch having landed before anyone
+noticed, there is no silent fix. Renumber the later one, move every citation you can reach,
+and say in its Context that it was renumbered and from what, so a citation you could not
+reach — a review comment, a link from outside the repository — still leads somewhere.
+
+A renumber is a mechanical edit, like the four workflow edits above, so it does not re-owe the
+Review passes: the decision itself is untouched.
