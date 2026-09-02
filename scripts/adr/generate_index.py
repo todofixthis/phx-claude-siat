@@ -249,6 +249,9 @@ def generate(adr_dir: Path, repo_root: Path) -> int:
         # The message below asks which number is cited rather than which has merged: the two
         # usually agree, but a branch open long enough to collide has usually cited its own
         # ADR already. phx:writing-adrs sets out that test and the renumbering procedure.
+        # `setdefault` keeps the first file to claim a number rather than the previous one,
+        # so three or more sharing it report one error each against that same file instead
+        # of a chain where each blames its predecessor and only the last names the original.
         claimant = claimed_numbers.setdefault(int(number), path.name)
         if claimant != path.name:
             problems.append(
