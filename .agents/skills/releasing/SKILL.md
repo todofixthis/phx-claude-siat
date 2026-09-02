@@ -116,7 +116,7 @@ output: `0` succeeded, `124` means it is still running at the cap (report that a
 
 ### After a successful run
 
-Two steps a green conclusion does not cover:
+Three steps a green conclusion does not cover:
 
 - **Fast-forward local `develop`.** CI pushed the back-merge, so the local branch is
   behind by at least that commit. `git pull --ff-only` — the session that cut the
@@ -133,6 +133,24 @@ Two steps a green conclusion does not cover:
 
   Fetch the `annotations_url` of any run with a non-zero count. Report what they say;
   don't fix them mid-release.
+- **References to close?** Rarer since ADR 020: deferred work is a file under
+  `docs/backlog/`, so a `#NNN` the notes cite is usually a pull request. `gh issue view`
+  and `gh issue close` resolve a pull-request number through the same endpoint rather than
+  refusing it, so closing one by number closes the wrong object and reports success.
+  Resolve every reference before acting on any:
+
+  ```bash
+  gh api /repos/{owner}/{repo}/issues/<NNN> --jq 'has("pull_request")'
+  ```
+
+  Read the exit code first: non-zero means the lookup did not answer — a stale reference or
+  a failed call — so check that number by hand and never close it. A zero exit answers for
+  **this** repository and nothing else: issues and pull requests share one number sequence
+  per repository, so a bare `#NNN` that means another repo's issue resolves here to
+  whatever local object holds that number, and answers confidently about the wrong one.
+  Confirm the reference is ours before acting on it. Then `true` is a pull request, so
+  leave it alone, and `false` is an issue to close with a link to the Release:
+  `gh issue close <NNN> --comment "Released in X.Y.Z: <release-url>"`.
 
 ### If the run fails
 
@@ -159,8 +177,8 @@ for when it cannot run at all:
 - **Back-merge missing?** From `develop`: `git fetch origin && git merge --no-edit origin/main && git push`.
   Verify on the remote:
   `git fetch origin && git merge-base --is-ancestor origin/main origin/develop`.
-- **Issues to close?** Rare here (notes cite ADRs). Close any `#NNN` the notes reference
-  by hand with a link to the Release.
+- **Steps still owed.** Nothing on this path passes through **After a successful run**, so
+  a release finished by hand has done none of them. Go back and work that section.
 
 ## Validation gate
 
