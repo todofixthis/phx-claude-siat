@@ -1,5 +1,120 @@
 # Changelog
 
+## 5.1.0 - 2026-09-02
+
+### For phx plugin users
+
+#### Breaking changes
+
+- **Plan review now runs the commands a plan names.** Where a task names a build, lint,
+  type-check, test or CI step, `phx:writing-plans` has its reviewer run it in the plan's
+  worktree rather than read it. Those commands now execute on your machine, taking time and
+  touching whatever they touch. Reading alone cannot catch a broken verification step: a
+  command failing because the task's own code does not exist yet is expected, where one that
+  cannot run at all — a bad path, an unknown flag, missing config — is a blocker.
+- **Fully-mechanical plans now execute inline without asking first.** Where every task writes
+  its file contents in full and leaves the executor no discovery or decision,
+  `phx:writing-plans` skips the execution-handoff question and runs the plan inline rather than
+  spawning a subagent per task. If you used that question as a checkpoint before anything was
+  written, ask for subagent execution explicitly.
+
+#### Added
+
+- **A path-scoped rule now counts as a defence for an archived decision**, where
+  `phx:writing-adrs` previously admitted only two: a comment wherever a breach would be
+  authored, and a breach large enough to need its own ADR. Such a rule is a file whose glob
+  list makes your harness inject it when a matching file is read. A new section covers what
+  loads one, which routes miss it — a reader working from a shell meets nothing — and that an
+  ADR archived on a rule must name the rule file in `scope`.
+  Reasoning in [ADR 018](https://github.com/todofixthis/phx-claude-siat/blob/51ee504/docs/adr/018-admit-a-path-scoped-rule-as-an-archival-defence.md).
+- **A rule for linking third-party dependencies**: cite the dependency's upstream source, not a
+  gitignored local install path no one else can reach.
+- A pointer to a reference implementation of the ADR index generator and its tests, for anyone
+  porting the contract.
+
+#### Changed
+
+- **Renumbering an ADR is now permitted where nothing cites its number yet**, and a new
+  `Renumbering an ADR` section sets out the procedure — when a collision appears and why
+  nothing surfaces it, which of the two ADRs may move, the six places that name a number, and
+  what to do when both are cited. Reuse always breaks citations, where renumbering breaks them
+  only once the number has been cited; never-reuse stays absolute.
+- **`phx:writing-adrs` no longer tells you when your index generator runs.** It previously
+  asserted that the generator runs on every pull request touching `docs/adr/` and locally
+  wherever the pre-commit hook is installed; it now tells you to find out what triggers your
+  own. If you built a workflow on that claim, check it.
+- **Dependencies:** the bundled tooling for `phx:creative-commits` and `phx:nz-english` moves
+  to newer pinned versions. Both resolve from their own lockfiles at run time, so this changes
+  what installs on invocation; no declared requirement changed.
+
+### For contributors
+
+#### Breaking changes
+
+- **Deferred work is no longer filed as a GitHub issue** (ADR 020). It goes in
+  `docs/backlog/<slug>.md`, one file per item; an item that is not there is recorded nowhere.
+  The tracker stays enabled for Renovate and for people who installed the plugin, so nothing
+  stops you filing one — but nothing routes an agent there, so an issue holding deferred work
+  goes unread. Asked to file one, an agent now writes the backlog file instead and says so; it
+  complies only if you repeat the request having heard that.
+  **Three cases override the default:** a condition that would reopen a settled decision goes
+  in that ADR's `revisit-when`; a finding about whether it has fired goes in a
+  `## Revisit watch` section in that ADR's body; and a constraint a future editor must meet
+  goes in a comment where they will meet it. **Two standing habits come with it:** read the
+  backlog before starting on an area, not only when deferring from one, and name in an item's
+  prose the paths it binds — `rg <area> docs/backlog/` is the whole routing mechanism, so an
+  item naming no path cannot be found. **Migration:** convert any open issue holding deferred
+  work. This repository's three — `#28`, `#38` and `#39` — are done; only two became backlog
+  files, `#28` becoming the `## Revisit watch` in ADR 007.
+- **The ADR index generator now rejects two states it used to accept**, so a branch carrying
+  either fails the `adr` job, and the pre-commit hook too where your commit stages an ADR.
+  **Two ADRs sharing a number:** numbers are allocated by reading the directory, so two
+  branches open at once take the same one; every reference is by number, so both files resolve
+  and the wrong one reads as correct. A rebase produced exactly this during the cycle.
+  **A heading number disagreeing with its filename:** renumbering is two edits, and the index
+  takes its number from the filename and its title from the heading, so a half-done renumber
+  renders a self-consistent row naming a decision that does not exist. Numbers compare by
+  value, so `001` and `1` are the same ADR.
+  **Migration:** run `python3 -m scripts.adr.generate_index`. It names both files in a collision
+  and both numbers in a mismatch, but not which file to move — the file it names first is first
+  in filename order, not first authored, so decide that against the rule in `phx:writing-adrs`,
+  and follow that skill's new `Renumbering an ADR` section, since a renumber has to move every
+  citation of the number, not just the filename and heading.
+- **ADR scope is now validated on every pull request** (ADR 021), where the `adr` job previously
+  ran only for changes under `docs/adr/` or `scripts/`. The generator revalidates every ADR's
+  `scope`, so **deleting or renaming a file named in an ADR's `scope` now means updating that
+  ADR in the same pull request** — and a pull request touching neither directory can fail on
+  scope rot that predates it.
+
+#### Added
+
+- **`docs/backlog/`**, with a README fixing the shape of an item and the work deferred during
+  this cycle.
+- **Four decisions recorded:** ADR 018 admits a path-scoped rule as an archival defence, ADR 019
+  rejects generating those rules from ADR frontmatter, ADR 020 moves deferred work into the
+  repository, and ADR 021 validates scope on every pull request. ADR 013 gains a note that ADR
+  021 narrows one of its known tensions.
+- **A standing question on ADR 007.** Its new `## Revisit watch` records the stdlib-only
+  constraint as assessed and *not* fired, and asks that at the next change under `scripts/`,
+  however small, you re-ask two questions: whether anything there approximates a grammar rather
+  than parsing it, and whether the workflow substring-match in `validate_manifests.py` has
+  caused a miss in practice.
+
+#### Fixed
+
+- **The release recovery step could close a pull request instead of an issue.** `gh issue view`
+  and `gh issue close` resolve a pull-request number through the same endpoint rather than
+  refusing it, so the old instruction, run against an unmerged pull request, would close it and
+  report success. ADR 020 made that likelier: with deferred work now a file, a `#NNN` in the
+  notes is usually a pull request.
+
+  The step now resolves every reference before acting on any, reads the exit code rather than
+  the printed value, and warns that a zero exit answers for this repository alone — a bare
+  `#NNN` meaning another repository's issue resolves here to whatever local object holds that
+  number. It also moved from the failed-run recovery list into the steps that follow a
+  successful run; the recovery list gains a **Steps still owed** bullet in its place, because a
+  release finished by hand passes through none of those steps.
+
 ## 5.0.0 - 2026-08-26
 
 ### For phx plugin users
