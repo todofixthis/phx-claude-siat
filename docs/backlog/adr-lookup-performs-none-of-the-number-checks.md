@@ -31,7 +31,7 @@ disk.
 
 The window is narrow, and that narrowness is the argument for deferring rather than for
 ignoring: `generate` fails as soon as any ADR is staged, and `pr.yml`'s `adr` job runs on
-any change under `docs/adr/` or `scripts/`, so neither fault can survive a pull request.
+every pull request whatever it touches (ADR 021), so neither fault can survive one.
 What survives is the interval before either fires — and the advisory is the one place a
 reader meets these decisions without going looking, which is the whole argument for it in
 ADR 013. Rows that are secretly one decision, or that name a decision that does not exist,
