@@ -18,7 +18,6 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      adr: ${{ steps.filter.outputs.adr }}
       manifests: ${{ steps.filter.outputs.manifests }}
       python: ${{ steps.filter.outputs.python }}
     steps:
@@ -31,7 +30,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          adr=false
           manifests=false
           python=false
 
@@ -53,31 +51,29 @@ jobs:
                       python=true ;;
               esac
               case "$path" in
-                  docs/adr/*|scripts/*)
-                      adr=true ;;
-              esac
-              case "$path" in
                   CHANGELOG.md|.claude-plugin/*|scripts/*|\
                   skills/*|.agents/skills/*)
                       manifests=true ;;
               esac
-              # A change to the workflow itself re-runs everything it gates.
+              # A change to the workflow itself re-runs everything it gates. The `adr`
+              # job runs unconditionally (ADR 021), so it needs no arm here.
               case "$path" in
                   .github/workflows/*)
-                      adr=true; manifests=true; python=true ;;
+                      manifests=true; python=true ;;
               esac
           done
 
-          echo "adr=$adr" >> "$GITHUB_OUTPUT"
           echo "manifests=$manifests" >> "$GITHUB_OUTPUT"
           echo "python=$python" >> "$GITHUB_OUTPUT"
-          echo "Selected checks: adr=$adr manifests=$manifests python=$python"
+          echo "Selected checks: manifests=$manifests python=$python"
 
   # The pre-commit hook regenerates INDEX.md, but hooks are not installed on
   # clone — this is the backstop for a contributor who never set core.hooksPath.
+  # Runs on every PR, not only ones touching docs/adr/ or scripts/: generate_index.py
+  # revalidates every ADR's scope regardless of what changed, so a path renamed or
+  # deleted anywhere else in the repo fails here instead of going stale unnoticed
+  # (ADR 021).
   adr:
-    needs: changes
-    if: needs.changes.outputs.adr == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

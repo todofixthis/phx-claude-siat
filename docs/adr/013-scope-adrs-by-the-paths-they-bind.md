@@ -154,6 +154,8 @@ the field was not honouring costs nothing real.
   *is* its own tooling. Where decisions concern runtime behaviour, data or process, scope
   will be empty far more often than it is here, and the revisit trigger above is written
   against this repository's corpus rather than theirs.
+- [ADR 021][] narrows Known Tension #1 below, for the PR-review path only: the tension
+  itself, and its acceptance here, stand for the omission case and the `develop` bypass.
 
 ### Known tensions
 
@@ -187,6 +189,7 @@ accumulated meanwhile — brittle ones included — are the evidence that design
 [ADR 001]: 001-co-locate-marketplace-and-plugin.md
 [ADR 010]: 010-pin-the-marketplace-entry-to-main.md
 [ADR 014]: 014-cite-adrs-from-code-comments.md
+[ADR 021]: 021-validate-adr-scope-on-every-pull-request.md
 [`generate_index.py`]: ../../scripts/adr/generate_index.py
 [`pr.yml`]: ../../.github/workflows/pr.yml
 [`writing-adrs`]: ../../skills/writing-adrs/SKILL.md
