@@ -137,9 +137,33 @@ duplicated parser, and closing it is a change this decision does not stand in th
 Each script's docstring names the constraint and cites this ADR, so it is visible at the
 point of temptation rather than only here.
 
+## Revisit watch
+
+Assessed while designing [ADR 013][]'s `scope` field, and **not fired**. `scope_matches()`
+compares string prefixes; `scope_problems()` recognises `*`, `?` and `[` to reject
+glob-shaped entries rather than interpreting them. Neither is parsing.
+
+An early ADR 013 draft did justify rejecting globs by this decision — matching one would
+mean hand-parsing a grammar the repo does not define. That was false, `fnmatch` being
+standard library, and the justification was removed; what ADR 013 rests on now stands on
+its own.
+
+The constraint is still shaping design at one remove, which the Risks above anticipated:
+a dependency-bearing matcher was never a live candidate. So at the next change under
+`scripts/`, however small, re-ask both:
+
+1. Is anything under `scripts/` approximating a grammar — a glob, a semver range, a TOML
+   subset, a path spec — rather than parsing it?
+2. Has the workflow substring-match in `validate_manifests.py` caused a miss in practice?
+   That is the trigger's second clause, and nobody has tested it.
+
+If either answers yes, this decision is due a revisit, and ADR 011's amendment banner is
+the precedent for recording one.
+
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [ADR 011]: 011-make-scripts-a-package.md
+[ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [`creative-commits`]: ../../skills/creative-commits/SKILL.md
 [`generate_index.py`]: ../../scripts/adr/generate_index.py
 [PEP 723]: https://peps.python.org/pep-0723/
