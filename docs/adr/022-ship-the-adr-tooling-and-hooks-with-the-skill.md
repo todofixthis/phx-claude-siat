@@ -132,6 +132,10 @@ arm is spent from 017's `revisit-when`.
   [ADR 024][]'s; what the hooks inject and when they nag are ADR 025's and 026's.
 - `AGENTS.md`'s test-run line gains the skill's pytest leg, and the README replaces its
   generator instructions with the tool's and the CI recipe.
+- The skill carries no `allowed-tools` grant. Measured 2026-09-03 in headless sessions: a
+  skill carrying one is denied at invocation, and with the invocation allowed the grant
+  still did not pre-approve the `adr.py` command under either rule form. Each command
+  prompts as `nz-english`'s does; a backlog item holds the retry.
 
 [ADR 003]: 003-locate-skill-assets-relative-to-skill-directory.md
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md

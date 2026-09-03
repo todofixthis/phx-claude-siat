@@ -1,7 +1,7 @@
 """Drift tests: what SKILL.md and adr.py both encode must be one thing.
 
 The Format template, the frontmatter field names, and the command lines the skill tells
-the agent to run against the `allowed-tools` rule that pre-approves them.
+the agent to run against the subcommands the tool offers.
 """
 
 import re
@@ -9,11 +9,21 @@ import unittest
 from pathlib import Path
 
 import adr
+from frontmatter import parse_frontmatter
 
+ALLOWED_TOOLS_FIELD = "allowed-tools"
 SKILL = Path(__file__).resolve().parents[1] / "SKILL.md"
 RE_FORMAT_FENCE = re.compile(r"## Format\n\nFile: .*?\n\n```markdown\n(.*?)```", re.DOTALL)
 RE_COMMAND_LINE = re.compile(r"`python3 \$\{CLAUDE_SKILL_DIR\}/adr\.py ([a-z]+)[^`]*`")
-RE_ALLOWED = re.compile(r"^allowed-tools: (.*)$", re.MULTILINE)
+
+
+def skill_frontmatter() -> dict:
+    """The skill's frontmatter fields, parsed by the parser the tool itself uses."""
+    match = adr.RE_FRONTMATTER.match(SKILL.read_text(encoding="utf-8"))
+    assert match, "SKILL.md has no frontmatter block"
+    fields, problems = parse_frontmatter(match.group(1))
+    assert not problems, problems
+    return fields
 
 
 class FormatTemplateTests(unittest.TestCase):
@@ -47,15 +57,21 @@ class FieldNameTests(unittest.TestCase):
         self.assertEqual(documented, known)
 
 
-class AllowedToolsTests(unittest.TestCase):
-    """Every command line the skill gives matches the rule that pre-approves it."""
+class CommandLineTests(unittest.TestCase):
+    """Every command line the skill gives names a subcommand, and nothing grants it."""
 
-    def test_every_command_line_matches_the_rule(self):
-        """Every command line names a subcommand the `allowed-tools` rule pre-approves."""
+    def test_the_frontmatter_carries_no_allowed_tools_grant(self):
+        """The skill asks for no tool grant.
+
+        Measured 2026-09-03 in headless sessions: a skill carrying `allowed-tools` is
+        denied at invocation, and with the invocation allowed the grant still did not
+        pre-approve the `adr.py` command. The grant costs a prompt and buys nothing.
+        """
+        self.assertNotIn(ALLOWED_TOOLS_FIELD, skill_frontmatter())
+
+    def test_every_command_line_names_a_subcommand(self):
+        """Every command line the skill gives names a subcommand the tool offers."""
         text = SKILL.read_text(encoding="utf-8")
-        rule = RE_ALLOWED.search(text)
-        self.assertIsNotNone(rule)
-        self.assertEqual(rule.group(1).strip(), "Bash(python3 ${CLAUDE_SKILL_DIR}/adr.py:*)")
         commands = RE_COMMAND_LINE.findall(text)
         self.assertTrue(commands, "the skill names no adr.py command")
         known = {

@@ -1,7 +1,6 @@
 ---
 name: writing-adrs
 description: Use when making significant architectural, tooling, or design decisions that would benefit from documented rationale — before implementing the decision
-allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/adr.py:*)
 ---
 
 # Writing Architecture Decision Records
