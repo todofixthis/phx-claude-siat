@@ -1075,6 +1075,22 @@ class RenumberTests(RepoTestCase):
             "\nsuperseded-by: 5\n", (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
         )
 
+    def test_moves_the_revisit_discharged_by_peer_field(self):
+        """revisit-discharged-by naming the old number follows the renumber too."""
+        self.write(
+            "003-third.md",
+            adr_text(
+                title="3: Third",
+                **{"revisit-when": "A condition.", "revisit-discharged-by": "1"},
+            ),
+        )
+        self.manage()
+        adr.renumber(self.repo_root, 1, 5)
+        self.assertIn(
+            "\nrevisit-discharged-by: 5\n",
+            (self.adr_dir / "003-third.md").read_text(encoding="utf-8"),
+        )
+
     def test_lists_citations_outside_the_corpus(self):
         """A citation elsewhere in the tree is returned for the agent, not edited."""
         self.write_scoped("src/x.py")
@@ -1089,6 +1105,62 @@ class RenumberTests(RepoTestCase):
         """Moving onto a number another ADR holds is refused before any write."""
         with self.assertRaises(adr.AdrError):
             adr.renumber(self.repo_root, 1, 2)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
+
+
+class MainEditTests(RepoTestCase):
+    """Integration tests for `supersede`, `discharge` and `renumber` through the entry point."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write("001-first.md", adr_text())
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+
+    def test_supersede_exits_zero_and_sets_the_pair(self):
+        """`supersede 1 --by 2` marks the old ADR superseded and exits 0."""
+        code, _, _ = self.run_main("supersede", "1", "--by", "2")
+        self.assertEqual(code, 0)
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        self.assertIn("\nstatus: Superseded\n", content)
+        self.assertIn("\nsuperseded-by: 2\n", content)
+
+    def test_discharge_exits_zero_and_records_the_discharge(self):
+        """`discharge 1 --by 2` records the pair when a trigger is present."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A condition."}))
+        self.manage()
+        code, _, _ = self.run_main("discharge", "1", "--by", "2")
+        self.assertEqual(code, 0)
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        self.assertIn("\nrevisit-discharged-by: 2\n", content)
+
+    def test_discharge_without_a_trigger_exits_one_and_writes_nothing(self):
+        """`discharge` on an ADR with no revisit-when fails and leaves the file untouched."""
+        original = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        code, _, err = self.run_main("discharge", "1", "--by", "2")
+        self.assertEqual(code, 1)
+        self.assertIn("Error:", err)
+        self.assertEqual((self.adr_dir / "001-first.md").read_text(encoding="utf-8"), original)
+
+    def test_renumber_lists_citations_outside_the_corpus(self):
+        """`renumber` moves the ADR and prints citations the agent must still move by hand."""
+        self.write_scoped("src/x.py")
+        (self.repo_root / "src" / "x.py").write_text(
+            "# ADR 001 forbids this\n", encoding="utf-8"
+        )
+        code, out, _ = self.run_main("renumber", "1", "5")
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            out,
+            "Citations outside docs/adr still name the old number; move each by hand:\n"
+            "  src/x.py:1: # ADR 001 forbids this\n",
+        )
+
+    def test_renumber_onto_a_claimed_number_exits_one_and_writes_nothing(self):
+        """`renumber` onto a number another ADR holds fails before any write."""
+        code, _, err = self.run_main("renumber", "1", "2")
+        self.assertEqual(code, 1)
+        self.assertIn("Error:", err)
         self.assertTrue((self.adr_dir / "001-first.md").exists())
 
 
