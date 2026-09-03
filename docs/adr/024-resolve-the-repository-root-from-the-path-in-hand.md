@@ -51,7 +51,7 @@ is its own root. A path under no managed root binds nothing, silently.
 header doubles as the gate, so an unmanaged `docs/adr/` is never touched.
 **Cons:** A few `stat` calls per event, bounded by depth. Where a `Bash` command names
 paths under two managed roots, [ADR 025][]'s injection covers each and [ADR 026][]'s check
-runs for one root, the written ADR's or else the `cwd`'s.
+runs for every root a file tool wrote an ADR under, and for the `cwd`'s.
 **Risks:** The `cwd` fallback is the working-directory dependence [ADR 015][] and 016
 rejected, and `--repo-root` is the explicit argument 016 reaffirmed rejecting over
 `$(pwd)`; both are accepted here because the tree the tool ships in is never the target.

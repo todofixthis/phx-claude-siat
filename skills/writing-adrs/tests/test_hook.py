@@ -664,6 +664,21 @@ class MainTests(HookTestCase):
             )
         self.assertEqual(second, "")
 
+    def test_reports_a_crash_under_the_events_own_name(self):
+        """A crash on a parsed event carries that event's name, not SessionStart's."""
+
+        def boom(event, state):
+            raise RuntimeError("boom")
+
+        with mock.patch.dict(hook.HANDLERS, {"PreToolUse": boom}):
+            text = hook.main(
+                json.dumps(
+                    self.event("PreToolUse", tool_name="Read", tool_input={"file_path": "x"})
+                ),
+                self.state_dir,
+            )
+        self.assertEqual(json.loads(text)["hookSpecificOutput"]["hookEventName"], "PreToolUse")
+
     def test_handles_an_event_that_names_no_session(self):
         """A valid event with no session_id gets the standing note, not a crash report."""
         event = self.event("SessionStart", source="startup")

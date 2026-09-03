@@ -87,9 +87,10 @@ standing fault is gated, and the hooks do not change that.
 - A repository the session touches without having started in it has no baseline until its
   first check, which snapshots one then — after the write that triggered it, so a finding
   that write introduced is billed to the repository and reaches the human that way.
-- The per-batch check runs for one root: the one resolved from the ADR a file tool in
-  the batch wrote, else from the hook's `cwd` ([ADR 024][]). A root the session only ever
-  reads from is injected into, never checked.
+- The per-batch check runs for every root a file tool in the batch wrote an ADR under,
+  regenerating each, and for the root resolved from the hook's `cwd` ([ADR 024][]), which
+  it only reports on. A root the session only ever reads from is injected into, never
+  checked.
 
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md

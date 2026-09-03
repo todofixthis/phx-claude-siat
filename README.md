@@ -190,7 +190,7 @@ Decisions binding these paths:
 007 (Accepted): Keep repo scripts stdlib-only — docs/adr/007-keep-repo-scripts-stdlib-only.md
 ```
 
-That report comes from `adr.py for`, which the session hooks also run, and it is where
+That report comes from `adr.py for`, the same lookup the session hooks make, and it is where
 `Archived` decisions appear — they are still in force but kept out of `INDEX.md`.
 Skipping the hook is not free: `pr.yml` runs the tool's `check` on every pull request,
 which fails the build on a stale index or on a `scope` entry naming a path that no longer
@@ -210,8 +210,8 @@ To ask which decisions bind a file before changing it, from the repo root:
 python3 skills/writing-adrs/adr.py for scripts/ci/versions.py
 ```
 
-Paths may be repo-relative or absolute; one outside the repository is refused rather
-than answered with silence.
+Paths may be repo-relative or absolute; one outside the repository binds nothing and
+prints nothing.
 
 Contributions go to `develop` — `main` carries releases only. Run the `scripts/` suite
 with `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`, and each skill shipping

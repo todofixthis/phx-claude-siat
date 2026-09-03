@@ -580,7 +580,7 @@ def command_for(root: Path, paths: list[str], cwd: Path) -> int:
 
 
 def command_reconcile(root: Path, write: bool) -> int:
-    """`reconcile`: the hooks' command; findings as JSON on stdout, always exit 0."""
+    """`reconcile`: findings as JSON on stdout for other tooling, always exit 0."""
     import json
 
     findings = reconcile(root, write=write)

@@ -513,7 +513,9 @@ def main(stdin: str, state_dir: Path) -> str:
                 state.data["crash_reported"] = True
         except Exception:  # noqa: BLE001, S110 — state is best effort on the crash path
             pass
-        return json.dumps(output("SessionStart", crash_context(exc)))
+        # Under the event's own name, so a harness that checks the field still delivers it.
+        event_name = event.get("hook_event_name") or "SessionStart"
+        return json.dumps(output(event_name, crash_context(exc)))
 
 
 if __name__ == "__main__":
