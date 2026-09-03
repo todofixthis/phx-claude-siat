@@ -22,6 +22,7 @@
 - Findings are reported by delta from a session baseline, at most twice for an agent (ADR 026).
 - NZ English throughout; comments on the line above the code they describe; every function annotates its return type and named parameters; imports and collections alphabetised.
 - Test conventions: `.agents/rules/testing.md` (read it before writing tests). Classes are `unittest.TestCase` subclasses run under pytest, as `skills/nz-english/tests/` does.
+- The locked `ruff` enables a broad rule set. Where a rule fires on a construct the plan requires, suppress it on that line with a `# noqa: <RULE> — <why>` comment, as `nz-english` does; never widen `pyproject.toml`'s ruff configuration, and never raise the 3.10 runtime floor to satisfy a lint (the floor is a constant, which the `UP036` rule accepts).
 - A citation under `skills/` names the constraint, never an ADR number (`AGENTS.md`, ADR 014).
 - Commits use the `phx:creative-commits` skill; push after every commit.
 
@@ -628,7 +629,7 @@ PYTHON_FLOOR = (3, 10)
 if sys.version_info < PYTHON_FLOOR:
     sys.exit(f"adr.py needs Python {PYTHON_FLOOR[0]}.{PYTHON_FLOOR[1]} or newer")
 
-from frontmatter import parse_frontmatter  # noqa: E402
+from frontmatter import parse_frontmatter
 
 ADR_DIR = Path("docs") / "adr"
 INDEX_FILENAME = "INDEX.md"
@@ -831,28 +832,23 @@ def scope_problems(entries: list[str], root: Path) -> list[tuple[str, str, str]]
     problems = []
     for entry in entries:
         if any(char in entry for char in "*?["):
-            problems.append(
-                (
-                    "malformed",
-                    entry,
-                    f"scopes `{entry}`, which reads as a glob; scope takes exact paths and "
-                    "directory prefixes ending in `/`, nothing else",
-                )
+            message = (
+                f"scopes `{entry}`, which reads as a glob; scope takes exact paths and "
+                "directory prefixes ending in `/`, nothing else"
             )
+            problems.append(("malformed", entry, message))
             continue
         target = root / entry
         if not target.exists():
-            problems.append(
-                (
-                    "dangling",
-                    entry,
-                    f"scopes `{entry}`, which nothing matches. If the code moved, update "
-                    "`scope`; if it is gone, ask whether the decision still binds anything, "
-                    "and revisit it",
-                )
+            message = (
+                f"scopes `{entry}`, which nothing matches. If the code moved, update "
+                "`scope`; if it is gone, ask whether the decision still binds anything, "
+                "and revisit it"
             )
+            problems.append(("dangling", entry, message))
         elif target.is_dir() and not entry.endswith("/"):
-            problems.append(("malformed", entry, f"scopes `{entry}`, a directory; write it as `{entry}/`"))
+            message = f"scopes `{entry}`, a directory; write it as `{entry}/`"
+            problems.append(("malformed", entry, message))
     return problems
 
 
@@ -1187,7 +1183,47 @@ if __name__ == "__main__":
     sys.exit(cli())
 ```
 
-For this task, add stubs that raise `NotImplementedError` for `command_new`, `command_edit`, `command_renumber`, `supersede`, `discharge`, `renumber`; Tasks 3 and 4 replace them.
+For this task, add these stubs below `main`'s helpers; Tasks 3 and 4 replace them. They carry the Interfaces block's signatures, so every import above (including `date`) is used and `ruff` stays green:
+
+```python
+def new_adr(
+    root: Path, title: str, summary: str, scope: list[str], revisit_when: str | None, today: date
+) -> Path:
+    """Task 3."""
+    raise NotImplementedError
+
+
+def supersede(root: Path, old: int, new: int) -> None:
+    """Task 4."""
+    raise NotImplementedError
+
+
+def discharge(root: Path, old: int, new: int) -> None:
+    """Task 4."""
+    raise NotImplementedError
+
+
+def renumber(root: Path, old: int, new: int) -> list[str]:
+    """Task 4."""
+    raise NotImplementedError
+
+
+def command_new(root: Path, args: argparse.Namespace) -> int:
+    """Task 3."""
+    raise NotImplementedError
+
+
+def command_edit(root: Path, action: Callable[[Path, int, int], None], old: int, new: int) -> int:
+    """Task 4."""
+    raise NotImplementedError
+
+
+def command_renumber(root: Path, old: int, new: int) -> int:
+    """Task 4."""
+    raise NotImplementedError
+```
+
+Add `from collections.abc import Callable` to the imports.
 
 - [ ] **Step 4: Port every remaining case from `scripts/adr/test_generate_index.py`**
 
@@ -1282,7 +1318,7 @@ class NewAdrTests(RepoTestCase):
         content = path.read_text(encoding="utf-8")
         self.assertNotIn("YYYY-MM-DD", content)
         self.assertNotIn("# plus revisit-when", content)
-        fields, _, _, problems = adr.parse_adr(content)
+        _, _, _, problems = adr.parse_adr(content)
         self.assertEqual(problems, [])
 
 
@@ -1375,7 +1411,9 @@ def new_adr(
 def command_new(root: Path, args: argparse.Namespace) -> int:
     """`new`: print the path written."""
     try:
-        path = new_adr(root, args.title, args.summary, [] if args.no_scope else args.scope, args.revisit_when, date.today())
+        scope = [] if args.no_scope else args.scope
+        # Local date, as the ADR's author would write it.
+        path = new_adr(root, args.title, args.summary, scope, args.revisit_when, date.today())  # noqa: DTZ011
     except AdrError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -1622,7 +1660,6 @@ def renumber(root: Path, old: int, new: int) -> list[str]:
         for p in adr_dir.iterdir()
     ):
         raise AdrError(f"ADR {new} already exists; pick a number nothing claims")
-    old_padded = f"{old:0{NUMBER_WIDTH}d}"
     new_padded = f"{new:0{NUMBER_WIDTH}d}"
     slug = path.name[len(RE_FILE_NUMBER.match(path.name).group(1)) :]
     re_citation = re.compile(rf"\bADR 0*{old}\b")
@@ -1740,9 +1777,8 @@ path; nothing here reads the working directory.
 """
 
 import json
+import os
 import threading
-import unittest
-from pathlib import Path
 
 import hook
 from adr import INDEX_FILENAME
@@ -2000,9 +2036,8 @@ class MainTests(HookTestCase):
         old = self.state_dir / "sessions" / "old.json"
         old.parent.mkdir(parents=True)
         old.write_text("{}", encoding="utf-8")
-        import os
         os.utime(old, (0, 0))
-        self.handle("SessionStart", source="startup")
+        hook.handle(self.event("SessionStart", source="startup"), self.state_dir, now=hook.PRUNE_AFTER_SECONDS + 1.0)
         self.assertFalse(old.exists())
 ```
 
@@ -2042,15 +2077,17 @@ import time
 import traceback
 from pathlib import Path
 
-# Never a non-zero exit, even here: print the crash as context and leave.
-if sys.version_info < (3, 10):
+# The floor the syntax here needs. Never a non-zero exit, even here: print the crash as
+# context and leave.
+PYTHON_FLOOR = (3, 10)
+if sys.version_info < PYTHON_FLOOR:
     print(
         '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":'
         '"phx:writing-adrs hook needs Python 3.10 or newer; the ADR checks are off until it is."}}'
     )
     sys.exit(0)
 
-import adr  # noqa: E402
+import adr
 
 FILE_TOOLS = ("Edit", "NotebookEdit", "Read", "Write")
 MAIN_AGENT = "main"
@@ -2090,7 +2127,7 @@ class State:
         self.lock_path = self.directory / f"{session_id}.lock"
         self.data: dict = {}
 
-    def __enter__(self) -> "State":
+    def __enter__(self) -> "State":  # noqa: PYI034 — no Self on the 3.10 floor
         self.directory.mkdir(parents=True, exist_ok=True)
         self.lock = self.lock_path.open("w")
         fcntl.flock(self.lock, fcntl.LOCK_EX)
@@ -2344,7 +2381,7 @@ def main(stdin: str, state_dir: Path) -> str:
                 if state.data["crash_reported"]:
                     return ""
                 state.data["crash_reported"] = True
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 — state is best effort on the crash path
             pass
         error = traceback.format_exc().strip().split("\n")[-1] or repr(exc)
         return json.dumps(output("SessionStart", CRASH.format(error=error, path=Path(__file__).resolve())))
@@ -2368,7 +2405,7 @@ Expected: green. `Path.is_relative_to` needs 3.9+, fine under the floor.
 
 - [ ] **Step 5: Mutation-test the delta rule**
 
-Mutate `if f.id not in record["baseline"]` to `if True` and `if f.id not in record["raised"]` to `if True`, with the same `-- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .` test command as Task 2; expect CAUGHT for both.
+Mutate, with `--file skills/writing-adrs/hook.py`, `if f.id not in record["baseline"]` to `if True` and `if f.id not in record["raised"]` to `if True`, with the same `-- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .` test command as Task 2; expect CAUGHT for both.
 
 - [ ] **Step 6: Commit**
 
@@ -2457,13 +2494,15 @@ The second prints nothing until Task 8 makes this repository's index managed; af
 - [ ] **Step 3: Measure the budget (after Task 8, when this repository's corpus is managed)**
 
 ```bash
-TIMEFORMAT=%R && for i in $(seq 20); do export CLAUDE_PLUGIN_DATA="$(mktemp -d)"; time (printf '%s' "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$PWD/scripts/ci/versions.py\"},\"session_id\":\"m$i\",\"cwd\":\"$PWD\"}" | python3 skills/writing-adrs/hook.py >/dev/null); done 2>&1 | sort -n | tail -1
+GATE_CMD="$(python3 -c "import json;print(json.load(open('hooks/hooks.json'))['hooks']['PreToolUse'][0]['hooks'][0]['command'])")"
+export CLAUDE_PROJECT_DIR=$PWD CLAUDE_PLUGIN_ROOT=$PWD
+TIMEFORMAT=%R && for i in $(seq 20); do export CLAUDE_PLUGIN_DATA="$(mktemp -d)"; time (printf '%s' "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$PWD/scripts/ci/versions.py\"},\"session_id\":\"m$i\",\"cwd\":\"$PWD\"}" | sh -c "$GATE_CMD" >/dev/null); done 2>&1 | sort -n | sed -n '10p;20p'
 ```
-A fresh state directory per run, so every run is a first touch and not the cheap already-injected branch; bash's `time` builtin, since `/usr/bin/time` is absent here. Expected: the slowest of twenty under 0.100. Record the median and worst in ADR 022's Consequences bullet on cost ("measured 2026-09-0X: …"). If over budget, profile before changing the design: the usual culprit is parsing every ADR twice per event.
+This times the shell line as the harness runs it, gate included; a fresh state directory per run, so every run is a first touch and not the cheap already-injected branch; bash's `time` builtin, since `/usr/bin/time` is absent here. The two numbers are the median and the worst of twenty. Expected: the worst under 0.100. Record the median and worst in ADR 022's Consequences bullet on cost ("measured 2026-09-0X: …"). If over budget, profile before changing the design: the usual culprit is parsing every ADR twice per event.
 
 - [ ] **Step 4: Add `hooks/` to the scopes**
 
-In `docs/adr/022-…`, `025-…` and `026-…`, add `hooks/` to `scope` (alphabetical order within the list), and delete the sentence in each that deferred it. Regenerate: `python3 skills/writing-adrs/adr.py index`.
+In `docs/adr/022-…`, `025-…` and `026-…`, add `hooks/` to `scope` (alphabetical order within the list), and delete the sentence in each that deferred it. Regenerate with the old generator, which is still what the pre-commit hook runs until Task 8: `python3 -m scripts.adr.generate_index`.
 
 - [ ] **Step 5: Commit**
 
@@ -2628,13 +2667,15 @@ Run `git status` to catch any related unstaged or untracked files (e.g. lock fil
 - [ ] **Step 1: Delete the old generator and retarget every reference**
 
 ```bash
-git rm -r -q scripts/adr
+git rm -r -q scripts/adr && rm -rf scripts/adr
 rg -n 'scripts/adr|scripts\.adr|generate_index' --glob '!docs/superpowers/**' .
 ```
+The `rm -rf` clears `__pycache__`, which `git rm` leaves behind and which would let a `scripts/adr/` scope entry keep resolving.
 For every hit:
 - `docs/adr/013-…` and `019-…`: remove `scripts/adr/` from `scope`.
 - Every `[`generate_index.py`]: ../../scripts/adr/generate_index.py` definition — every `rg` hit, which is more ADRs than the four that discuss the tool, plus `docs/backlog/route-backlog-items-from-the-files-they-bind.md`: retarget to `../../skills/writing-adrs/adr.py` and rename the label to `` [`adr.py`] `` in both definition and uses, keeping definitions alphabetised. Where the prose says "generate_index.py" as a name, leave it — it names the file as it was.
 - `scripts/dev/mutate.py` and `.agents/rules/testing.md` example commands: point at `skills/writing-adrs/adr.py` and a check that exists there.
+- `docs/backlog/adr-lookup-performs-none-of-the-number-checks.md` binds `scripts/adr/`; the gap it records survives in `binding()`, so keep the item and retarget its paths and function names to `skills/writing-adrs/adr.py` and `binding()`.
 - `AGENTS.md` and `README.md`: handled in Steps 3 and 4.
 
 - [ ] **Step 2: Pre-commit hook**
@@ -2711,8 +2752,10 @@ python3 skills/writing-adrs/adr.py check
 python3 -m scripts.ci.validate_manifests
 python3 -m unittest discover -s scripts -t . -p 'test_*.py' 2>&1 | tail -2
 cd skills/writing-adrs && uv run pytest -q && cd -
-uvx --from ./skills/writing-adrs phx-adr check
-head -n 1 docs/adr/INDEX.md
+uvx --reinstall --from ./skills/writing-adrs phx-adr check
+head -n 1 docs/adr/INDEX.md```
+`--reinstall` because uv caches a path source until its `pyproject.toml` changes, and would otherwise serve Task 1's placeholder.
+```bash
 ```
 Expected: all green; the index's first line is the fixed header. Then re-run Task 6 Steps 2 and 3 (the smoke test now prints the note; measure and record the budget in ADR 022).
 
@@ -2729,7 +2772,7 @@ Run `git status` to catch any related unstaged or untracked files (e.g. lock fil
 
 - [ ] **Step 1: Test-analyst pass**
 
-Per `.agents/rules/testing.md`, dispatch a subagent with `adr.py`, `hook.py`, their tests and the rule, asking what is not covered. Write the missing tests. Record the findings for the PR body.
+Per `.agents/rules/testing.md`, dispatch a subagent with `adr.py`, `hook.py`, their tests and the rule, asking what is not covered. Two cases the spec names and Task 5 did not write go in regardless of what it finds: a finding surviving a renumber unchanged (same `id` before and after `renumber`), and root resolution for a worktree path the agent has `cd`-ed into (a `cwd` under `.worktrees/<name>` with its own managed corpus). Write the missing tests. Record the findings for the PR body.
 
 - [ ] **Step 2: Mutation pass**
 
