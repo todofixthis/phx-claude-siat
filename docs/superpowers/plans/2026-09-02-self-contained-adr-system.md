@@ -212,7 +212,7 @@ Create `skills/writing-adrs/tests/__init__.py` (empty) and `skills/writing-adrs/
 cd skills/writing-adrs && uv run pytest -q && uv run ruff check . && uv run black --check . && cd -
 python3 -m unittest discover -s scripts -t . -p 'test_*.py' 2>&1 | tail -3
 ```
-Expected: both green. The `scripts/` suite still imports `scripts.frontmatter` through the symlink.
+Expected: both green. The `scripts/` suite still imports `scripts.frontmatter` through the symlink. From this task until Task 8, `python3 -m scripts.ci.validate_manifests` fails because the skill now ships a `pyproject.toml` that `pr.yml` does not yet name — expected; do not "fix" it early.
 
 - [ ] **Step 7: Prove the entry point packages**
 
@@ -237,7 +237,7 @@ if __name__ == "__main__":
 ```bash
 uvx --from ./skills/writing-adrs phx-adr
 ```
-Expected: `phx-adr placeholder`. If hatchling rejects `only-include`, use `include = ["adr.py", "frontmatter.py", "hook.py"]` instead and record which worked in the commit body.
+Expected: `phx-adr placeholder` (verified during planning: hatchling accepts `only-include`, and `uv sync` installs the project editable now that it is buildable).
 
 - [ ] **Step 8: Commit**
 
@@ -278,15 +278,12 @@ import io
 import json
 import tempfile
 import unittest
-from datetime import date
 from pathlib import Path
 
-import adr
 from adr import (
     ADR_DIR,
     INDEX_FILENAME,
     INDEX_HEADER,
-    Finding,
     binding,
     inspect,
     is_managed,
@@ -439,6 +436,7 @@ class ResolveRootTests(RepoTestCase):
         """A bare directory with no corpus and no .git resolves to itself."""
         bare = self.repo_root / "bare"
         bare.mkdir()
+        self.assertFalse(any((p / ".git").exists() for p in (bare, *bare.parents)))
         self.assertEqual(resolve_root(bare), bare)
 
 
@@ -568,7 +566,7 @@ class MainTests(RepoTestCase):
         self.write("001-first.md", adr_text())
         code, out, _ = self.run_main("for", SCOPED_FILE)
         self.assertEqual(code, 0)
-        self.assertEqual(out, f"001 (Accepted): Do the thing — docs/adr/001-first.md\n")
+        self.assertEqual(out, "001 (Accepted): Do the thing — docs/adr/001-first.md\n")
 
     def test_repo_root_overrides_the_working_directory(self):
         """--repo-root points every command at the given tree."""
@@ -1205,10 +1203,10 @@ Expected: green. Fix formatting with `uv run black .` if needed.
 - [ ] **Step 6: Mutation-test two checks**
 
 ```bash
-python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py --anchor 'if not target.exists():' --with 'if False:' --test 'cd skills/writing-adrs && uv run pytest -q'
-python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py --anchor 'if current == rendered:' --with 'if True:' --test 'cd skills/writing-adrs && uv run pytest -q'
+python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py --anchor 'if not target.exists():' --with 'if False:' -- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .
+python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py --anchor 'if current == rendered:' --with 'if True:' -- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .
 ```
-Read `scripts/dev/mutate.py --help` first for the exact flag for the test command. Expected: CAUGHT for both. Record the result for the commit body.
+The test command follows `--` as argv words (no shell), and it must be `unittest`, whose `FAIL:`/`ERROR:` lines the runner matches — pytest's output reports as UNKNOWN. Expected: CAUGHT for both. Record the result for the commit body.
 
 - [ ] **Step 7: Commit**
 
@@ -1228,7 +1226,7 @@ Run `git status` to catch any related unstaged or untracked files (e.g. lock fil
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `test_adr.py`:
+Append to `test_adr.py`, adding `import adr` and `from datetime import date` to its imports (they were left out in Task 2 so `ruff` stayed green):
 
 ```python
 class SlugifyTests(unittest.TestCase):
@@ -1419,12 +1417,12 @@ class SetFieldsTests(unittest.TestCase):
     def test_replaces_an_existing_field_in_place(self):
         """A field already present keeps its position and takes the new value."""
         text = adr_text()
-        self.assertIn("\nstatus: Superseded\ndate:", adr.set_fields(text, {"status": "Superseded"}))
+        self.assertIn("summary: A summary.\nstatus: Superseded\n---\n", adr.set_fields(text, {"status": "Superseded"}))
 
     def test_appends_a_new_field_at_the_end_of_the_block(self):
         """A field not present is added as the last line before the closing marker."""
         result = adr.set_fields(adr_text(), {"superseded-by": "13"})
-        self.assertIn("summary: A summary.\nsuperseded-by: 13\n---\n", result)
+        self.assertIn("status: Accepted\nsuperseded-by: 13\n---\n", result)
 
     def test_deletes_a_field_given_none(self):
         """None removes the line."""
@@ -1747,7 +1745,7 @@ import unittest
 from pathlib import Path
 
 import hook
-from adr import ADR_DIR, INDEX_FILENAME
+from adr import INDEX_FILENAME
 from tests.test_adr import SCOPED_FILE, RepoTestCase, adr_text
 
 
@@ -1880,7 +1878,11 @@ class PreToolUseTests(HookTestCase):
         self.assertLess(len(text), 10_000)
 
     def test_concurrent_calls_lose_no_update(self):
-        """Parallel first touches on different files both land in state."""
+        """Parallel first touches on different files both land in state.
+
+        Valid only because `flock` locks per open file description, so two threads with
+        their own handles exclude each other as two processes would; `lockf` would not.
+        """
         self.write_scoped("a.py")
         self.write_scoped("b.py")
         self.write("002-a.md", adr_text(title="2: A", scope="[a.py]"))
@@ -1904,7 +1906,7 @@ class PostToolBatchTests(HookTestCase):
         """A Write under docs/adr in the batch leads to reconcile --write."""
         self.handle("SessionStart", source="startup")
         self.write("002-second.md", adr_text(title="2: Do another thing"))
-        result = self.handle("PostToolBatch", tool_results=[{"tool_name": "Write", "tool_input": {"file_path": str(self.adr_dir / "002-second.md")}}])
+        result = self.handle("PostToolBatch", tool_calls=[{"tool_name": "Write", "tool_input": {"file_path": str(self.adr_dir / "002-second.md")}}])
         self.assertIsNone(result)
         self.assertIn("[002]", self.index())
 
@@ -1912,17 +1914,17 @@ class PostToolBatchTests(HookTestCase):
         """A rename after the baseline is reported on the batch that follows, then not again."""
         self.handle("SessionStart", source="startup")
         self.dangle()
-        first = self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}])
+        first = self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}])
         self.assertIn("README.md", self.context(first))
         self.assertIn("update `scope`", self.context(first))
-        second = self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "ls"}}])
+        second = self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "ls"}}])
         self.assertIsNone(second)
 
     def test_does_not_report_a_baseline_finding(self):
         """A finding present at session start belongs to the repository, not this batch."""
         self.dangle()
         self.handle("SessionStart", source="startup")
-        result = self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "ls"}}])
+        result = self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "ls"}}])
         self.assertIsNone(result)
 
     def test_never_writes_without_an_adr_edit(self):
@@ -1930,14 +1932,14 @@ class PostToolBatchTests(HookTestCase):
         self.handle("SessionStart", source="startup")
         self.write("002-second.md", adr_text(title="2: Do another thing"))
         before = self.index()
-        result = self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "cat > docs/adr/002-second.md"}}])
+        result = self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "cat > docs/adr/002-second.md"}}])
         self.assertEqual(self.index(), before)
         self.assertIn("stale", self.context(result))
 
     def test_snapshots_a_baseline_for_a_root_first_met_here(self):
         """A root with no SessionStart baseline gets one at its first check."""
         self.dangle()
-        result = self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "ls"}}])
+        result = self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "ls"}}])
         self.assertIsNone(result)
         self.assertEqual(self.state()["roots"][str(self.repo_root)]["baseline"], ["dangling:README.md"])
 
@@ -1948,7 +1950,7 @@ class StopTests(HookTestCase):
     def test_raises_an_open_finding_once_more(self):
         self.handle("SessionStart", source="startup")
         self.dangle()
-        self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}])
+        self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}])
         first = self.handle("Stop", stop_hook_active=False)
         self.assertIn("README.md", self.context(first))
         self.assertEqual(first["hookSpecificOutput"]["hookEventName"], "Stop")
@@ -1958,21 +1960,21 @@ class StopTests(HookTestCase):
     def test_is_silent_once_fixed(self):
         self.handle("SessionStart", source="startup")
         self.dangle()
-        self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}])
+        self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}])
         (self.repo_root / SCOPED_FILE).write_text("", encoding="utf-8")
         self.assertIsNone(self.handle("Stop", stop_hook_active=False))
 
     def test_subagent_stop_uses_the_same_rule(self):
         self.handle("SessionStart", source="startup")
         self.dangle()
-        self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}], agent_id="agent-1")
+        self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}], agent_id="agent-1")
         result = self.handle("SubagentStop", agent_id="agent-1", stop_hook_active=False)
         self.assertEqual(result["hookSpecificOutput"]["hookEventName"], "SubagentStop")
 
     def test_does_not_re_raise_while_a_stop_hook_is_active(self):
         self.handle("SessionStart", source="startup")
         self.dangle()
-        self.handle("PostToolBatch", tool_results=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}])
+        self.handle("PostToolBatch", tool_calls=[{"tool_name": "Bash", "tool_input": {"command": "rm README.md"}}])
         self.assertIsNone(self.handle("Stop", stop_hook_active=True))
 
 
@@ -2040,8 +2042,13 @@ import time
 import traceback
 from pathlib import Path
 
+# Never a non-zero exit, even here: print the crash as context and leave.
 if sys.version_info < (3, 10):
-    sys.exit("hook.py needs Python 3.10 or newer")
+    print(
+        '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":'
+        '"phx:writing-adrs hook needs Python 3.10 or newer; the ADR checks are off until it is."}}'
+    )
+    sys.exit(0)
 
 import adr  # noqa: E402
 
@@ -2157,7 +2164,9 @@ def paths_in_command(command: str, cwd: Path) -> list[Path]:
     found = []
     for token in tokens:
         candidate = Path(token) if Path(token).is_absolute() else cwd / token
-        if ("/" in token or candidate.exists()) and candidate.exists():
+        # An existing path, or a slash-bearing token whose directory exists: the second
+        # is a heredoc or redirect about to create a file, which still binds.
+        if candidate.exists() or ("/" in token and candidate.parent.exists()):
             found.append(candidate)
     return found
 
@@ -2235,10 +2244,11 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
 
 def written_adr_root(event: dict) -> Path | None:
     """The managed root of an ADR a file tool in the batch wrote, if any."""
-    for result in event.get("tool_results") or []:
+    for result in event.get("tool_calls") or []:
         if result.get("tool_name") not in FILE_TOOLS or result.get("tool_name") == "Read":
             continue
-        path = (result.get("tool_input") or {}).get("file_path")
+        tool_input = result.get("tool_input") or {}
+        path = tool_input.get("file_path") or tool_input.get("notebook_path")
         if not path:
             continue
         root = managed_root_for(Path(path))
@@ -2358,7 +2368,7 @@ Expected: green. `Path.is_relative_to` needs 3.9+, fine under the floor.
 
 - [ ] **Step 5: Mutation-test the delta rule**
 
-Mutate `if f.id not in record["baseline"]` to `if True` and `if f.id not in record["raised"]` to `if True`; expect CAUGHT for both.
+Mutate `if f.id not in record["baseline"]` to `if True` and `if f.id not in record["raised"]` to `if True`, with the same `-- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .` test command as Task 2; expect CAUGHT for both.
 
 - [ ] **Step 6: Commit**
 
@@ -2377,13 +2387,13 @@ Run `git status` to catch any related unstaged or untracked files (e.g. lock fil
 
 - [ ] **Step 1: Write `hooks/hooks.json`**
 
-Every command is one shell line. `GATE` below is written out in full in each entry (JSON has no variables):
+Every command is one shell line: the gate, then the interpreter. `GATE` below is written out in full in each entry (JSON has no variables):
 
 ```
 f="${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md"; g="$PWD/docs/adr/INDEX.md"; { [ -f "$f" ] && head -n 1 "$f" | grep -q 'phx:writing-adrs'; } || { [ -f "$g" ] && head -n 1 "$g" | grep -q 'phx:writing-adrs'; } || exit 0; python3 "${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py"
 ```
 
-The `SessionStart` entry prefixes a `python3` check that speaks once:
+The `SessionStart` entry inserts a `python3` check between the gate's `exit 0` and the `python3` call — after the gate, so an unmanaged repository with no `python3` hears nothing:
 
 ```
 command -v python3 >/dev/null 2>&1 || { printf '%s' '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"phx:writing-adrs hooks need python3 on PATH; the ADR corpus checks are off until it is installed."}}'; exit 0; }; 
@@ -2419,7 +2429,7 @@ command -v python3 >/dev/null 2>&1 || { printf '%s' '{"hookSpecificOutput":{"hoo
       {
         "hooks": [
           {
-            "command": "<PYTHON CHECK><GATE>",
+            "command": "<GATE with the PYTHON CHECK inserted before its python3 call>",
             "timeout": 20,
             "type": "command"
           }
@@ -2440,16 +2450,16 @@ Replace every `<GATE>` and `<PYTHON CHECK>` with the literal strings above (JSON
 
 ```bash
 cd "$(mktemp -d)" && git init -q && echo '{"hook_event_name":"SessionStart","source":"startup","session_id":"t","cwd":"'"$PWD"'"}' | CLAUDE_PROJECT_DIR=$PWD CLAUDE_PLUGIN_ROOT=/home/user/phx-claude-siat sh -c "$(python3 -c "import json;print(json.load(open('/home/user/phx-claude-siat/hooks/hooks.json'))['hooks']['SessionStart'][0]['hooks'][0]['command'])")"; echo "exit=$? (expect exit=0 and no output: no corpus)"
-echo '{"hook_event_name":"SessionStart","source":"startup","session_id":"t","cwd":"'"$PWD"'"}' | CLAUDE_PROJECT_DIR=$PWD CLAUDE_PLUGIN_ROOT=$PWD CLAUDE_PLUGIN_DATA=$(mktemp -d) sh -c "$(python3 -c "import json;print(json.load(open('hooks/hooks.json'))['hooks']['SessionStart'][0]['hooks'][0]['command'])")"
+cd /home/user/phx-claude-siat && echo '{"hook_event_name":"SessionStart","source":"startup","session_id":"t","cwd":"'"$PWD"'"}' | CLAUDE_PROJECT_DIR=$PWD CLAUDE_PLUGIN_ROOT=$PWD CLAUDE_PLUGIN_DATA=$(mktemp -d) sh -c "$(python3 -c "import json;print(json.load(open('hooks/hooks.json'))['hooks']['SessionStart'][0]['hooks'][0]['command'])")"
 ```
 The second prints nothing until Task 8 makes this repository's index managed; after Task 8, re-run it and expect the standing note JSON.
 
 - [ ] **Step 3: Measure the budget (after Task 8, when this repository's corpus is managed)**
 
 ```bash
-cd /home/user/phx-claude-siat && for i in $(seq 20); do /usr/bin/time -f %e sh -c 'echo "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"'"$PWD"'/scripts/ci/versions.py\"},\"session_id\":\"m$i\",\"cwd\":\"'"$PWD"'\"}" | CLAUDE_PLUGIN_DATA=/tmp/phx-measure python3 skills/writing-adrs/hook.py >/dev/null' 2>&1; done | sort -n | tail -1
+TIMEFORMAT=%R && for i in $(seq 20); do export CLAUDE_PLUGIN_DATA="$(mktemp -d)"; time (printf '%s' "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$PWD/scripts/ci/versions.py\"},\"session_id\":\"m$i\",\"cwd\":\"$PWD\"}" | python3 skills/writing-adrs/hook.py >/dev/null); done 2>&1 | sort -n | tail -1
 ```
-Expected: the slowest of twenty under 0.100. Record the median and worst in ADR 022's Consequences bullet on cost ("measured 2026-09-0X: …"). If over budget, profile before changing the design: the usual culprit is parsing every ADR twice per event.
+A fresh state directory per run, so every run is a first touch and not the cheap already-injected branch; bash's `time` builtin, since `/usr/bin/time` is absent here. Expected: the slowest of twenty under 0.100. Record the median and worst in ADR 022's Consequences bullet on cost ("measured 2026-09-0X: …"). If over budget, profile before changing the design: the usual culprit is parsing every ADR twice per event.
 
 - [ ] **Step 4: Add `hooks/` to the scopes**
 
@@ -2532,7 +2542,7 @@ class AllowedToolsTests(unittest.TestCase):
 
 - [ ] **Step 2: Run to see them fail**
 
-Expected: the Format fence differs (the current fence is identical text but the regex anchors on the exact "File:" line — check), no `allowed-tools`, no command lines.
+Expected: only `AllowedToolsTests` fails (no `allowed-tools`, no command lines). The Format fence and the documented field set already match the tool, so those two pass from the start; do not hunt for a difference.
 
 - [ ] **Step 3: Rewrite the skill**
 
@@ -2623,7 +2633,7 @@ rg -n 'scripts/adr|scripts\.adr|generate_index' --glob '!docs/superpowers/**' .
 ```
 For every hit:
 - `docs/adr/013-…` and `019-…`: remove `scripts/adr/` from `scope`.
-- Every `[`generate_index.py`]: ../../scripts/adr/generate_index.py` definition (013, 021, 022, 023): retarget to `../../skills/writing-adrs/adr.py` and rename the label to `` [`adr.py`] `` in both definition and uses, keeping definitions alphabetised. Where the prose says "generate_index.py" as a name, leave it — it names the file as it was.
+- Every `[`generate_index.py`]: ../../scripts/adr/generate_index.py` definition — every `rg` hit, which is more ADRs than the four that discuss the tool, plus `docs/backlog/route-backlog-items-from-the-files-they-bind.md`: retarget to `../../skills/writing-adrs/adr.py` and rename the label to `` [`adr.py`] `` in both definition and uses, keeping definitions alphabetised. Where the prose says "generate_index.py" as a name, leave it — it names the file as it was.
 - `scripts/dev/mutate.py` and `.agents/rules/testing.md` example commands: point at `skills/writing-adrs/adr.py` and a check that exists there.
 - `AGENTS.md` and `README.md`: handled in Steps 3 and 4.
 
@@ -2678,7 +2688,8 @@ Update the header comment: "This is the writing-adrs tool the skill ships; the p
   #### writing-adrs
 
   `writing-adrs` ships a tool and session hooks, so the skill needs **`python3` (3.10 or
-  newer)** on your `PATH`. Nothing else to install. The first ADR the agent records creates
+  newer)** on your `PATH`. Nothing else to install. (The CI recipe below needs only `uv`,
+  which fetches the 3.12 the packaged tool declares.) The first ADR the agent records creates
   `docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks regenerate the index
   after an ADR edit, inject the decisions binding a file the first time a session touches it,
   and report a `scope` entry left dangling by a move or delete. The hooks are inert in a
@@ -2722,7 +2733,7 @@ Per `.agents/rules/testing.md`, dispatch a subagent with `adr.py`, `hook.py`, th
 
 - [ ] **Step 2: Mutation pass**
 
-Mutate at least: the managed-header check in `is_managed`, the `.git` stop in `resolve_root`, the `write` branch in `reconcile`, the `injected` check in `on_pre_tool_use`, and the `stop_hook_active` guard. Expect CAUGHT for each; record.
+Mutate at least: the managed-header check in `is_managed`, the `.git` stop in `resolve_root`, the `write` branch in `reconcile`, the `injected` check in `on_pre_tool_use`, and the `stop_hook_active` guard, each with `-- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .` as the test command. Expect CAUGHT for each; record.
 
 - [ ] **Step 3: End-to-end scenario (local, needs a model)**
 
@@ -2754,6 +2765,8 @@ Run `git status`, then use the `creative-commits` skill. Then use `superpowers:f
 
 - `AGENTS.md`, `README.md` and the ADR scope/link edits are in Task 8 rather than the pre-work, because they describe the tool's path, which does not exist until Task 2 lands; committing them first would mislead the executors of Tasks 1 to 7.
 - The end-to-end run with a live model is a local verification, not a CI step: `pr.yml` cannot authenticate a model, and the hook tests with synthetic payloads stand in for it.
+- The tool's runtime floor is Python 3.10 (checked at start, as `nz-english` does) while `pyproject.toml` declares 3.12 for the dev toolchain and the packaged wheel, mirroring `nz-english`; the `uvx` recipe needs `uv`, which fetches a 3.12 of its own, so the two floors never meet on one machine.
+- `validate_manifests` is red from Task 1 to Task 8 by design: the skill gains its `pyproject.toml` before `pr.yml` names it, and the two land in the order the tests need.
 
 ## Self-review checklist
 
