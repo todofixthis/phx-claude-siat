@@ -74,7 +74,7 @@ phx plugin
     ├── SKILL.md                           reasoning, conventions, review — the agent's half
     ├── adr.py                             the tool: new, index, check, for, supersede,
     │                                      discharge, renumber, reconcile
-    ├── frontmatter.py                     the line parser (copied from scripts/, see below)
+    ├── frontmatter.py                     the line parser (moved from scripts/, symlinked back)
     ├── hook.py                            stdin event → adr.py → additionalContext
     ├── pyproject.toml, uv.lock            dev toolchain, plus the phx-adr entry point
     └── tests/
@@ -98,8 +98,10 @@ substitute the base directory it reported; migrating it to `${CLAUDE_SKILL_DIR}`
 backlog item this change writes, so the plugin ends with one convention.
 
 **Root resolution.** `--repo-root` where given; otherwise the nearest ancestor of the path
-in hand — the file touched, or the hook's working directory, which follows the agent's
-`cd` — that holds a managed `docs/adr/INDEX.md`; otherwise the working directory. Never
+in hand — the file touched, or the hook input's `cwd`, which follows the agent's `cd` —
+that holds a managed `docs/adr/INDEX.md`; otherwise the nearest ancestor holding `.git`,
+so `new` from a subdirectory creates the corpus at the repository root; otherwise the
+working directory. Innermost managed corpus wins; the walk stops at the first `.git`. Never
 `CLAUDE_PROJECT_DIR` alone: a worktree entered with `EnterWorktree` or
 `using-git-worktrees` lies outside it, and a root anchored to the launch directory would
 inspect the wrong tree.
@@ -139,9 +141,9 @@ broken tool that falls silent is the failure ADR 013 names.
 
 | Event | Matcher | Behaviour |
 |---|---|---|
-| `SessionStart` | `startup\|resume\|clear\|compact\|fork` | Injects the standing note: decisions in force, read `docs/adr/INDEX.md` before proposing architectural or tooling changes, decisions binding a file arrive as you touch it, record one with `phx:writing-adrs`. Where no state file exists, snapshots the **baseline** of current findings and reports them once. `compact` keeps the baseline and the reported findings and resets only the injected set, since the context that held it is gone; `resume` keeps both; `fork` arrives with a new session id and no state, so it behaves as `startup`; `clear` starts a fresh state. |
+| `SessionStart` | `startup\|resume\|clear\|compact\|fork` | Injects the standing note: decisions in force, read `docs/adr/INDEX.md` before proposing architectural or tooling changes, decisions binding a file arrive as you touch it, record one with `phx:writing-adrs`. Where no state file exists, snapshots the **baseline** of current findings and reports them once — as `additionalContext` for the agent and as `systemMessage` for the human, who never sees `additionalContext`. `compact` keeps the baseline and the reported findings and resets only the injected set, since the context that held it is gone; `resume` keeps both; `fork` arrives with a new session id and no state, so it behaves as `startup`; `clear` starts a fresh state. |
 | `SubagentStart` | — | The standing note: a subagent is its own context and gets no `SessionStart`. |
-| `PreToolUse` | `Read\|Edit\|Write\|MultiEdit\|NotebookEdit\|Bash` | Injects each binding decision not yet injected this session: number, status, title, summary, live `revisit-when`, path. For file tools the path is `tool_input.file_path`. For `Bash` the command string is tokenised and every token that resolves to a path under a managed root is looked up, a directory token with a trailing slash — so `cat`, a heredoc write, `git mv` and `rm` all deliver, closing the shell-read gap a path-scoped rule cannot. Before the tool, so it lands before the edit. |
+| `PreToolUse` | `Read\|Edit\|Write\|NotebookEdit\|Bash` | Injects each binding decision not yet injected this session: number, status, title, summary, live `revisit-when`, path. For file tools the path is `tool_input.file_path`. For `Bash` the command string is tokenised and every token that resolves to a path under a managed root is looked up, a directory token with a trailing slash — so `cat`, a heredoc write, `git mv` and `rm` all deliver, closing the shell-read gap a path-scoped rule cannot. Each injection is labelled as the decisions binding those paths, not the corpus, and ends with the instruction to read `INDEX.md` before proposing an architectural or tooling change. The rows arrive alongside the tool's result, so a first-touch write has landed; what they precede is the next action. (`MultiEdit` no longer exists as a tool.) |
 | `PostToolBatch` | — | Once per batch, after every parallel tool call in it has resolved. `reconcile --write` where a file tool in the batch wrote under `docs/adr/`, rooted at the root resolved from that path; `reconcile` otherwise, rooted at the working directory. Reports each finding **new since the baseline** once: a malformed ADR, two sharing a number, a stale index, a `scope` entry naming nothing — worded as a rename or deletion to act on: update `scope`, or ask whether the decision still binds anything and revisit it. Rename-agnostic: it inspects the tree, not the command. |
 | `Stop`, `SubagentStop` | — | `reconcile`. Raises each open finding new since the baseline **once more**, as `additionalContext`, which on `Stop` continues the turn as non-error feedback (hooks reference, "Stop decision control"), so the agent acts before handing back. Silent when clean, and silent for a finding already raised here: a hook that re-raises until the finding closes makes deleting the entry the path of least resistance, and the tool cannot tell that from a considered removal. What the agent leaves open reaches the next session's baseline, and a human. A subagent's turn ends at `SubagentStop`, so its state is raised there. |
 
@@ -156,11 +158,13 @@ the offending value — the dangling entry, the shared number — with the ADR n
 for display only, so neither a rename nor a renumber mints a new one. Where `new` creates
 the corpus mid-session, no `SessionStart` ran: the baseline is empty.
 
-**Session state** lives at `${CLAUDE_PLUGIN_DATA}/sessions/<session_id>[-<agent_id>].json`
-— baseline, injected numbers, findings reported at each stage — keyed per subagent because
-each is its own context. Parallel `PreToolUse` hooks read and write it concurrently, so
+**Session state** lives at `${CLAUDE_PLUGIN_DATA}/sessions/<session_id>.json`: the
+baseline and the reported set keyed by managed root, and the injected rows keyed by agent
+(`main`, or the `agent_id` of a subagent), so a subagent shares the session's baseline and
+keeps its own context. Parallel `PreToolUse` hooks read and write it concurrently, so
 every update takes an `fcntl` lock on a sidecar file, decides under it, and lands by atomic
-rename. `SessionStart` prunes files older than seven days. Where `CLAUDE_PLUGIN_DATA` is unset (a `--plugin-dir` session) the
+rename. `SessionStart` prunes files older than thirty days, matching session retention. A
+root first touched mid-session has no baseline until its first check, which snapshots one. Where `CLAUDE_PLUGIN_DATA` is unset (a `--plugin-dir` session) the
 state goes under the system temp directory.
 
 **Output bounds.** The harness caps hook output at 10,000 characters; the hook caps
@@ -187,13 +191,9 @@ The rewrite removes what the tool does and keeps what only judgement can do:
 The tooling that becomes the plugin's is deleted here, and the repository consumes the
 shipped copy: the first consumer, not a second implementation.
 
-- `scripts/adr/` goes. `scripts/frontmatter.py` stays for `validate_manifests.py`, and the
-  skill carries its own copy; a test asserts the two are identical below the module
-  docstring (the ADR 017 drift test), since a citation under `skills/` names the constraint
-  rather than an ADR number (ADR 014). Importing across the boundary by path is ADR 011's
-  rejected Option 4, and would have shipped code feeding unshipped code across two test
-  runners. This reinstates a duplication ADR 011 retired, held together by a test instead
-  of a package; the ADR below records it.
+- `scripts/adr/` goes. The parser moves into the skill and `scripts/frontmatter.py`
+  becomes a symlink to it, so `validate_manifests.py` imports it unchanged and there is one
+  file (ADR 023). Its docstring names constraints, not ADR numbers, since it ships.
 - `.githooks/pre-commit` calls `adr.py index` and `adr.py for` by path. It stays: the fast
   local aid ADR 005 welcomes, and the one route reaching a human committing from a shell.
 - `pr.yml`: the `adr` job runs `adr.py check`; the `python` matrix gains
@@ -201,7 +201,8 @@ shipped copy: the first consumer, not a second implementation.
   step runs the consumer recipe below against the checkout, so the recipe cannot rot
   unnoticed.
 - Tests move to `skills/writing-adrs/tests/` under pytest, matching the matrix leg;
-  `AGENTS.md`'s test-run line gains that leg.
+  `AGENTS.md`'s test-run line gains that leg. `pr.yml`'s `changes` job `case` arm that
+  selects the matrix names `skills/writing-adrs/*` too, or the leg never runs.
 - ADR 021 gains a `## Revisit watch` saying its trigger has not fired: session hooks exist
   and CI stays authoritative. That finding belongs there, not in a spec that gets deleted.
 
@@ -280,15 +281,15 @@ agent later Edits the same file → nothing
 - **Tool:** unit tests per subcommand against a fixture tree in a temp directory, ported
   from `scripts/adr/test_generate_index.py`; every existing case survives the move.
 - **Hook:** one test per event with a synthetic stdin payload, asserting the exact
-  `additionalContext` and the state file after; baseline-and-delta cases (baseline finding
-  reported once; new finding reported at `PostToolBatch`, once more at `Stop`, then silent;
+  `additionalContext` (and `systemMessage` at `SessionStart`) and the state file after;
+  baseline-and-delta cases (baseline finding reported once; new finding reported at `PostToolBatch`, once more at `Stop`, then silent;
   nothing reported once fixed; a finding surviving a renumber unchanged); state across
   `compact`, `resume`, `fork` and `clear`; the same rows raised at `SubagentStop`;
   concurrent `PreToolUse` calls losing no update; Bash tokenising, directory tokens included; root resolution from a worktree path the agent has `cd`-ed into; the
   exception path; the inert path for an unmanaged `docs/adr/`.
 - **Drift:** the Format block in `SKILL.md` equals the template `new` writes; every field
-  name the skill documents exists in the tool; `frontmatter.py` matches its copy; every
-  `adr.py` command line in the skill matches the `allowed-tools` rule.
+  name the skill documents exists in the tool; every `adr.py` command line in the skill
+  matches the `allowed-tools` rule.
 - **Mutation and analyst passes** per `.agents/rules/testing.md`.
 - **End-to-end, run locally, not in `pr.yml`** (it needs a model): the goal scenario
   against a scratch repository with `claude --plugin-dir ./ -p`. No `docs/adr/` → hooks

@@ -106,10 +106,17 @@ only.
   by this decision — ADR 005 makes CI the layer enforcement depends on, so widening the hook
   too is a local convenience to reach for later, not a requirement here.
 
+## Revisit watch
+
+- 2026-09-02: [ADR 022][] built the session-time hook system Option 3 described. The trigger
+  has not fired: the hooks are advisory, and CI stays the layer enforcement depends on.
+  Reopen only if the hooks are ever taken as the authoritative check instead.
+
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [ADR 009]: 009-keep-a-standing-develop-bypass.md
 [ADR 012]: 012-advertise-one-plugin-per-catalogue.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
+[ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
 [`generate_index.py`]: ../../scripts/adr/generate_index.py
 [`pr.yml`]: ../../.github/workflows/pr.yml

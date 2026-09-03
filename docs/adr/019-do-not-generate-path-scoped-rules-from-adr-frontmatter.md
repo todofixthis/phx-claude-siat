@@ -1,8 +1,9 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-08-30
 scope: [.agents/rules/, docs/adr/, scripts/adr/, skills/writing-adrs/]
 summary: Do not generate path-scoped rule files from ADR frontmatter at any granularity; a hand-written rule stating a constraint stays welcome, and INDEX.md with the `--for` lookup remains how a path reaches the decisions binding it.
+superseded-by: 25
 revisit-when: A harness loads a path-scoped rule on the creation of a matching file or on a shell read, so what a rule reaches stops depending on how a session happens to read; or the mandated index read is measured and found not to be happening.
 ---
 

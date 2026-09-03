@@ -11,10 +11,8 @@ by omitting a path — the argument is required. This follows the anchoring rule
 applies to `scripts/`, one step further out: the anchor is read on the `__main__` line
 alone, and `own_dir` is threaded below it.
 
-Only the first of the two anchor tests that rule asks for is written here. The second —
-asserting the anchor reaches this repository — is wrong for a skill: the whole point of
-`OWN_SKILL_SEGMENT` is that the tool runs from a plugin cache with the repository
-nowhere near it, and a test demanding otherwise would fail in the shape consumers get.
+Both anchor tests that rule asks for are written here, the second in the form the rule
+gives for a module shipped under `skills/`: the anchor names the files the skill bundles.
 """
 
 import re
