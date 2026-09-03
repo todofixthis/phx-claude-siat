@@ -22,6 +22,7 @@
 - Findings are reported by delta from a session baseline, at most twice for an agent (ADR 026).
 - NZ English throughout; comments on the line above the code they describe; every function annotates its return type and named parameters; imports and collections alphabetised.
 - Test conventions: `.agents/rules/testing.md` (read it before writing tests). Classes are `unittest.TestCase` subclasses run under pytest, as `skills/nz-english/tests/` does.
+- Run `uv run black .` in the skill directory before every "run the suite, lint and format" step: the code blocks in this plan are not black-formatted, and `black --check` is red until you do. Black changes layout only; a `# noqa` that black moves off its line is the one thing to re-check afterwards.
 - The locked `ruff` enables a broad rule set. Where a rule fires on a construct the plan requires, suppress it on that line with a `# noqa: <RULE> — <why>` comment, as `nz-english` does; never widen `pyproject.toml`'s ruff configuration, and never raise the 3.10 runtime floor to satisfy a lint (the floor is a constant, which the `UP036` rule accepts).
 - A citation under `skills/` names the constraint, never an ADR number (`AGENTS.md`, ADR 014).
 - Commits use the `phx:creative-commits` skill; push after every commit.
@@ -176,6 +177,8 @@ pre-commit = [
 
 [tool.black]
 line-length = 96
+# Pinned so black stops warning that it formatted for a Python it cannot parse.
+target-version = ["py312"]
 
 [tool.ruff]
 line-length = 96
@@ -205,7 +208,7 @@ Expected: `uv.lock` created; no errors.
 
 - [ ] **Step 5: Write the parser tests in the skill's suite**
 
-Create `skills/writing-adrs/tests/__init__.py` (empty) and `skills/writing-adrs/tests/test_frontmatter.py` by copying `scripts/test_frontmatter.py` and changing its import to `from frontmatter import parse_frontmatter` and its docstring's run line to `uv run pytest`. Keep every case.
+Create `skills/writing-adrs/tests/__init__.py` (empty) and `skills/writing-adrs/tests/test_frontmatter.py` by copying `scripts/test_frontmatter.py` and changing its import to `from frontmatter import parse_frontmatter` and its docstring's run line to `uv run pytest`. Keep every case. Then run `uv run black .` over the skill (the copied files were never black-formatted) and parenthesise the one implicitly concatenated string `ruff` reports as `ISC004` in the copied test.
 
 - [ ] **Step 6: Run both suites**
 
@@ -1348,7 +1351,7 @@ Expected: FAIL (`AttributeError: slugify` / `NotImplementedError`).
 
 - [ ] **Step 3: Implement**
 
-Add to `adr.py`, replacing the `command_new` stub:
+Add to `adr.py`, replacing the `new_adr` and `command_new` stubs:
 
 ```python
 class AdrError(Exception):
@@ -1412,8 +1415,8 @@ def command_new(root: Path, args: argparse.Namespace) -> int:
     """`new`: print the path written."""
     try:
         scope = [] if args.no_scope else args.scope
-        # Local date, as the ADR's author would write it.
-        path = new_adr(root, args.title, args.summary, scope, args.revisit_when, date.today())  # noqa: DTZ011
+        today = date.today()  # noqa: DTZ011 — the local date, as the author writes it
+        path = new_adr(root, args.title, args.summary, scope, args.revisit_when, today)
     except AdrError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -2481,7 +2484,7 @@ command -v python3 >/dev/null 2>&1 || { printf '%s' '{"hookSpecificOutput":{"hoo
 }
 ```
 
-Replace every `<GATE>` and `<PYTHON CHECK>` with the literal strings above (JSON-escaped). Validate: `python3 -c "import json; json.load(open('hooks/hooks.json'))"` and `claude plugin validate ./` if available.
+Replace every `<GATE>` and `<PYTHON CHECK>` with the literal strings above (JSON-escaped). Validate the JSON with `python3 -c "import json; json.load(open('hooks/hooks.json'))"`; `claude plugin validate ./` reads only the manifests, so it proves nothing about this file.
 
 - [ ] **Step 2: Smoke-test the shell line by hand**
 
@@ -2753,9 +2756,9 @@ python3 -m scripts.ci.validate_manifests
 python3 -m unittest discover -s scripts -t . -p 'test_*.py' 2>&1 | tail -2
 cd skills/writing-adrs && uv run pytest -q && cd -
 uvx --reinstall --from ./skills/writing-adrs phx-adr check
-head -n 1 docs/adr/INDEX.md```
+head -n 1 docs/adr/INDEX.md
+```
 `--reinstall` because uv caches a path source until its `pyproject.toml` changes, and would otherwise serve Task 1's placeholder.
-```bash
 ```
 Expected: all green; the index's first line is the fixed header. Then re-run Task 6 Steps 2 and 3 (the smoke test now prints the note; measure and record the budget in ADR 022).
 
