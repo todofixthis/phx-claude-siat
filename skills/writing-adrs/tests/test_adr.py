@@ -1128,6 +1128,13 @@ class SetFieldsTests(unittest.TestCase):
         result = adr.set_fields(text, {"status": "Superseded"})
         self.assertTrue(result.endswith("\nMore body with status: words in it.\n"))
 
+    def test_replaces_a_field_written_with_space_before_its_colon(self):
+        """The parser accepts `status : Accepted`, so the editor must find that line too."""
+        text = adr_text().replace("status: Accepted", "status : Accepted")
+        result = adr.set_fields(text, {"status": "Superseded"})
+        self.assertEqual(result.count("status"), 1)
+        self.assertIn("\nstatus: Superseded\n", result)
+
 
 class SupersedeTests(RepoTestCase):
     """Integration tests for ``supersede()``."""
@@ -1158,6 +1165,19 @@ class SupersedeTests(RepoTestCase):
         with self.assertRaises(adr.AdrError):
             adr.supersede(self.repo_root, 1, 2)
         self.assertEqual((self.adr_dir / "001-first.md").read_text(encoding="utf-8"), original)
+
+    def test_clears_archived_because_when_superseding_an_archived_adr(self):
+        """Superseded refuses `archived-because`, so the field goes with the status change."""
+        self.write(
+            "003-third.md",
+            adr_text(status="Archived", title="3: Third", **{"archived-because": "A comment."}),
+        )
+        self.manage()
+        adr.supersede(self.repo_root, 3, 2)
+        content = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+        self.assertNotIn("archived-because", content)
+        self.assertIn("\nsuperseded-by: 2\n", content)
+        self.assertEqual(adr.parse_adr(content)[3], [])
 
 
 class DischargeTests(RepoTestCase):
@@ -1284,6 +1304,17 @@ class RenumberTests(RepoTestCase):
         with self.assertRaises(adr.AdrError):
             adr.renumber(self.repo_root, 1, 5)
         self.assertTrue((self.adr_dir / "001-first.md").exists())
+
+    def test_moves_a_padded_peer_field(self):
+        """A hand-authored `superseded-by: 001` names the same ADR as `1` and follows it."""
+        self.write(
+            "003-third.md",
+            adr_text(status="Superseded", title="3: Third", **{"superseded-by": "001"}),
+        )
+        self.manage()
+        adr.renumber(self.repo_root, 1, 5)
+        content = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+        self.assertIn("\nsuperseded-by: 5\n", content)
 
 
 class MainEditTests(RepoTestCase):

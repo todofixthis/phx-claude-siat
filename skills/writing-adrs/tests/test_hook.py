@@ -94,6 +94,18 @@ class PathsInCommandTests(unittest.TestCase):
         found = hook.paths_in_command("ls .. /", self.cwd)
         self.assertEqual([hook.managed_root_for(path) for path in found], [None, None])
 
+    def test_a_fused_redirect_target_counts_as_a_path(self):
+        """`>>src/db/other.py` is one token; the operator is stripped and the target kept."""
+        (self.cwd / "src" / "db").mkdir(parents=True)
+        found = hook.paths_in_command("echo x >>src/db/other.py", self.cwd)
+        self.assertEqual(found, [self.cwd / "src" / "db" / "other.py"])
+
+    def test_a_path_shaped_word_that_follows_no_redirect_is_not_a_path(self):
+        """Only an existing path, or a redirect target, binds; a message naming one does not."""
+        (self.cwd / "docs" / "adr").mkdir()
+        found = hook.paths_in_command("git commit -m 'docs/adr/013 is fine'", self.cwd)
+        self.assertEqual(found, [])
+
 
 class SessionStartTests(HookTestCase):
     """SessionStart: the standing note, the baseline, and what each source does to state."""
@@ -297,6 +309,25 @@ class PreToolUseTests(HookTestCase):
             sorted(self.state()["injected"][hook.MAIN_AGENT]),
             [self.injected_key("002"), self.injected_key("003")],
         )
+
+    def test_a_slash_inside_a_message_argument_delivers_nothing(self):
+        """A path-shaped word in a commit message is not a path the command touches."""
+        result = self.handle(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_input={"command": "git commit -m 'docs/adr/013 is fine'"},
+        )
+        self.assertIsNone(result)
+
+    def test_a_redirect_target_about_to_be_created_delivers(self):
+        """A redirect creating a file under a scoped directory binds before the file exists."""
+        self.write_scoped("src/db/x.py")
+        self.write("002-second.md", adr_text(title="2: Do another thing", scope="[src/db/]"))
+        self.manage()
+        result = self.handle(
+            "PreToolUse", tool_name="Bash", tool_input={"command": "cat > src/db/new.py <<EOF"}
+        )
+        self.assertIn("002", self.context(result))
 
 
 class PostToolBatchTests(HookTestCase):

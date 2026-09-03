@@ -269,11 +269,19 @@ def paths_in_command(command: str, cwd: Path) -> list[Path]:
     except ValueError:
         tokens = command.split()
     found = []
-    for token in tokens:
+    previous = ""
+    for raw in tokens:
+        # A redirect target may be fused to its operator (`>>file`) or follow it as its
+        # own token; either way it is a file about to be created, which still binds.
+        redirected = previous in (">", ">>") or (raw.startswith(">") and raw.strip(">"))
+        token = raw.lstrip(">")
+        previous = raw
+        if not token:
+            continue
         candidate = Path(token) if Path(token).is_absolute() else cwd / token
-        # An existing path, or a slash-bearing token whose directory exists: the second
-        # is a heredoc or redirect about to create a file, which still binds.
-        if candidate.exists() or ("/" in token and candidate.parent.exists()):
+        # An existing path, or a redirect target whose directory exists. A bare slash in
+        # any other token — a commit message naming a path — is not a path the command touches.
+        if candidate.exists() or (redirected and candidate.parent.exists()):
             found.append(candidate)
     return found
 
@@ -336,6 +344,7 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
     rows: list[adr.Row] = []
     named: list[str] = []
     for root, paths in by_root.items():
+        before = len(rows)
         for row in adr.binding(root, paths):
             # Keyed by root as well as number: two managed corpora in one session each
             # number their decisions from 001, and a bare number would let the first
@@ -345,6 +354,9 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
                 continue
             injected.append(key)
             rows.append(row)
+        # Once per root that contributed a row: the label names the paths looked up, and
+        # binding() matched any of them rather than each row to one path.
+        if len(rows) > before:
             named.extend(adr.relative_to_root(p, root) or p for p in paths)
     if not rows:
         return None

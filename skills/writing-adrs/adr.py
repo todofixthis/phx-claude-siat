@@ -766,8 +766,8 @@ def set_fields(content: str, updates: dict[str, str | None]) -> str:
         raise AdrError("has no frontmatter block")
     lines = match.group(1).split("\n")
     for key, value in updates.items():
-        prefix = f"{key}:"
-        present = [i for i, line in enumerate(lines) if line.startswith(prefix)]
+        # Matched the way the parser reads a key, so `status : Accepted` is found too.
+        present = [i for i, line in enumerate(lines) if line.partition(":")[0].strip() == key]
         if value is None:
             lines = [line for i, line in enumerate(lines) if i not in present]
         elif present:
@@ -794,6 +794,11 @@ def regenerate_or_raise(root: Path) -> None:
         raise AdrError("; ".join(f.message for f in findings))
 
 
+def names_number(value: str | None, number: int) -> bool:
+    """Whether a frontmatter value names `number`, however it is padded."""
+    return value is not None and value.isdigit() and int(value) == number
+
+
 def refuse_on_findings(root: Path) -> None:
     """Raise the corpus's findings, so a command refuses before it writes anything.
 
@@ -812,8 +817,14 @@ def supersede(root: Path, old: int, new: int) -> None:
     path = find_adr(root, old)
     find_adr(root, new)
     refuse_on_findings(root)
+    # Superseded refuses `archived-because`, so an Archived ADR sheds it with the status.
     updated = set_fields(
-        read_document(path), {"status": "Superseded", SUPERSEDED_BY_FIELD: str(new)}
+        read_document(path),
+        {
+            "status": "Superseded",
+            STATUS_FIELDS["Archived"]: None,
+            SUPERSEDED_BY_FIELD: str(new),
+        },
     )
     path.write_text(updated, encoding="utf-8")
     regenerate_or_raise(root)
@@ -869,7 +880,8 @@ def renumber(root: Path, old: int, new: int) -> list[str]:
         peer_updates = {}
         peer_fields = parse_adr(text)[0]
         for field in (SUPERSEDED_BY_FIELD, REVISIT_DISCHARGED_BY_FIELD):
-            if peer_fields.get(field) == str(old):
+            # By value, as the citation regexes above compare: `007` names ADR 7.
+            if names_number(peer_fields.get(field), old):
                 peer_updates[field] = str(new)
         if peer_updates:
             text = set_fields(text, peer_updates)
