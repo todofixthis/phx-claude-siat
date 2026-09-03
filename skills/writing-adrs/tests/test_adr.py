@@ -912,6 +912,14 @@ class NewAdrTests(RepoTestCase):
         self.assertIn("gone/", str(caught.exception))
         self.assertEqual(sorted(p.name for p in self.adr_dir.iterdir()), [])
 
+    def test_refuses_to_scaffold_beside_a_malformed_sibling(self):
+        """An existing fault is caught before writing, so no new file lands beside it index-less."""
+        self.write("001-broken.md", adr_text(status="Bogus"))
+        with self.assertRaises(adr.AdrError) as caught:
+            adr.new_adr(self.repo_root, "W", "S.", [SCOPED_FILE], None, date(2026, 9, 2))
+        self.assertIn("001-broken.md", str(caught.exception))
+        self.assertEqual(sorted(p.name for p in self.adr_dir.iterdir()), ["001-broken.md"])
+
     def test_the_template_carries_no_placeholder_frontmatter(self):
         """The rendered file's frontmatter is complete; the template's comment lines are gone."""
         path = adr.new_adr(self.repo_root, "V", "S.", [SCOPED_FILE], None, date(2026, 9, 2))

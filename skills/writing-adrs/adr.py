@@ -676,13 +676,18 @@ def new_adr(
 ) -> Path:
     """Scaffold the next ADR, creating the corpus on first use, and regenerate the index.
 
-    A scope entry naming nothing is refused before anything is written: the index would
-    refuse it anyway, and a half-scaffolded ADR is worse than none.
+    The scope and the existing corpus are both checked before anything is written: a
+    scope entry naming nothing is refused the way the index would refuse it, and a
+    fault already on disk is refused before a new file could land beside it, index-less.
     """
     problems = scope_problems(scope, root)
     if problems:
         raise AdrError("; ".join(message for _, _, message in problems))
     adr_dir = root / ADR_DIR
+    if adr_dir.is_dir():
+        _, findings = inspect(root)
+        if findings:
+            raise AdrError("; ".join(f.message for f in findings))
     adr_dir.mkdir(parents=True, exist_ok=True)
     number = next_number(adr_dir)
     path = adr_dir / f"{number:0{NUMBER_WIDTH}d}-{slugify(title)}.md"
