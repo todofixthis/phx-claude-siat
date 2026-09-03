@@ -23,7 +23,8 @@ preceding the code they document, not as trailing comments.
 - `scripts/` is a package (ADR 011), so run a script as `python3 -m scripts.<area>.<name>`
   from the repo root — a path invocation fails to import. The `scripts/` suite is
   `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`; each skill shipping a
-  `pyproject.toml` runs `uv run pytest` from its directory.
+  `pyproject.toml` runs `uv run pytest`, `uv run ruff check .` and `uv run black --check .`
+  from its directory, all three gated by `pr.yml`.
 - `scripts/frontmatter.py` is a symlink into `skills/writing-adrs/`; edit the parser there.
 - Every function annotates its return type and its named parameters, `-> None`
   included; `*args` and `**kwargs` are left bare. Test functions are exempt from
@@ -146,4 +147,5 @@ with no `docs/adr/` to open, so name the constraint rather than relying on the n
 Hooks aren't installed on clone: run `git config core.hooksPath .githooks` once per
 clone (it carries across worktrees). Without it `INDEX.md` goes stale, and `pr.yml`'s
 `adr` job runs the tool's `check` on every pull request, which fails the build on a stale
-index. Set `core.hooksPath` and re-commit.
+index or on a `scope` entry naming a path that no longer exists. Set `core.hooksPath` and
+re-commit.

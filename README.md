@@ -59,6 +59,23 @@ those two — the tool uses only the standard library, and builds no virtualenv.
 it to find that out: an absent `git` stops the sweep before the non-repository
 path is reached. Where either program is missing, the skill says so and stops.
 
+#### writing-adrs
+
+`writing-adrs` ships a tool and session hooks, so the skill needs **`python3` (3.10 or
+newer)** on your `PATH`. Nothing else to install. (The CI recipe below needs only `uv`,
+which fetches an interpreter meeting the tool's 3.12 floor.) The first ADR the agent
+records creates `docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks
+regenerate the index after the agent edits an ADR (an edit made through the shell is
+reported, not fixed), inject the decisions binding a file the first time a session touches
+it, and report a `scope` entry left dangling by a move or delete. The hooks are inert in a
+repository whose `docs/adr/INDEX.md` the tool did not generate.
+
+To gate a consumer's CI on the corpus, pinned to a release tag (`<tag>`):
+
+```bash
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@<tag>#subdirectory=skills/writing-adrs' phx-adr check
+```
+
 #### Superpowers wrapper scripts
 
 These scripts wrap the same-named skills from
@@ -80,22 +97,6 @@ adding conventions the base skills leave out:
 > ````markdown
 > Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one.
 > ````
-
-#### writing-adrs
-
-`writing-adrs` ships a tool and session hooks, so the skill needs **`python3` (3.10 or
-newer)** on your `PATH`. Nothing else to install. (The CI recipe below needs only `uv`,
-which fetches an interpreter meeting the tool's 3.12 floor.) The first ADR the agent
-records creates `docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks
-regenerate the index after an ADR edit, inject the decisions binding a file the first time
-a session touches it, and report a `scope` entry left dangling by a move or delete. The
-hooks are inert in a repository whose `docs/adr/INDEX.md` the tool did not generate.
-
-To gate a consumer's CI on the corpus, pinned to a release tag (`<tag>`):
-
-```bash
-uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@<tag>#subdirectory=skills/writing-adrs' phx-adr check
-```
 
 ## Installation
 
@@ -189,10 +190,12 @@ Decisions binding these paths:
 007 (Accepted): Keep repo scripts stdlib-only — docs/adr/007-keep-repo-scripts-stdlib-only.md
 ```
 
-That report is the only place `Archived` decisions appear — they are still in force
-but kept out of `INDEX.md`. Skipping the hook is not free: `pr.yml` runs the tool's
-`check` on every pull request and fails the build on a stale index, so a missing hook
-shows up as a red gate rather than a stale file.
+That report comes from `adr.py for`, which the session hooks also run, and it is where
+`Archived` decisions appear — they are still in force but kept out of `INDEX.md`.
+Skipping the hook is not free: `pr.yml` runs the tool's `check` on every pull request,
+which fails the build on a stale index or on a `scope` entry naming a path that no longer
+exists, and then runs the consumer recipe above against the checkout so it cannot rot. A
+missing hook shows up as a red gate rather than a stale file.
 
 The setting lives in the clone's shared config and the path is relative, so a single
 activation also covers every worktree. To regenerate the index by hand:
@@ -212,7 +215,8 @@ than answered with silence.
 
 Contributions go to `develop` — `main` carries releases only. Run the `scripts/` suite
 with `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`, and each skill shipping
-a `pyproject.toml` with `uv run pytest` from its directory; `AGENTS.md` has the rest of the
+a `pyproject.toml` with `uv run pytest`, `uv run ruff check .` and `uv run black --check .`
+from its directory, which is what CI gates; `AGENTS.md` has the rest of the
 maintainer guidance.
 
 ## Licence
