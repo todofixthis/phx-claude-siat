@@ -16,8 +16,10 @@ import io
 import json
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
+import adr
 from adr import (
     ADR_DIR,
     EMPTY_NOTE,
@@ -852,6 +854,91 @@ class MainTests(RepoTestCase):
         )
         self.assertEqual(code, 0)
         self.assertIn("001", out)
+
+
+class SlugifyTests(unittest.TestCase):
+    """Unit tests for ``slugify()``."""
+
+    def test_lowercases_and_hyphenates(self):
+        """Spaces and punctuation collapse to single hyphens; case is lowered."""
+        self.assertEqual(
+            adr.slugify("Keep repo scripts stdlib-only!"), "keep-repo-scripts-stdlib-only"
+        )
+
+    def test_strips_leading_and_trailing_junk(self):
+        """A title wrapped in quotes or spaces yields a clean slug."""
+        self.assertEqual(adr.slugify("  'Pin the entry' "), "pin-the-entry")
+
+
+class NewAdrTests(RepoTestCase):
+    """Integration tests for ``new_adr()``: the file, the index, and refusal on a bad scope."""
+
+    def test_creates_the_corpus_and_the_first_adr(self):
+        """With no docs/adr at all, `new` creates it, the ADR and a managed index."""
+        root = self.repo_root / "fresh"
+        root.mkdir()
+        (root / SCOPED_FILE).write_text("", encoding="utf-8")
+        path = adr.new_adr(
+            root, "Do the thing", "A summary.", [SCOPED_FILE], None, date(2026, 9, 2)
+        )
+        self.assertEqual(path, root / ADR_DIR / "001-do-the-thing.md")
+        content = path.read_text(encoding="utf-8")
+        self.assertTrue(
+            content.startswith(
+                "---\nstatus: Accepted\ndate: 2026-09-02\nscope: [README.md]\n"
+                "summary: A summary.\n---\n\n# 001: Do the thing\n"
+            )
+        )
+        self.assertIn("### Option 2: [Chosen option] (Accepted)", content)
+        self.assertTrue(is_managed(root))
+
+    def test_allocates_the_next_number_and_keeps_padding(self):
+        """The number is one past the highest on disk, zero-padded to three."""
+        self.write("007-x.md", adr_text(title="7: X"))
+        path = adr.new_adr(self.repo_root, "Y", "S.", [SCOPED_FILE], None, date(2026, 9, 2))
+        self.assertEqual(path.name, "008-y.md")
+
+    def test_writes_revisit_when_and_an_empty_scope(self):
+        """--revisit-when lands as a field; --no-scope writes `scope: []`."""
+        path = adr.new_adr(self.repo_root, "Z", "S.", [], "A condition.", date(2026, 9, 2))
+        content = path.read_text(encoding="utf-8")
+        self.assertIn("\nscope: []\n", content)
+        self.assertIn("\nrevisit-when: A condition.\n", content)
+
+    def test_refuses_a_scope_naming_nothing_and_writes_nothing(self):
+        """A dangling entry at scaffold time is an error, and no file is created."""
+        with self.assertRaises(adr.AdrError) as caught:
+            adr.new_adr(self.repo_root, "W", "S.", ["gone/"], None, date(2026, 9, 2))
+        self.assertIn("gone/", str(caught.exception))
+        self.assertEqual(sorted(p.name for p in self.adr_dir.iterdir()), [])
+
+    def test_the_template_carries_no_placeholder_frontmatter(self):
+        """The rendered file's frontmatter is complete; the template's comment lines are gone."""
+        path = adr.new_adr(self.repo_root, "V", "S.", [SCOPED_FILE], None, date(2026, 9, 2))
+        content = path.read_text(encoding="utf-8")
+        self.assertNotIn("YYYY-MM-DD", content)
+        self.assertNotIn("# plus revisit-when", content)
+        _, _, _, problems = adr.parse_adr(content)
+        self.assertEqual(problems, [])
+
+
+class MainNewTests(RepoTestCase):
+    """Integration tests for `new` through the entry point."""
+
+    def test_new_prints_the_path_and_regenerates_the_index(self):
+        """`new` reports where it wrote and the index carries the row."""
+        code, out, _ = self.run_main(
+            "new", "Do the thing", "--summary", "A summary.", "--scope", SCOPED_FILE
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), str(self.repo_root / ADR_DIR / "001-do-the-thing.md"))
+        self.assertIn("| [001](001-do-the-thing.md) | Accepted | Do the thing |", self.index())
+
+    def test_new_requires_a_scope_decision(self):
+        """Neither --scope nor --no-scope is a usage error, exit 2."""
+        with self.assertRaises(SystemExit) as caught:
+            self.run_main("new", "T", "--summary", "S.")
+        self.assertEqual(caught.exception.code, 2)
 
 
 if __name__ == "__main__":

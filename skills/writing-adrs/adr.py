@@ -617,6 +617,55 @@ def cli() -> int:
     return main(sys.argv[1:], Path.cwd())
 
 
+class AdrError(Exception):
+    """A command that cannot proceed; the message is for the person who ran it."""
+
+
+def slugify(title: str) -> str:
+    """Kebab-case a title for a filename."""
+    return RE_SLUG_JUNK.sub("-", title.lower()).strip("-")
+
+
+def next_number(adr_dir: Path) -> int:
+    """One past the highest number on disk, or 1 for an empty corpus."""
+    numbers = (
+        [
+            int(RE_FILE_NUMBER.match(p.name).group(1))
+            for p in adr_dir.iterdir()
+            if RE_ADR_FILENAME.match(p.name)
+        ]
+        if adr_dir.is_dir()
+        else []
+    )
+    return max(numbers, default=0) + 1
+
+
+def render_new(
+    number: int,
+    title: str,
+    summary: str,
+    scope: list[str],
+    revisit_when: str | None,
+    today: date,
+) -> str:
+    """The template with its frontmatter and heading filled; the body left for the agent."""
+    frontmatter = [
+        "status: Accepted",
+        f"date: {today.isoformat()}",
+        f"scope: [{', '.join(scope)}]",
+        f"summary: {summary}",
+    ]
+    if revisit_when:
+        frontmatter.append(f"revisit-when: {revisit_when}")
+    _, body = FORMAT_TEMPLATE.split("---\n\n# NNN: Title (Imperative Mood)\n", 1)
+    return (
+        "---\n"
+        + "\n".join(frontmatter)
+        + f"\n---\n\n# {number:0{NUMBER_WIDTH}d}: {title}\n"
+        + body
+    )
+
+
 def new_adr(
     root: Path,
     title: str,
@@ -625,8 +674,25 @@ def new_adr(
     revisit_when: str | None,
     today: date,
 ) -> Path:
-    """Task 3."""
-    raise NotImplementedError
+    """Scaffold the next ADR, creating the corpus on first use, and regenerate the index.
+
+    A scope entry naming nothing is refused before anything is written: the index would
+    refuse it anyway, and a half-scaffolded ADR is worse than none.
+    """
+    problems = scope_problems(scope, root)
+    if problems:
+        raise AdrError("; ".join(message for _, _, message in problems))
+    adr_dir = root / ADR_DIR
+    adr_dir.mkdir(parents=True, exist_ok=True)
+    number = next_number(adr_dir)
+    path = adr_dir / f"{number:0{NUMBER_WIDTH}d}-{slugify(title)}.md"
+    path.write_text(
+        render_new(number, title, summary, scope, revisit_when, today), encoding="utf-8"
+    )
+    findings = reconcile(root, write=True)
+    if findings:
+        raise AdrError("; ".join(f.message for f in findings))
+    return path
 
 
 def supersede(root: Path, old: int, new: int) -> None:
@@ -645,8 +711,16 @@ def renumber(root: Path, old: int, new: int) -> list[str]:
 
 
 def command_new(root: Path, args: argparse.Namespace) -> int:
-    """Task 3."""
-    raise NotImplementedError
+    """`new`: print the path written."""
+    try:
+        scope = [] if args.no_scope else args.scope
+        today = date.today()  # noqa: DTZ011 — the local date, as the author writes it
+        path = new_adr(root, args.title, args.summary, scope, args.revisit_when, today)
+    except AdrError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(path)
+    return 0
 
 
 def command_edit(
