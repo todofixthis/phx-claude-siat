@@ -9,7 +9,7 @@ uses: `${CLAUDE_SKILL_DIR}` in every command line, and an `allowed-tools` rule p
 the tool.
 
 `nz-english` instead tells the agent to substitute for `<skilldir>` the base directory the
-skill reported when it loaded. ADR 022 settles that `${CLAUDE_SKILL_DIR}` is the harness's
+skill reported when it loaded. ADR 022 records that `${CLAUDE_SKILL_DIR}` is the harness's
 own form of the skill-relative resolution ADR 003 requires, so this is a migration rather
 than a reopened decision.
 

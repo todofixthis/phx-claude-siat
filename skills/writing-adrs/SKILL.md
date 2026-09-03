@@ -19,22 +19,38 @@ inside the repository. `${CLAUDE_SKILL_DIR}` is substituted before you see this 
 |---|---|
 | Scaffold the next ADR, creating `docs/adr/` and the index on first use | `python3 ${CLAUDE_SKILL_DIR}/adr.py new "Title in imperative mood" --summary "What was decided." --scope path/ --scope file.py` — or `--no-scope` for a decision that binds no path; add `--revisit-when "Condition."` where one would reopen it |
 | See which decisions bind a path before changing it | `python3 ${CLAUDE_SKILL_DIR}/adr.py for path/to/file` |
-| Regenerate the index by hand (the hooks do it after your edits) | `python3 ${CLAUDE_SKILL_DIR}/adr.py index` |
-| Validate without writing, as CI does | `python3 ${CLAUDE_SKILL_DIR}/adr.py check` |
+| Regenerate the index by hand (the hooks do it after an Edit or Write to an ADR; an edit through the shell leaves it for you) | `python3 ${CLAUDE_SKILL_DIR}/adr.py index` |
+| Validate without writing; exits 1 on any finding — what a CI job would run | `python3 ${CLAUDE_SKILL_DIR}/adr.py check` |
 | Mark an ADR superseded | `python3 ${CLAUDE_SKILL_DIR}/adr.py supersede OLD --by NEW` |
 | Record a discharged revisit trigger | `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW` |
 | Renumber an ADR nothing outside your work cites | `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD NEW` |
 
 `new` writes the frontmatter complete and the body as the Format template below, for you
 to fill. The tool refuses a `scope` entry naming nothing on disk, so name paths that exist.
-Where the tool cannot run — no `python3`, or it reports a fault in itself — stop and say so
-rather than editing the index or the frontmatter by hand.
+Where the tool cannot run at all — no `python3`, or it breaks — stop and say so rather than
+writing the index or the fields it sets (`status`, `superseded-by`, `revisit-discharged-by`) by
+hand; `scope`, `summary` and `revisit-when` stay yours to edit. A refusal is not that: it
+prints `Error:` on stderr and exits 1, naming an ADR and what is wrong with it. Fix that ADR
+and rerun — every command is blocked while any fault stands, so an unrelated ADR's dangling
+`scope` entry blocks `new` too.
+
+Adopting a corpus somebody wrote by hand takes one pass. The tool refuses to act while any ADR
+under `docs/adr/` fails its rules — a lowercase `status: accepted`, a `tags` field where
+`scope` belongs, no `scope` at all — and the hooks stay silent until `docs/adr/INDEX.md` opens
+with the tool's generated header line. Bring each ADR's frontmatter to the Format below —
+title-case `status`, and `tags` replaced by `scope`, or `scope: []` where the decision binds no
+path — then run `python3 ${CLAUDE_SKILL_DIR}/adr.py index` once: it writes that header and
+switches the hooks on.
 
 With the phx plugin's hooks active, the decisions binding a file arrive in your context the
 first time you touch it, the index is regenerated after you edit an ADR, and a `scope` entry
 left dangling by a move or delete is reported to you once, and once more before you finish.
 That report means: update `scope` if the code moved; if it is gone, ask whether the decision
 still binds anything, and revisit it here.
+
+A decision arrives once per session, not once per file, so a second file the same decision
+binds arrives with nothing — the row you already hold still binds it. Each row ends with the
+ADR's path in brackets: the row is the summary, and that file holds the reasoning.
 
 ## Format
 
@@ -113,7 +129,7 @@ truncated index row.
   - **A repo-wide convention has no root shorthand** — name the top-level directories it genuinely reaches. Being made to list them is the point: most "repo-wide" decisions turn out not to be.
   - **An `Archived` ADR defended by a rule names that rule file too** — the files a comment defends are in `scope` already; the rule defending them is not. See Defending a decision with a path-scoped rule, below.
   - **`scope: []`** is a real answer, for a decision whose subject is not a file at all — a platform setting, a habit at review time. Say in Decision why there is no file home.
-  - The tool rejects an entry naming nothing on disk, a glob, and a directory written without its trailing `/`.
+  - **The tool rejects** an entry naming nothing on disk, a glob, and a directory written without its trailing `/`.
 - **`summary`** — one sentence: what was decided, not why. This appears verbatim in the index. Phrase it so a reader who sees _only_ the frontmatter won't breach the decision: name the binding choice, including the notable rejected alternative where one exists (e.g. "Use mypy, not ty"). Leave the revisit trigger to `revisit-when`: the index carries that in a column of its own, so naming it here spends the reader's sentence twice.
 - **`revisit-when`** — one sentence naming the condition that would change the choice; omit where none would. A condition the decision accommodates is a premise, not a trigger; one that would replace the decision outright is still a trigger, since it says when to look and what the answering ADR does is settled then, not now. State the condition alone and not the option it argues for — Decision has already weighed that. Where several conditions each reopen the ADR, put them on the one line and phrase each so it can be cut without the rest — the discharge workflow spends them one at a time.
 - **`revisit-discharged-by`** — the number of the ADR that met the trigger and answered it, as a bare integer (`11`, not `011`); omit until one has, and never set it without `revisit-when`. It empties the ADR's Revisit cell in the index, which is its job: a spent condition stops costing every reader context.
@@ -188,13 +204,12 @@ as for a comment. Beyond that:
 - **Name the rule file in `scope` as well**, by the path the repository stores — with the
   layout above, the `.agents/rules/` one, since that is what gets staged and what a lookup
   matches. Deleting the rule removes the defence, and the ADR being out of the index by
-  design, nothing obvious reports the loss. A reverse lookup from a path reports the ADR
-  to whoever *narrows* the rule; whether it reports a deletion depends on the lookup, and
-  one keyed to added and modified paths will not. Where a generator checks that scope
-  entries resolve on disk, the deletion breaks the build — but on whichever later change
-  runs the generator, which is rarely the one that deleted the rule. Neither mechanism
-  catches the symlinked form of the entry, which resolves on disk and quietly matches
-  nothing. Find out what each of yours does before counting on any of them.
+  design, nothing in the corpus says so. The tool does: the entry then names nothing on
+  disk, which it reports as dangling — in the session that deletes it where the hooks are
+  active, and at the next `check` otherwise. Which tool did the deleting does not matter:
+  the hooks run after a batch of any kind, so a shell `rm` reaches them as surely as an edit.
+  What none of that catches is the symlinked form of the entry, which resolves on
+  disk and quietly matches nothing.
 - **Never archive on a rule outside the repository** — one in `~/.claude/rules/` loads on
   your machine and on nobody else's.
 - **Watch the rule arrive before archiving on it, and do it in a fresh session**, since a
@@ -393,8 +408,11 @@ Run `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD NEW` on the ADR whose numbe
 cited outside your own work. It moves the file, the heading, every peer ADR's fields and
 links naming the number, and the index, and refuses a number already claimed. It then lists
 every citation outside `docs/adr/` — a code comment, `AGENTS.md`, a plan, a skill — which
-are yours to move, in the same change. Miss one and it still resolves — to whichever
-decision kept the number — which is the silent failure the numbering rule exists to prevent.
+are yours to move, in the same change. That search covers the `ADR NNN` and `NNN-<slug>`
+forms alone: a path form such as `docs/adr/NNN` matches neither, and the renumbered ADR's own
+`summary`, `revisit-when` or body naming its number is yours too. Miss one and it still
+resolves — to whichever decision kept the number — which is the silent failure the numbering
+rule exists to prevent.
 
 Where both numbers are cited outside your work, each branch having landed before anyone
 noticed, there is no silent fix. Renumber the later one, move every citation you can reach,

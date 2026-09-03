@@ -531,9 +531,15 @@ def command_check(root: Path) -> int:
     return 0
 
 
-def command_for(root: Path, paths: list[str]) -> int:
-    """`for`: the reverse lookup, one line per binding decision."""
-    for row in binding(root, paths):
+def command_for(root: Path, paths: list[str], cwd: Path) -> int:
+    """`for`: the reverse lookup, one line per binding decision.
+
+    A relative path is the caller's, so it resolves against `cwd` and not against the root:
+    run from `src/`, `for db/models.py` means `src/db/models.py`. Passed through unchanged it
+    would match no scope entry and report no decisions, which reads as "nothing binds this".
+    """
+    resolved = [path if Path(path).is_absolute() else str(cwd / path) for path in paths]
+    for row in binding(root, resolved):
         print(
             f"{row.number} ({row.status}): {row.title} — {(ADR_DIR / row.filename).as_posix()}"
         )
@@ -600,7 +606,7 @@ def main(argv: list[str], cwd: Path) -> int:
     if args.command == "check":
         return command_check(root)
     if args.command == "for":
-        return command_for(root, args.paths)
+        return command_for(root, args.paths, cwd)
     if args.command == "reconcile":
         return command_reconcile(root, args.write)
     if args.command == "new":

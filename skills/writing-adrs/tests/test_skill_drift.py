@@ -20,6 +20,7 @@ class FormatTemplateTests(unittest.TestCase):
     """The fenced Format block in the skill is the template `new` writes."""
 
     def test_the_fence_equals_the_template(self):
+        """The fence under `## Format` matches `FORMAT_TEMPLATE` byte for byte."""
         text = SKILL.read_text(encoding="utf-8")
         match = RE_FORMAT_FENCE.search(text)
         self.assertIsNotNone(match, "SKILL.md has no fenced Format block")
@@ -30,6 +31,7 @@ class FieldNameTests(unittest.TestCase):
     """Every frontmatter field the skill documents exists in the tool."""
 
     def test_documented_fields_are_known_to_the_tool(self):
+        """The bolded field bullets name exactly the fields the tool knows."""
         text = SKILL.read_text(encoding="utf-8")
         documented = set(re.findall(r"^- \*\*`([a-z-]+)`\*\*", text, re.MULTILINE))
         known = {
@@ -49,6 +51,7 @@ class AllowedToolsTests(unittest.TestCase):
     """Every command line the skill gives matches the rule that pre-approves it."""
 
     def test_every_command_line_matches_the_rule(self):
+        """Every command line names a subcommand the `allowed-tools` rule pre-approves."""
         text = SKILL.read_text(encoding="utf-8")
         rule = RE_ALLOWED.search(text)
         self.assertIsNotNone(rule)

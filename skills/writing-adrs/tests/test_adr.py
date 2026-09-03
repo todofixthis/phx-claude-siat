@@ -845,12 +845,34 @@ class MainTests(RepoTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out, "001 (Accepted): Do the thing — docs/adr/001-first.md\n")
 
+    def test_for_resolves_a_relative_path_against_the_working_directory(self):
+        """`for` run from a subdirectory reads a relative path as that subdirectory's.
+
+        The scoped path is nested so the two readings differ: passed through unchanged,
+        `db/models.py` matches no entry and the command reports nothing. The corpus is
+        managed so the root still resolves from a subdirectory.
+        """
+        self.write_scoped("src/db/models.py")
+        self.write("001-first.md", adr_text(scope="[src/db/]"))
+        self.manage()
+        code, out, _ = self.run_main("for", "db/models.py", cwd=self.repo_root / "src")
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "001 (Accepted): Do the thing — docs/adr/001-first.md\n")
+
     def test_repo_root_overrides_the_working_directory(self):
-        """--repo-root points every command at the given tree."""
+        """--repo-root points every command at the given tree.
+
+        The subject is named absolutely because a relative one would resolve against the
+        working directory, which here is deliberately outside the tree.
+        """
         self.write("001-first.md", adr_text())
         elsewhere = Path(self.enterContext(tempfile.TemporaryDirectory()))
         code, out, _ = self.run_main(
-            "--repo-root", str(self.repo_root), "for", SCOPED_FILE, cwd=elsewhere
+            "--repo-root",
+            str(self.repo_root),
+            "for",
+            str(self.repo_root / SCOPED_FILE),
+            cwd=elsewhere,
         )
         self.assertEqual(code, 0)
         self.assertIn("001", out)
