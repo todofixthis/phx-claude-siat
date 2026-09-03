@@ -949,5 +949,148 @@ class MainNewTests(RepoTestCase):
         self.assertEqual(caught.exception.code, 2)
 
 
+class SetFieldsTests(unittest.TestCase):
+    """Unit tests for ``set_fields()``: replace, append, delete, and leave the body alone."""
+
+    def test_replaces_an_existing_field_in_place(self):
+        """A field already present keeps its position and takes the new value."""
+        text = adr_text()
+        self.assertIn(
+            "summary: A summary.\nstatus: Superseded\n---\n",
+            adr.set_fields(text, {"status": "Superseded"}),
+        )
+
+    def test_appends_a_new_field_at_the_end_of_the_block(self):
+        """A field not present is added as the last line before the closing marker."""
+        result = adr.set_fields(adr_text(), {"superseded-by": "13"})
+        self.assertIn("status: Accepted\nsuperseded-by: 13\n---\n", result)
+
+    def test_deletes_a_field_given_none(self):
+        """None removes the line."""
+        result = adr.set_fields(adr_text(**{"revisit-when": "X."}), {"revisit-when": None})
+        self.assertNotIn("revisit-when", result)
+
+    def test_leaves_the_body_untouched(self):
+        """Only the frontmatter changes; the body bytes are identical."""
+        text = adr_text() + "\nMore body with status: words in it.\n"
+        result = adr.set_fields(text, {"status": "Superseded"})
+        self.assertTrue(result.endswith("\nMore body with status: words in it.\n"))
+
+
+class SupersedeTests(RepoTestCase):
+    """Integration tests for ``supersede()``."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write("001-first.md", adr_text())
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+
+    def test_sets_status_and_superseded_by_and_regenerates(self):
+        """The old ADR gains the pair, and the index drops it."""
+        adr.supersede(self.repo_root, 1, 2)
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        self.assertIn("\nstatus: Superseded\n", content)
+        self.assertIn("\nsuperseded-by: 2\n", content)
+        self.assertNotIn("[001]", self.index())
+
+    def test_refuses_an_unknown_number(self):
+        """A number nothing on disk carries is an error naming it."""
+        with self.assertRaises(adr.AdrError):
+            adr.supersede(self.repo_root, 9, 2)
+
+
+class DischargeTests(RepoTestCase):
+    """Integration tests for ``discharge()``."""
+
+    def test_records_the_discharge_and_empties_the_revisit_cell(self):
+        """revisit-discharged-by is set as a bare integer and the index's Revisit cell empties."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A condition."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        adr.discharge(self.repo_root, 1, 2)
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        self.assertIn("\nrevisit-discharged-by: 2\n", content)
+        self.assertIn(
+            "| [001](001-first.md) | Accepted | Do the thing | README.md | A summary. |  |",
+            self.index(),
+        )
+
+    def test_refuses_where_there_is_no_trigger_to_spend(self):
+        """An ADR with no revisit-when cannot be discharged, and the file is left untouched."""
+        self.write("001-first.md", adr_text())
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        original = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        with self.assertRaises(adr.AdrError):
+            adr.discharge(self.repo_root, 1, 2)
+        self.assertEqual((self.adr_dir / "001-first.md").read_text(encoding="utf-8"), original)
+
+    def test_refuses_a_superseded_adr(self):
+        """A discharge on a Superseded ADR empties a cell nobody reads."""
+        self.write(
+            "001-first.md",
+            adr_text(status="Superseded", **{"superseded-by": "2", "revisit-when": "X."}),
+        )
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        with self.assertRaises(adr.AdrError):
+            adr.discharge(self.repo_root, 1, 2)
+
+
+class RenumberTests(RepoTestCase):
+    """Integration tests for ``renumber()``: file, heading, peers, links, index, and the list."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write("001-first.md", adr_text())
+        self.write(
+            "002-second.md",
+            adr_text(title="2: Do another thing")
+            + "\nSee [ADR 001][] and ADR 001 again.\n\n[ADR 001]: 001-first.md\n",
+        )
+        self.manage()
+
+    def test_moves_the_file_heading_peer_links_and_index(self):
+        """Every reference inside docs/adr follows the number."""
+        adr.renumber(self.repo_root, 1, 5)
+        self.assertFalse((self.adr_dir / "001-first.md").exists())
+        moved = (self.adr_dir / "005-first.md").read_text(encoding="utf-8")
+        self.assertIn("\n# 005: Do the thing\n", moved)
+        peer = (self.adr_dir / "002-second.md").read_text(encoding="utf-8")
+        self.assertIn("See [ADR 005][] and ADR 005 again.", peer)
+        self.assertIn("[ADR 005]: 005-first.md", peer)
+        self.assertIn("| [005](005-first.md)", self.index())
+        self.assertNotIn("001", self.index())
+
+    def test_moves_peer_fields_naming_the_number(self):
+        """superseded-by and revisit-discharged-by follow the number as bare integers."""
+        self.write(
+            "003-third.md",
+            adr_text(status="Superseded", title="3: Third", **{"superseded-by": "1"}),
+        )
+        self.manage()
+        adr.renumber(self.repo_root, 1, 5)
+        self.assertIn(
+            "\nsuperseded-by: 5\n", (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+        )
+
+    def test_lists_citations_outside_the_corpus(self):
+        """A citation elsewhere in the tree is returned for the agent, not edited."""
+        self.write_scoped("src/x.py")
+        (self.repo_root / "src" / "x.py").write_text(
+            "# ADR 001 forbids this\n", encoding="utf-8"
+        )
+        remaining = adr.renumber(self.repo_root, 1, 5)
+        self.assertEqual(remaining, ["src/x.py:1: # ADR 001 forbids this"])
+        self.assertIn("ADR 001", (self.repo_root / "src" / "x.py").read_text(encoding="utf-8"))
+
+    def test_refuses_a_number_already_claimed(self):
+        """Moving onto a number another ADR holds is refused before any write."""
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 1, 2)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

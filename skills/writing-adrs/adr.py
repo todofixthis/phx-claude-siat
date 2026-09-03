@@ -700,19 +700,148 @@ def new_adr(
     return path
 
 
+def set_fields(content: str, updates: dict[str, str | None]) -> str:
+    """Return `content` with frontmatter fields replaced, appended, or (given None) removed.
+
+    Only the block between the markers changes; a field in place keeps its position and a
+    new one goes last. The body is returned byte for byte.
+    """
+    match = RE_FRONTMATTER.match(content)
+    if not match:
+        raise AdrError("has no frontmatter block")
+    lines = match.group(1).split("\n")
+    for key, value in updates.items():
+        prefix = f"{key}:"
+        present = [i for i, line in enumerate(lines) if line.startswith(prefix)]
+        if value is None:
+            lines = [line for i, line in enumerate(lines) if i not in present]
+        elif present:
+            lines[present[0]] = f"{key}: {value}"
+        else:
+            lines.append(f"{key}: {value}")
+    return "---\n" + "\n".join(lines) + "\n---\n" + match.group(2)
+
+
+def find_adr(root: Path, number: int) -> Path:
+    """The file carrying `number`, however its filename pads it."""
+    adr_dir = root / ADR_DIR
+    for path in sorted(adr_dir.iterdir()) if adr_dir.is_dir() else []:
+        match = RE_FILE_NUMBER.match(path.name)
+        if RE_ADR_FILENAME.match(path.name) and int(match.group(1)) == number:
+            return path
+    raise AdrError(f"no ADR is numbered {number}")
+
+
+def regenerate_or_raise(root: Path) -> None:
+    """Regenerate the index after an edit, raising the findings if it cannot."""
+    findings = reconcile(root, write=True)
+    if findings:
+        raise AdrError("; ".join(f.message for f in findings))
+
+
 def supersede(root: Path, old: int, new: int) -> None:
-    """Task 4."""
-    raise NotImplementedError
+    """Mark `old` superseded by `new` and regenerate. The body is the agent's to edit."""
+    path = find_adr(root, old)
+    find_adr(root, new)
+    updated = set_fields(
+        path.read_text(encoding="utf-8"),
+        {"status": "Superseded", SUPERSEDED_BY_FIELD: str(new)},
+    )
+    path.write_text(updated, encoding="utf-8")
+    regenerate_or_raise(root)
 
 
 def discharge(root: Path, old: int, new: int) -> None:
-    """Task 4."""
-    raise NotImplementedError
+    """Record that `new` spent `old`'s revisit trigger. Striking the body through is the agent's."""
+    path = find_adr(root, old)
+    find_adr(root, new)
+    content = path.read_text(encoding="utf-8")
+    fields, _, _, _ = parse_adr(content)
+    if not fields.get(REVISIT_WHEN_FIELD):
+        raise AdrError(f"ADR {old} has no {REVISIT_WHEN_FIELD} to spend")
+    if fields.get("status") == "Superseded":
+        raise AdrError(
+            f"ADR {old} is Superseded; a discharge on it empties a cell nobody reads"
+        )
+    path.write_text(
+        set_fields(content, {REVISIT_DISCHARGED_BY_FIELD: str(new)}), encoding="utf-8"
+    )
+    regenerate_or_raise(root)
 
 
 def renumber(root: Path, old: int, new: int) -> list[str]:
-    """Task 4."""
-    raise NotImplementedError
+    """Move `old` to `new` across docs/adr; return citations elsewhere for the agent.
+
+    Rewrites the filename, the heading number, every `ADR <old>` citation and `<old>-slug`
+    link target in the corpus, and the peer fields naming the number. Files outside
+    docs/adr are searched, not edited: a code comment is the agent's to move.
+    """
+    path = find_adr(root, old)
+    adr_dir = root / ADR_DIR
+    claimed = any(
+        RE_ADR_FILENAME.match(p.name) and int(RE_FILE_NUMBER.match(p.name).group(1)) == new
+        for p in adr_dir.iterdir()
+    )
+    if claimed:
+        raise AdrError(f"ADR {new} already exists; pick a number nothing claims")
+    new_padded = f"{new:0{NUMBER_WIDTH}d}"
+    slug = path.name[len(RE_FILE_NUMBER.match(path.name).group(1)) :]
+    re_citation = re.compile(rf"\bADR 0*{old}\b")
+    re_link = re.compile(rf"\b0*{old}({re.escape(slug)})")
+    re_heading = re.compile(rf"^# 0*{old}:", re.MULTILINE)
+
+    for peer in sorted(adr_dir.iterdir()):
+        if not RE_ADR_FILENAME.match(peer.name) or peer == path:
+            continue
+        text = peer.read_text(encoding="utf-8")
+        text = re_citation.sub(f"ADR {new_padded}", text)
+        text = re_link.sub(rf"{new_padded}\1", text)
+        peer_updates = {}
+        peer_fields = parse_adr(text)[0]
+        for field in (SUPERSEDED_BY_FIELD, REVISIT_DISCHARGED_BY_FIELD):
+            if peer_fields.get(field) == str(old):
+                peer_updates[field] = str(new)
+        if peer_updates:
+            text = set_fields(text, peer_updates)
+        peer.write_text(text, encoding="utf-8")
+
+    text = path.read_text(encoding="utf-8")
+    text = re_heading.sub(f"# {new_padded}:", text)
+    target = adr_dir / f"{new_padded}{slug}"
+    target.write_text(text, encoding="utf-8")
+    path.unlink()
+    regenerate_or_raise(root)
+    return citations_outside_corpus(root, old, slug)
+
+
+def citations_outside_corpus(root: Path, old: int, slug: str) -> list[str]:
+    """`path:line: text` for every mention of the number outside docs/adr, for the agent."""
+    import subprocess
+
+    re_any = re.compile(rf"\bADR 0*{old}\b|\b0*{old}{re.escape(slug)}")
+    try:
+        listing = subprocess.run(
+            ["git", "ls-files", "-co", "--exclude-standard"],
+            capture_output=True,
+            check=True,
+            cwd=root,
+            text=True,
+        ).stdout.split("\n")
+    except (OSError, subprocess.CalledProcessError):
+        listing = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
+    found = []
+    for relative in listing:
+        if not relative or relative.startswith(ADR_DIR.as_posix() + "/"):
+            continue
+        file = root / relative
+        try:
+            lines = file.read_text(encoding="utf-8").split("\n")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for index, line in enumerate(lines, start=1):
+            if re_any.search(line):
+                found.append(f"{relative}:{index}: {line}")
+    return found
 
 
 def command_new(root: Path, args: argparse.Namespace) -> int:
@@ -731,13 +860,27 @@ def command_new(root: Path, args: argparse.Namespace) -> int:
 def command_edit(
     root: Path, action: Callable[[Path, int, int], None], old: int, new: int
 ) -> int:
-    """Task 4."""
-    raise NotImplementedError
+    """`supersede` and `discharge` share one shape: act, or print the error."""
+    try:
+        action(root, old, new)
+    except AdrError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def command_renumber(root: Path, old: int, new: int) -> int:
-    """Task 4."""
-    raise NotImplementedError
+    """`renumber`: move, then list what the agent still has to move by hand."""
+    try:
+        remaining = renumber(root, old, new)
+    except AdrError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if remaining:
+        print("Citations outside docs/adr still name the old number; move each by hand:")
+        for line in remaining:
+            print(f"  {line}")
+    return 0
 
 
 if __name__ == "__main__":
