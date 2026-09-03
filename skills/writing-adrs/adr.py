@@ -80,6 +80,8 @@ NUMBER_WIDTH = 3
 
 RE_ADR_FILENAME = re.compile(r"^\d+-.*\.md$")
 RE_FILE_NUMBER = re.compile(r"^(\d+)")
+# A character that cannot open a plain YAML scalar, or an indicator that a space follows.
+RE_YAML_INDICATOR = re.compile(r"""^(?:[`"'*&!%@,\[\]{}>|#]|[-?:]\s)""")
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
 RE_H1_TITLE = re.compile(r"^# (.+)$", re.MULTILINE)
 RE_NUMBER_PREFIX = re.compile(r"^(\d+):\s*")
@@ -241,6 +243,12 @@ def parse_adr(content: str) -> tuple[dict, str, str | None, list[str]]:
             for entry in spent
             if not entry.isdigit()
         )
+
+    for key, value in fields.items():
+        for entry in value if isinstance(value, list) else [value]:
+            hazard = yaml_hazard(entry)
+            if hazard:
+                problems.append(f"declares `{key}` holding {hazard}")
 
     if TAGS_FIELD in fields:
         problems.append(
@@ -671,6 +679,31 @@ class AdrError(Exception):
     """A command that cannot proceed; the message is for the person who ran it."""
 
 
+def yaml_hazard(value: str) -> str | None:
+    """Why a YAML reader would misread `value`, or None. Our parser reads it fine.
+
+    GitHub renders the frontmatter through a YAML parser. An opening indicator character —
+    a backtick, quote, bracket or the like — cannot start a plain value, and `: ` inside one
+    or a `:` ending it opens a nested mapping; either fails the whole file's rendering. ` #`
+    starts a comment, which drops the rest of the value without a word.
+    """
+    if RE_YAML_INDICATOR.match(value):
+        return (
+            f"an opening `{value[0]}`, which a YAML reader such as GitHub's takes as syntax; "
+            "start the value with a word"
+        )
+    if ": " in value or value.endswith(":"):
+        return (
+            "`: `, which a YAML reader such as GitHub's takes as a nested mapping; "
+            "rephrase the value"
+        )
+    if " #" in value:
+        return (
+            "` #`, which a YAML reader such as GitHub's takes as a comment; rephrase the value"
+        )
+    return None
+
+
 def slugify(title: str) -> str:
     """Kebab-case a title for a filename."""
     return RE_SLUG_JUNK.sub("-", title.lower()).strip("-")
@@ -734,12 +767,18 @@ def new_adr(
     """
     if not slugify(title):
         raise AdrError("title yields an empty slug")
-    if "\n" in summary:
-        raise AdrError("summary holds a line break; frontmatter carries a value on one line")
-    if revisit_when and "\n" in revisit_when:
-        raise AdrError(
-            "revisit-when holds a line break; frontmatter carries a value on one line"
-        )
+    for field, value in ((SUMMARY_FIELD, summary), (REVISIT_WHEN_FIELD, revisit_when)):
+        if value and "\n" in value:
+            raise AdrError(
+                f"{field} holds a line break; frontmatter carries a value on one line"
+            )
+    for field, value in (
+        (SUMMARY_FIELD, summary),
+        (REVISIT_WHEN_FIELD, revisit_when),
+        *((SCOPE_FIELD, entry) for entry in scope),
+    ):
+        if value and yaml_hazard(value):
+            raise AdrError(f"{field} holds {yaml_hazard(value)}")
     for entry in scope:
         if "," in entry or "\n" in entry:
             raise AdrError(

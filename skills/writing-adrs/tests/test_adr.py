@@ -267,6 +267,50 @@ class ParseAdrTests(unittest.TestCase):
             self.problems(adr_text(**{REVISIT_DISCHARGED_BY_FIELD: "[ADR 12, 14]"})),
         )
 
+    def test_rejects_a_value_a_yaml_reader_takes_as_a_mapping(self):
+        """`: ` inside a value fails GitHub's rendering of the whole file, so it is refused."""
+        self.assertIn(
+            "declares `summary` holding `: `, which a YAML reader such as GitHub's takes as a "
+            "nested mapping; rephrase the value",
+            self.problems(adr_text(summary="Do this: that.")),
+        )
+
+    def test_rejects_a_value_ending_in_a_colon(self):
+        """A trailing colon opens a mapping the same way, and a substring check misses it."""
+        self.assertIn(
+            "declares `revisit-when` holding `: `, which a YAML reader such as GitHub's takes "
+            "as a nested mapping; rephrase the value",
+            self.problems(adr_text(**{REVISIT_WHEN_FIELD: "The rule is this:"})),
+        )
+
+    def test_rejects_a_value_opening_with_a_yaml_indicator(self):
+        """A leading backtick, quote or bracket cannot start a plain value, and prose starts with one easily."""
+        for opening in (
+            "`x.py` is anchored.",
+            '"Do nothing" wins.',
+            "[a] is first.",
+            "- Dash.",
+        ):
+            with self.subTest(opening=opening):
+                self.assertIn(
+                    f"declares `summary` holding an opening `{opening[0]}`, which a YAML "
+                    "reader such as GitHub's takes as syntax; start the value with a word",
+                    self.problems(adr_text(summary=opening)),
+                )
+
+    def test_accepts_prose_with_yaml_indicators_mid_value(self):
+        """Backticks, quotes, brackets and lone colons mid-value are ordinary prose and pass."""
+        summary = 'Run `pr.yml` on every PR, said "no" to [globs], at 1:2 and foo@bar.'
+        self.assertEqual(self.problems(adr_text(summary=summary)), [])
+
+    def test_rejects_a_value_a_yaml_reader_takes_as_a_comment(self):
+        """` #` inside a value silently truncates it on GitHub, so it is refused."""
+        self.assertIn(
+            "declares `revisit-when` holding ` #`, which a YAML reader such as GitHub's takes "
+            "as a comment; rephrase the value",
+            self.problems(adr_text(**{REVISIT_WHEN_FIELD: "Issue #12 closes."})),
+        )
+
     def test_rejects_the_field_scope_replaced(self):
         """A stale `tags` must fail, or a half-finished migration passes unnoticed."""
         problem = self.problems(adr_text(**{TAGS_FIELD: "[alpha, beta]"}))[0]
@@ -1071,6 +1115,22 @@ class NewAdrTests(RepoTestCase):
         self.assertEqual(
             self.refuse("W", "A summary.\nAnd more.", [SCOPED_FILE]),
             "summary holds a line break; frontmatter carries a value on one line",
+        )
+
+    def test_refuses_a_summary_a_yaml_reader_would_misread(self):
+        """Written, the file would render nowhere on GitHub, and the reconcile after would refuse it."""
+        self.assertEqual(
+            self.refuse("W", "Do this: that.", [SCOPED_FILE]),
+            "summary holds `: `, which a YAML reader such as GitHub's takes as a nested "
+            "mapping; rephrase the value",
+        )
+
+    def test_refuses_a_scope_entry_a_yaml_reader_would_misread(self):
+        """A scope entry is checked up front too, not left for the reconcile after the write."""
+        self.assertEqual(
+            self.refuse("W", "A summary.", ["a: b.py"]),
+            "scope holds `: `, which a YAML reader such as GitHub's takes as a nested "
+            "mapping; rephrase the value",
         )
 
     def test_refuses_a_revisit_trigger_holding_a_line_break(self):

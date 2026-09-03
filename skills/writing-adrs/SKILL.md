@@ -114,7 +114,11 @@ status quo (see Conventions).
 
 Every value sits on one line — no wrapping, no `>` or `|` block scalars. The parsers read
 line by line and now fail on anything else, where a wrapped `summary` used to yield a
-truncated index row.
+truncated index row. A value also starts with a word or a number, holds no `: ` or ` #`,
+and does not end in a colon: GitHub renders the frontmatter through a YAML parser, which
+takes an opening backtick, quote or bracket as syntax and `: ` as a nested mapping, failing
+the whole file, and ` #` as a comment, dropping the rest of the value. The tool refuses all
+three.
 
 - **`status`** — `Accepted`, `Archived`, or `Superseded`. All three stay in the repo; the last two are excluded from `docs/adr/INDEX.md`, which is what an agent loads by default.
   - `Accepted` — in force, and worth carrying in context.

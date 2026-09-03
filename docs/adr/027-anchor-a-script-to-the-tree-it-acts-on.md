@@ -2,7 +2,7 @@
 status: Accepted
 date: 2026-09-03
 scope: [.agents/rules/testing.md, scripts/, skills/]
-summary: Anchor each path a script resolves to the tree that path acts on: a file the script ships with resolves from __file__, a target in the caller's tree from the path in hand or the working directory; no anchor is the rule for every path, which is what ADR 016 claimed.
+summary: Anchor each path a script resolves to the tree that path acts on — a file the script ships with resolves from __file__, a target in the caller's tree from the path in hand or the working directory; no anchor is the rule for every path, which is what ADR 016 claimed.
 revisit-when: A script needs a default path into a tree that is neither the one it ships in nor the caller's, so neither anchor names it.
 ---
 
