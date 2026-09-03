@@ -12,7 +12,7 @@ revisit-when: A consumer needs the skills without the hooks and Claude Code offe
 
 [`writing-adrs`][] describes a contract — frontmatter fields, a generated `INDEX.md`, a
 reverse lookup from a path to the decisions binding it — and tells a consumer to port the
-reference implementation, [`generate_index.py`][] with its parser and tests, stripping the
+reference implementation, [`adr.py`][] with its parser and tests, stripping the
 [`pre-commit`][] wiring that runs it here. Every consumer that wants the checks builds them
 again, and one that does not gets a skill whose rules nothing enforces; the reverse lookup,
 the half of [ADR 013][] that reaches a reader who did not go looking, runs on no consumer
@@ -58,7 +58,9 @@ No install step, as [ADR 017][] requires of shipped tooling.
 **Cons:** Every `phx` user carries the hooks, and Claude Code offers no per-hook opt-out:
 a consumer who wants the skills without them has `disableAllHooks` or uninstall. In a
 managed repository each hooked event starts Python once, per subagent; the budget is
-100 ms on this repository's corpus.
+100 ms on this repository's corpus — measured 2026-09-03: median 74 ms, worst 111 ms of
+twenty on this container, of which interpreter startup is 15 ms and the handler's own work
+5 ms, so the two runs over budget are container jitter rather than corpus size.
 **Risks:** A hook that misbehaves does so in every consumer's session at once, with no
 version pin between them and this repository's `main`.
 
@@ -139,7 +141,7 @@ arm is spent from 017's `revisit-when`.
 [ADR 024]: 024-resolve-the-repository-root-from-the-path-in-hand.md
 [ADR 025]: 025-deliver-binding-decisions-by-hook-at-first-touch.md
 [ADR 026]: 026-report-findings-by-delta-from-a-session-baseline.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [hooks]: https://code.claude.com/docs/en/hooks
 [`pre-commit`]: ../../.githooks/pre-commit
 [skills]: https://code.claude.com/docs/en/skills

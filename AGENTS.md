@@ -21,8 +21,10 @@ preceding the code they document, not as trailing comments.
 - `scripts/` is stdlib-only and the repo root carries no Python project (ADR 007);
   packaged skills under `skills/<name>/` may declare dependencies.
 - `scripts/` is a package (ADR 011), so run a script as `python3 -m scripts.<area>.<name>`
-  from the repo root — a path invocation fails to import. The whole suite is
-  `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`.
+  from the repo root — a path invocation fails to import. The `scripts/` suite is
+  `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`; each skill shipping a
+  `pyproject.toml` runs `uv run pytest` from its directory.
+- `scripts/frontmatter.py` is a symlink into `skills/writing-adrs/`; edit the parser there.
 - Every function annotates its return type and its named parameters, `-> None`
   included; `*args` and `**kwargs` are left bare. Test functions are exempt from
   both; the helpers and fixture classes serving them are not.
@@ -129,8 +131,10 @@ Work out which decisions cover the files you are changing from `INDEX.md`'s Scop
 a prefix binds everything beneath it** — so `scripts/` covers `scripts/ci/versions.py`.
 Read them as literal paths and you will miss most of what binds a file, with nothing to
 tell you. `Archived` decisions are in force but kept out of `INDEX.md`, so check for them
-with `rg -l 'status: Archived' docs/adr/` before recording a new decision; the pre-commit
-hook also reports them for staged paths, though only once the change is written.
+with `rg -l 'status: Archived' docs/adr/` before recording a new decision.
+`python3 skills/writing-adrs/adr.py for <path>` answers which decisions bind a path,
+`Archived` ones included; the plugin's hooks inject them the first time a session touches
+one.
 
 When code depends on a decision, cite it in a comment: the ADR number and what the
 decision forbids at that line, never the reasoning, which stays in the ADR (ADR 014).
@@ -141,5 +145,5 @@ with no `docs/adr/` to open, so name the constraint rather than relying on the n
 
 Hooks aren't installed on clone: run `git config core.hooksPath .githooks` once per
 clone (it carries across worktrees). Without it `INDEX.md` goes stale, and `pr.yml`'s
-`adr` job — which fires on any change under `docs/adr/` *or* `scripts/` — regenerates it
-and fails the build on a diff. Set `core.hooksPath` and re-commit.
+`adr` job runs the tool's `check` on every pull request, which fails the build on a stale
+index. Set `core.hooksPath` and re-commit.

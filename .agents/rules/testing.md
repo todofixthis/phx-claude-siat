@@ -120,8 +120,9 @@ After adding a check to the code under test, disable it in place, confirm a test
 fails, and restore it before committing:
 
 ```
-python3 -m scripts.dev.mutate --file scripts/adr/generate_index.py \
-    --anchor 'if not target.exists():' --with 'if False:'
+python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
+    --anchor 'if not target.exists():' --with 'if False:' \
+    -- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .
 ```
 
 Only **CAUGHT** exits 0. Act on the other three rather than reading past them:

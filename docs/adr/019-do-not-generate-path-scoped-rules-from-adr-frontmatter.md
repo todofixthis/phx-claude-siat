@@ -1,7 +1,7 @@
 ---
 status: Superseded
 date: 2026-08-30
-scope: [.agents/rules/, docs/adr/, scripts/adr/, skills/writing-adrs/]
+scope: [.agents/rules/, docs/adr/, skills/writing-adrs/]
 summary: Do not generate path-scoped rule files from ADR frontmatter at any granularity; a hand-written rule stating a constraint stays welcome, and INDEX.md with the `--for` lookup remains how a path reaches the decisions binding it.
 superseded-by: 25
 revisit-when: A harness loads a path-scoped rule on the creation of a matching file or on a shell read, so what a rule reaches stops depending on how a session happens to read; or the mandated index read is measured and found not to be happening.
@@ -12,7 +12,7 @@ revisit-when: A harness loads a path-scoped rule on the creation of a matching f
 ## Context
 
 [ADR 018][] admitted a path-scoped rule as an archival defence and rejected generating one
-per decision as such a defence. A different proposal followed: have [`generate_index.py`][]
+per decision as such a defence. A different proposal followed: have [`adr.py`][]
 also write rule files keyed to `scope`, so the decisions binding a file arrive when an agent
 reads it. That is delivery of the index rather than a defence, and it answers a failure
 [`AGENTS.md`][] already documents — `scope` entries are exact paths and prefixes, and a
@@ -128,8 +128,8 @@ give up first.
 
 [ADR 016]: 016-anchor-every-default-path-to-the-module.md
 [ADR 018]: 018-admit-a-path-scoped-rule-as-an-archival-defence.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`AGENTS.md`]: ../../AGENTS.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
 [`INDEX.md`]: INDEX.md
 [`testing.md`]: ../../.agents/rules/testing.md
 [`writing-adrs`]: ../../skills/writing-adrs/SKILL.md

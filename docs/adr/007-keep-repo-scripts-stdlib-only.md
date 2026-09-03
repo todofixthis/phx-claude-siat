@@ -23,7 +23,7 @@ root. None declares a dependency, and the repo root carries no `pyproject.toml`.
 [ADR 006][] already reasons from that constraint (choosing `tomllib` because it is
 standard library, and rejecting alternatives needing "a dependency the repo lacks"), and
 [ADR 005][] already accepts one of its costs: the flat-frontmatter parser adapted between
-[`generate_index.py`][] and [`validate_manifests.py`][]. Neither states the constraint
+[`adr.py`][] and [`validate_manifests.py`][]. Neither states the constraint
 itself, so each new script re-decides it, and the first to answer "add a dependency"
 answers for everyone.
 
@@ -164,8 +164,8 @@ the precedent for recording one.
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [ADR 011]: 011-make-scripts-a-package.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`creative-commits`]: ../../skills/creative-commits/SKILL.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
 [PEP 723]: https://peps.python.org/pep-0723/
 [`pre-commit`]: https://pre-commit.com/
 [`PyYAML`]: https://pyyaml.org/

@@ -22,7 +22,7 @@ See [notes on specific skills](#notes-on-specific-skills) below._
 | `nz-english`*            | Scanning for and correcting US English spellings                |
 | `receiving-code-review`* | Responding to review feedback on a pull request                 |
 | `reflection`             | Reviewing a session for friction and improving ecosystem files  |
-| `writing-adrs`           | Documenting significant architectural or tooling decisions      |
+| `writing-adrs`*          | Documenting significant architectural or tooling decisions      |
 | `writing-plans`*         | Writing implementation plans for multi-step tasks               |
 | `writing-release-notes`  | Generating release notes or a changelog entry for a new version |
 
@@ -80,6 +80,22 @@ adding conventions the base skills leave out:
 > ````markdown
 > Where `phx` wraps a `superpowers` skill of the same name, always invoke the `phx:` one.
 > ````
+
+#### writing-adrs
+
+`writing-adrs` ships a tool and session hooks, so the skill needs **`python3` (3.10 or
+newer)** on your `PATH`. Nothing else to install. (The CI recipe below needs only `uv`,
+which fetches the 3.12 the packaged tool declares.) The first ADR the agent records creates
+`docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks regenerate the index
+after an ADR edit, inject the decisions binding a file the first time a session touches it,
+and report a `scope` entry left dangling by a move or delete. The hooks are inert in a
+repository whose `docs/adr/INDEX.md` the tool did not generate.
+
+To gate a consumer's CI on the corpus, pinned to a release tag:
+
+```bash
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@5.2.0#subdirectory=skills/writing-adrs' phx-adr check
+```
 
 ## Installation
 
@@ -174,21 +190,21 @@ Decisions binding these paths:
 ```
 
 That report is the only place `Archived` decisions appear — they are still in force
-but kept out of `INDEX.md`. Skipping the hook is not free: `pr.yml` regenerates the
-index on every pull request touching `docs/adr/` or `scripts/` and fails the build
-if it differs, so a missing hook shows up as a red gate rather than a stale file.
+but kept out of `INDEX.md`. Skipping the hook is not free: `pr.yml` runs the tool's
+`check` on every pull request and fails the build on a stale index, so a missing hook
+shows up as a red gate rather than a stale file.
 
 The setting lives in the clone's shared config and the path is relative, so a single
 activation also covers every worktree. To regenerate the index by hand:
 
 ```bash
-python3 -m scripts.adr.generate_index
+python3 skills/writing-adrs/adr.py index
 ```
 
 To ask which decisions bind a file before changing it, from the repo root:
 
 ```bash
-python3 -m scripts.adr.generate_index --for scripts/ci/versions.py
+python3 skills/writing-adrs/adr.py for scripts/ci/versions.py
 ```
 
 Paths may be repo-relative or absolute; one outside the repository is refused rather

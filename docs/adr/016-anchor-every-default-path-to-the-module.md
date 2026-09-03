@@ -120,7 +120,7 @@ where an unresolved anchor and a caller's resolved path compare unequal.
 - [`test_validate_manifests.py`][] loses the `chdir` and the assertion guarding it — a
   lost `chdir` let a positive test pass against the real repository — and
   `test_release_notes.py` loses two more. Each gains a fixture root instead.
-- [`generate_index.py`][] was already anchored, but defaulted its root in every signature
+- [`adr.py`][] was already anchored, but defaulted its root in every signature
   that took one and held its `docs/adr` constant pre-joined. It now defaults in none, and
   that constant is repo-relative like the rest.
 - No call site changes. The hook, three CI jobs and the release skill all invoke these
@@ -134,7 +134,7 @@ where an unresolved anchor and a caller's resolved path compare unequal.
 [ADR 015]: 015-anchor-default-paths-to-the-module.md
 [`.agents/rules/testing.md`]: ../../.agents/rules/testing.md
 [ADR 024]: 024-resolve-the-repository-root-from-the-path-in-hand.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`mutate.py`]: ../../scripts/dev/mutate.py
 [`release_notes.py`]: ../../scripts/ci/release_notes.py
 [`test_release_notes.py`]: ../../scripts/ci/test_release_notes.py

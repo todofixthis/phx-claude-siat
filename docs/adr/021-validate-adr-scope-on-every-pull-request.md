@@ -11,7 +11,7 @@ revisit-when: The job's runtime grows enough to matter across every PR, or a ses
 ## Context
 
 [ADR 013][] keys ADR `scope` entries to the paths a decision binds and has
-[`generate_index.py`][] reject any entry naming nothing on disk. That check runs only where
+[`adr.py`][] reject any entry naming nothing on disk. That check runs only where
 something invokes it, and on a pull request the sole place that happens is [`pr.yml`][]'s
 `adr` job, gated on the diff touching `docs/adr/` or `scripts/`. A rename or deletion under
 any other scoped path — `skills/`, `.claude-plugin/`, `.githooks/` — passes that PR clean,
@@ -118,5 +118,5 @@ only.
 [ADR 012]: 012-advertise-one-plugin-per-catalogue.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`pr.yml`]: ../../.github/workflows/pr.yml

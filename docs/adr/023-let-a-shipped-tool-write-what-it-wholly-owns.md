@@ -15,7 +15,7 @@ rather than edits", and a test that fails when prose and code drift. The second 
 from `nz-english`, whose only edit is a rename, "the thing the skill says kills you".
 
 [ADR 022][] ships a tool that must write. It generates `INDEX.md`, which
-[`generate_index.py`][] has always written; it scaffolds an ADR from the skill's template;
+[`adr.py`][] has always written; it scaffolds an ADR from the skill's template;
 and the deterministic halves of the skill's workflows — set `status: Superseded` and
 `superseded-by`, set `revisit-discharged-by`, renumber a file with its heading and every
 peer field naming the old number — are the edits the skill has to warn against by hand
@@ -104,5 +104,5 @@ file, needs no test, and follows a convention the repository already uses for `C
 [ADR 011]: 011-make-scripts-a-package.md
 [ADR 017]: 017-move-a-skills-deterministic-steps-into-shipped-code.md
 [ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`frontmatter.py`]: ../../scripts/frontmatter.py
-[`generate_index.py`]: ../../scripts/adr/generate_index.py

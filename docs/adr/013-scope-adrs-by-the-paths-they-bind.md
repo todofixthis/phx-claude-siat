@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-08-10
-scope: [.github/workflows/pr.yml, .githooks/pre-commit, docs/adr/, scripts/adr/, skills/writing-adrs/]
+scope: [.github/workflows/pr.yml, .githooks/pre-commit, docs/adr/, skills/writing-adrs/]
 summary: Key ADR frontmatter to the paths a decision binds — exact paths and directory prefixes, never globs — rather than to free-text tags, and answer the reverse question, which decisions bind this file, from the pre-commit hook.
 revisit-when: A third decision scopes `[]`, making decisions with no file home common enough that an empty scope stops carrying signal.
 ---
@@ -19,7 +19,7 @@ characters — a fifth of the file an agent loads by default.
 
 Neither end of that distribution filters anything. A tag used once is a synonym for one
 document, which its own title and summary already name; a tag on seven of twelve
-documents excludes nothing. Nor does any tooling read the field: [`generate_index.py`][]
+documents excludes nothing. Nor does any tooling read the field: [`adr.py`][]
 renders it and nothing else consults it, so the index is scanned rather than searched.
 
 The cause is not that authors tagged carelessly. A free vocabulary has no coordination
@@ -195,6 +195,6 @@ accumulated meanwhile — brittle ones included — are the evidence that design
 [ADR 021]: 021-validate-adr-scope-on-every-pull-request.md
 [ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
 [ADR 025]: 025-deliver-binding-decisions-by-hook-at-first-touch.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`pr.yml`]: ../../.github/workflows/pr.yml
 [`writing-adrs`]: ../../skills/writing-adrs/SKILL.md

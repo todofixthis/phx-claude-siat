@@ -21,11 +21,10 @@ entire mechanism, and a session that skips it re-derives analysis already writte
 
 ## The mechanism already exists
 
-[`generate_index.py`][]'s `report_scoped_to()` is what [`.githooks/pre-commit`][] uses to
-name every ADR whose `scope` covers a staged path. A backlog item under `docs/backlog/`
-carrying its own scope could ride the same reporting path, and the hook already runs on
-every commit. So the work spans `scripts/adr/`, `.githooks/` and the shape of every file
-in `docs/backlog/`.
+[`adr.py`][]'s `binding()` is what [`.githooks/pre-commit`][] uses to name every ADR whose
+`scope` covers a staged path. A backlog item under `docs/backlog/` carrying its own scope
+could ride the same reporting path, and the hook already runs on every commit. So the work
+spans `skills/writing-adrs/`, `.githooks/` and the shape of every file in `docs/backlog/`.
 
 ## What makes it more than a copy of the ADR machinery
 
@@ -46,5 +45,5 @@ in `docs/backlog/`.
 [ADR 013]: ../adr/013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: ../adr/014-cite-adrs-from-code-comments.md
 [ADR 020]: ../adr/020-track-deferred-work-in-the-repository.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`.githooks/pre-commit`]: ../../.githooks/pre-commit
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
