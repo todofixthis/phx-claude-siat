@@ -5,9 +5,12 @@ exact JSON returned and the state file left behind. Roots are fixture trees pass
 path; nothing here reads the working directory.
 """
 
+import fcntl
 import json
 import os
 import threading
+import time
+from unittest import mock
 
 import hook
 from adr import INDEX_FILENAME
@@ -40,7 +43,9 @@ class HookTestCase(RepoTestCase):
 
     def state(self) -> dict:
         return json.loads(
-            (self.state_dir / "sessions" / f"{self.session}.json").read_text(encoding="utf-8")
+            (self.state_dir / hook.STATE_SUBDIR / f"{self.session}.json").read_text(
+                encoding="utf-8"
+            )
         )
 
     def dangle(self) -> None:
@@ -73,17 +78,20 @@ class SessionStartTests(HookTestCase):
         self.assertNotIn("README.md", self.context(again))
 
     def test_compact_resets_injected_and_keeps_the_baseline(self):
-        """After compaction the rows must be injected again; findings stay remembered."""
+        """After compaction the rows must be injected again; the baseline value is unchanged."""
         self.handle("SessionStart", source="startup")
         self.handle(
             "PreToolUse",
             tool_name="Read",
             tool_input={"file_path": str(self.repo_root / SCOPED_FILE)},
         )
-        self.assertEqual(self.state()["injected"]["main"], ["001"])
+        self.assertEqual(self.state()["injected"][hook.MAIN_AGENT], ["001"])
+        baseline_before = self.state()["roots"][str(self.repo_root)]["baseline"]
         self.handle("SessionStart", source="compact")
         self.assertEqual(self.state()["injected"], {})
-        self.assertIn("baseline", self.state()["roots"][str(self.repo_root)])
+        self.assertEqual(
+            self.state()["roots"][str(self.repo_root)]["baseline"], baseline_before
+        )
 
     def test_clear_starts_fresh(self):
         """`clear` discards the state file and snapshots anew."""
@@ -145,7 +153,9 @@ class PreToolUseTests(HookTestCase):
             agent_id="agent-1",
         )
         self.assertIn("001", self.context(result))
-        self.assertEqual(self.state()["injected"], {"agent-1": ["001"], "main": ["001"]})
+        self.assertEqual(
+            self.state()["injected"], {"agent-1": ["001"], hook.MAIN_AGENT: ["001"]}
+        )
 
     def test_tokenises_a_shell_command(self):
         """A path named in a command, quoted or bare, delivers; a directory matches its prefix."""
@@ -185,6 +195,28 @@ class PreToolUseTests(HookTestCase):
         self.assertIn("013", text)
         self.assertLess(len(text), 10_000)
 
+    def test_names_every_row_when_the_body_would_not_fit(self):
+        """A row too big for the cap moves to the named-only line rather than vanishing."""
+        long_summary = "x" * 1_000
+        self.write(
+            "001-first.md", adr_text(summary=long_summary, **{"revisit-when": "A condition."})
+        )
+        for n in range(2, 14):
+            self.write(
+                f"{n:03d}-n{n}.md", adr_text(title=f"{n}: Decision {n}", summary=long_summary)
+            )
+        self.manage()
+        text = self.context(
+            self.handle(
+                "PreToolUse",
+                tool_name="Read",
+                tool_input={"file_path": str(self.repo_root / SCOPED_FILE)},
+            )
+        )
+        self.assertLess(len(text), hook.MAX_CHARS)
+        for n in range(1, 14):
+            self.assertIn(f"{n:03d}", text)
+
     def test_concurrent_calls_lose_no_update(self):
         """Parallel first touches on different files both land in state.
 
@@ -211,7 +243,7 @@ class PreToolUseTests(HookTestCase):
             t.start()
         for t in threads:
             t.join()
-        self.assertEqual(sorted(self.state()["injected"]["main"]), ["002", "003"])
+        self.assertEqual(sorted(self.state()["injected"][hook.MAIN_AGENT]), ["002", "003"])
 
 
 class PostToolBatchTests(HookTestCase):
@@ -330,6 +362,39 @@ class StopTests(HookTestCase):
         self.assertIsNone(self.handle("Stop", stop_hook_active=True))
 
 
+class HandleRobustnessTests(HookTestCase):
+    """`handle()` must not hang or crash on a broken state file or a lock someone else holds."""
+
+    def test_treats_a_corrupt_state_file_as_absent(self):
+        """A state file that is not valid JSON yields a normal result and a fresh baseline.
+
+        Also the CRITICAL reproduction: corrupt state plus a valid event must return
+        normally rather than hang or raise.
+        """
+        session_dir = self.state_dir / hook.STATE_SUBDIR
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / f"{self.session}.json").write_text("not json", encoding="utf-8")
+        result = self.handle("SessionStart", source="startup")
+        self.assertIn("1 decision", self.context(result))
+        self.assertEqual(self.state()["roots"][str(self.repo_root)]["baseline"], [])
+
+    def test_a_held_lock_returns_none_without_hanging(self):
+        """A lock another handle holds gives up within the retry budget, never raises."""
+        lock_path = self.state_dir / hook.STATE_SUBDIR / f"{self.session}.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        holder = lock_path.open("w")
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        try:
+            started = time.monotonic()
+            result = self.handle("SessionStart", source="startup")
+            elapsed = time.monotonic() - started
+        finally:
+            fcntl.flock(holder, fcntl.LOCK_UN)
+            holder.close()
+        self.assertIsNone(result)
+        self.assertLess(elapsed, 2.0)
+
+
 class MainTests(HookTestCase):
     """The entry point: JSON in, JSON out, never a traceback."""
 
@@ -350,17 +415,40 @@ class MainTests(HookTestCase):
         )
         self.assertEqual(text, "")
 
-    def test_reports_a_crash_as_context_once(self):
-        """Malformed input is reported to the agent once per session, never raised."""
+    def test_reports_a_crash_every_time_for_an_unknown_session(self):
+        """An event that fails to parse has no session to remember against, so it is never silenced."""
         first = hook.main("{not json", self.state_dir)
         self.assertIn(
             "hook failed", json.loads(first)["hookSpecificOutput"]["additionalContext"]
         )
         self.assertIn("hook.py", json.loads(first)["hookSpecificOutput"]["additionalContext"])
+        second = hook.main("{not json", self.state_dir)
+        self.assertIn(
+            "hook failed", json.loads(second)["hookSpecificOutput"]["additionalContext"]
+        )
+        self.assertFalse((self.state_dir / hook.STATE_SUBDIR / "unknown.json").exists())
+
+    def test_reports_a_crash_once_for_a_known_session(self):
+        """A crash inside a handler for a known session is reported once, then silenced."""
+
+        def boom(event, state):
+            raise RuntimeError("boom")
+
+        with mock.patch.dict(hook.HANDLERS, {"SessionStart": boom}):
+            first = hook.main(
+                json.dumps(self.event("SessionStart", source="startup")), self.state_dir
+            )
+            self.assertIn(
+                "hook failed", json.loads(first)["hookSpecificOutput"]["additionalContext"]
+            )
+            second = hook.main(
+                json.dumps(self.event("SessionStart", source="startup")), self.state_dir
+            )
+        self.assertEqual(second, "")
 
     def test_prunes_old_state_files(self):
         """Files older than thirty days go at SessionStart."""
-        old = self.state_dir / "sessions" / "old.json"
+        old = self.state_dir / hook.STATE_SUBDIR / "old.json"
         old.parent.mkdir(parents=True)
         old.write_text("{}", encoding="utf-8")
         os.utime(old, (0, 0))

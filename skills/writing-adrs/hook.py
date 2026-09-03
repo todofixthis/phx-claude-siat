@@ -11,7 +11,9 @@ since the baseline once), Stop and SubagentStop (raise an open new finding once 
 
 Session state — the baseline and reported findings per managed root, the injected rows
 per agent — lives in one JSON file per session under the plugin's data directory, updated
-under a lock because matching hooks run in parallel.
+under a lock because matching hooks run in parallel. The lock is taken non-blocking with a
+bounded retry, never held open-ended: a hook that cannot get it reports nothing for that
+call rather than stall the tool call it runs beside.
 """
 
 import fcntl
@@ -37,6 +39,10 @@ if sys.version_info < PYTHON_FLOOR:
 import adr
 
 FILE_TOOLS = ("Edit", "NotebookEdit", "Read", "Write")
+# Bounded so a contended lock gives up rather than blocking the tool call beside it; ~1s
+# worst case, well under the harness's own hook timeout.
+LOCK_ATTEMPTS = 20
+LOCK_RETRY_SECONDS = 0.05
 MAIN_AGENT = "main"
 MAX_ROWS = 10
 # Under the harness's 10,000-character cap, past which the text is swapped for a file path.
@@ -61,6 +67,10 @@ STOP_LABEL = (
 CRASH = "phx:writing-adrs hook failed ({error}); the ADR checks are off until it is fixed. See {path}."
 
 
+class StateUnavailable(Exception):
+    """The session lock could not be taken within the retry budget."""
+
+
 def state_root(env: dict) -> Path:
     """Where session state lives: the plugin data directory, else the system temp directory."""
     base = env.get("CLAUDE_PLUGIN_DATA")
@@ -77,22 +87,58 @@ class State:
         self.data: dict = {}
 
     def __enter__(self) -> "State":  # noqa: PYI034 — no Self on the 3.10 floor
+        """Take the lock without blocking forever, then load state, corrupt-file safe.
+
+        A lock never released — held by a hung sibling call, or a process that died before
+        `__exit__` ran — must not wedge every later call for the session, so the wait is
+        bounded rather than the blocking `flock` a `with`-only implementation would use.
+        """
         self.directory.mkdir(parents=True, exist_ok=True)
         self.lock = self.lock_path.open("w")
-        fcntl.flock(self.lock, fcntl.LOCK_EX)
-        if self.path.exists():
-            self.data = json.loads(self.path.read_text(encoding="utf-8"))
+        for _ in range(LOCK_ATTEMPTS):
+            try:
+                fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                time.sleep(LOCK_RETRY_SECONDS)
+        else:
+            self.lock.close()
+            raise StateUnavailable(f"could not lock {self.lock_path}")
+        try:
+            self.data = self._load()
+        except Exception:
+            fcntl.flock(self.lock, fcntl.LOCK_UN)
+            self.lock.close()
+            raise
         self.data.setdefault("injected", {})
         self.data.setdefault("roots", {})
         self.data.setdefault("crash_reported", False)
         return self
 
     def __exit__(self, *exc) -> None:
-        temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self.data, sort_keys=True), encoding="utf-8")
-        os.replace(temporary, self.path)
-        fcntl.flock(self.lock, fcntl.LOCK_UN)
-        self.lock.close()
+        """Write state, then always release the lock — even where the write itself fails."""
+        try:
+            temporary = self.path.with_suffix(".tmp")
+            temporary.write_text(json.dumps(self.data, sort_keys=True), encoding="utf-8")
+            os.replace(temporary, self.path)
+        finally:
+            fcntl.flock(self.lock, fcntl.LOCK_UN)
+            self.lock.close()
+
+    def _load(self) -> dict:
+        """The state on disk, or empty where it is missing, corrupt, or not a JSON object.
+
+        The file is a cache the hook rewrites on every call, not a record a caller must
+        trust: corruption from a partial write or a stale format costs one baseline reset,
+        not a crash on every hook call thereafter.
+        """
+        if not self.path.exists():
+            return {}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
 
     def reset(self) -> None:
         """Forget everything, as `clear` does."""
@@ -105,14 +151,17 @@ class State:
         )
 
 
-def output(event_name: str, context: str, system_message: str | None = None) -> dict:
-    """The JSON Claude Code reads."""
-    result = {
-        "hookSpecificOutput": {
-            "additionalContext": context[:MAX_CHARS],
-            "hookEventName": event_name,
-        }
-    }
+def output(
+    event_name: str, context: str, system_message: str | None = None, *, cap: bool = True
+) -> dict:
+    """The JSON Claude Code reads.
+
+    `cap` guards the harness's character limit for every event except PreToolUse, whose
+    caller already fits the text itself and keeps the "also binding" line whole — a blind
+    slice here could otherwise cut a row's number off mid-line, naming it nowhere.
+    """
+    text = context[:MAX_CHARS] if cap else context
+    result = {"hookSpecificOutput": {"additionalContext": text, "hookEventName": event_name}}
     if system_message:
         result["systemMessage"] = system_message
     return result
@@ -138,6 +187,42 @@ def format_row(row: adr.Row) -> str:
 def format_findings(findings: list[adr.Finding]) -> str:
     """Findings as lines the agent can act on."""
     return "\n".join(f"- {f.message}" for f in findings)
+
+
+def overflow_line(rows: list[adr.Row]) -> str:
+    """The "also binding" line naming rows by number and path only."""
+    return "Also binding, by number and path: " + "; ".join(
+        f"{row.number} [{(adr.ADR_DIR / row.filename).as_posix()}]" for row in rows
+    )
+
+
+def fit_bound_rows(label: str, shown: list[adr.Row], rest: list[adr.Row]) -> str:
+    """Render `shown` in full and `rest` by number, trimming `shown` into `rest` to fit `MAX_CHARS`.
+
+    Every injected number stays named even where its full row will not fit: the row the
+    cap would otherwise cut is moved to the named-only line instead of being dropped
+    silently mid-truncation.
+    """
+    shown, rest = list(shown), list(rest)
+
+    def render() -> str:
+        lines = [label, *(format_row(row) for row in shown)]
+        if rest:
+            lines.append(overflow_line(rest))
+        return "\n".join(lines)
+
+    text = render()
+    while len(text) > MAX_CHARS and shown:
+        rest.insert(0, shown.pop())
+        text = render()
+    if len(text) > MAX_CHARS and rest:
+        # Every row has already moved to the named-only line; if the label and that line
+        # still overrun together, trim the label rather than cut a number off the line
+        # naming it.
+        tail = overflow_line(rest)
+        budget = max(MAX_CHARS - len(tail) - 1, 0)
+        text = label[:budget] + "\n" + tail
+    return text
 
 
 def snapshot_baseline(state: State, root: Path) -> list[adr.Finding]:
@@ -210,7 +295,7 @@ def on_subagent_start(event: dict, state: State) -> dict | None:
 
 
 def on_pre_tool_use(event: dict, state: State) -> dict | None:
-    """Rows binding the touched paths, once per agent."""
+    """Rows binding the touched paths, once per agent, fitted under the context cap."""
     by_root: dict[Path, list[str]] = {}
     for path in touched_paths(event):
         root = managed_root_for(path)
@@ -230,15 +315,9 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
             named.extend(adr.relative_to_root(p, root) or p for p in paths)
     if not rows:
         return None
-    shown, rest = rows[:MAX_ROWS], rows[MAX_ROWS:]
-    lines = [LABEL.format(paths=", ".join(sorted(set(named))))]
-    lines.extend(format_row(row) for row in shown)
-    if rest:
-        lines.append(
-            "Also binding, by number and path: "
-            + "; ".join(f"{r.number} [{(adr.ADR_DIR / r.filename).as_posix()}]" for r in rest)
-        )
-    return output("PreToolUse", "\n".join(lines))
+    label = LABEL.format(paths=", ".join(sorted(set(named))))
+    text = fit_bound_rows(label, rows[:MAX_ROWS], rows[MAX_ROWS:])
+    return output("PreToolUse", text, cap=False)
 
 
 def written_adr_root(event: dict) -> Path | None:
@@ -316,32 +395,57 @@ HANDLERS = {
 
 
 def prune(state_dir: Path, now: float) -> None:
-    """Drop state files older than the session retention period."""
+    """Drop session files older than the retention period; a lock sidecar is left alone."""
     directory = state_dir / STATE_SUBDIR
     if not directory.is_dir():
         return
     for path in directory.iterdir():
-        if now - path.stat().st_mtime > PRUNE_AFTER_SECONDS:
-            path.unlink(missing_ok=True)
+        if not path.is_file() or path.suffix == ".lock":
+            continue
+        try:
+            if now - path.stat().st_mtime > PRUNE_AFTER_SECONDS:
+                path.unlink(missing_ok=True)
+        except OSError:  # a vanished file needs no action; pruning is best effort
+            pass
 
 
 def handle(event: dict, state_dir: Path, now: float) -> dict | None:
-    """Dispatch one event. Raises on a malformed event; `main` turns that into context."""
+    """Dispatch one event. Raises on a malformed event; `main` turns that into context.
+
+    A lock that cannot be taken within the retry budget yields no context for this call
+    rather than blocking or crashing — the next matching event tries again.
+    """
     handler = HANDLERS.get(event.get("hook_event_name", ""))
     if handler is None:
         return None
     if event.get("hook_event_name") == "SessionStart":
         prune(state_dir, now)
-    with State(state_dir, event.get("session_id", "unknown")) as state:
-        return handler(event, state)
+    try:
+        with State(state_dir, event.get("session_id", "unknown")) as state:
+            return handler(event, state)
+    except StateUnavailable:
+        return None
+
+
+def crash_context(exc: Exception) -> str:
+    """The crash line and where to look, from the exception currently being handled."""
+    error = traceback.format_exc().strip().split("\n")[-1] or repr(exc)
+    return CRASH.format(error=error, path=Path(__file__).resolve())
 
 
 def main(stdin: str, state_dir: Path) -> str:
-    """Read the event, handle it, and return the JSON text to print — or "" for nothing."""
-    session_id = "unknown"
+    """Read the event, handle it, and return the JSON text to print — or "" for nothing.
+
+    An event that fails to parse names no session to remember against, so its crash is
+    reported on every call rather than silenced after one, and never touches state; a
+    crash from a parsed event is silenced once per the session it names.
+    """
     try:
         event = json.loads(stdin)
-        session_id = event.get("session_id", session_id)
+        session_id = event["session_id"]
+    except Exception as exc:  # noqa: BLE001 — no session to report to; nothing to silence
+        return json.dumps(output("SessionStart", crash_context(exc)))
+    try:
         result = handle(event, state_dir, time.time())
         return json.dumps(result) if result else ""
     except Exception as exc:  # noqa: BLE001 — a hook must never fall silent
@@ -352,10 +456,7 @@ def main(stdin: str, state_dir: Path) -> str:
                 state.data["crash_reported"] = True
         except Exception:  # noqa: BLE001, S110 — state is best effort on the crash path
             pass
-        error = traceback.format_exc().strip().split("\n")[-1] or repr(exc)
-        return json.dumps(
-            output("SessionStart", CRASH.format(error=error, path=Path(__file__).resolve()))
-        )
+        return json.dumps(output("SessionStart", crash_context(exc)))
 
 
 if __name__ == "__main__":
