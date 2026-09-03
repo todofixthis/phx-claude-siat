@@ -85,16 +85,16 @@ adding conventions the base skills leave out:
 
 `writing-adrs` ships a tool and session hooks, so the skill needs **`python3` (3.10 or
 newer)** on your `PATH`. Nothing else to install. (The CI recipe below needs only `uv`,
-which fetches the 3.12 the packaged tool declares.) The first ADR the agent records creates
-`docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks regenerate the index
-after an ADR edit, inject the decisions binding a file the first time a session touches it,
-and report a `scope` entry left dangling by a move or delete. The hooks are inert in a
-repository whose `docs/adr/INDEX.md` the tool did not generate.
+which fetches an interpreter meeting the tool's 3.12 floor.) The first ADR the agent
+records creates `docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks
+regenerate the index after an ADR edit, inject the decisions binding a file the first time
+a session touches it, and report a `scope` entry left dangling by a move or delete. The
+hooks are inert in a repository whose `docs/adr/INDEX.md` the tool did not generate.
 
-To gate a consumer's CI on the corpus, pinned to a release tag:
+To gate a consumer's CI on the corpus, pinned to a release tag (`<tag>`):
 
 ```bash
-uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@5.2.0#subdirectory=skills/writing-adrs' phx-adr check
+uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@<tag>#subdirectory=skills/writing-adrs' phx-adr check
 ```
 
 ## Installation
@@ -210,9 +210,10 @@ python3 skills/writing-adrs/adr.py for scripts/ci/versions.py
 Paths may be repo-relative or absolute; one outside the repository is refused rather
 than answered with silence.
 
-Contributions go to `develop` — `main` carries releases only. Run the suite with
-`python3 -m unittest discover -s scripts -t . -p 'test_*.py'`; `AGENTS.md` has the
-rest of the maintainer guidance.
+Contributions go to `develop` — `main` carries releases only. Run the `scripts/` suite
+with `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`, and each skill shipping
+a `pyproject.toml` with `uv run pytest` from its directory; `AGENTS.md` has the rest of the
+maintainer guidance.
 
 ## Licence
 

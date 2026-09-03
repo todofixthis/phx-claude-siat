@@ -83,9 +83,9 @@ else; every function below it requires the root, entry points included, and join
 repo-relative constants where each is read. So omitting the fixture root is a `TypeError`
 rather than a test that passes while reading the real repository — the guarantee a `chdir`
 used to buy with an assertion someone had to remember. Don't add a default back and reopen
-it. Where the subject takes a second anchor as well (`generate_index`'s `adr_dir`), the
-entry point derives it from the root and the tests inject each separately, so a fixture
-can point them at unrelated directories.
+it. Where a subject takes a second anchor as well, the entry point derives it from the
+root and the tests inject each separately, so a fixture can point them at unrelated
+directories.
 
 Two tests cover the anchor itself, and a module resolving paths owes both. Neither calls
 the subject; they read the constants, so they belong to a unit class named for the

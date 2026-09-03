@@ -45,5 +45,5 @@ spans `skills/writing-adrs/`, `.githooks/` and the shape of every file in `docs/
 [ADR 013]: ../adr/013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: ../adr/014-cite-adrs-from-code-comments.md
 [ADR 020]: ../adr/020-track-deferred-work-in-the-repository.md
-[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`.githooks/pre-commit`]: ../../.githooks/pre-commit
+[`adr.py`]: ../../skills/writing-adrs/adr.py

@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-09-02
 scope: [.claude-plugin/, .githooks/pre-commit, .github/workflows/pr.yml, hooks/, skills/writing-adrs/]
 summary: Ship the ADR generator, index and scope checks as a stdlib tool beside the writing-adrs skill, wired to sessions by hooks the phx plugin declares — not a standalone plugin, and not hooks declared in the skill's frontmatter alone.
-revisit-when: A consumer needs the skills without the hooks and Claude Code offers no per-hook opt-out, or a hook needs more than a POSIX shell and python3 to run.
+revisit-when: A consumer needs the skills without the hooks and Claude Code offers no per-hook opt-out, or a hook needs more than a POSIX shell and python3 to run, or a hook event's median cost is measured above 100 ms on this repository's corpus.
 ---
 
 # 022: Ship the ADR tooling and hooks with the skill
@@ -58,9 +58,13 @@ No install step, as [ADR 017][] requires of shipped tooling.
 **Cons:** Every `phx` user carries the hooks, and Claude Code offers no per-hook opt-out:
 a consumer who wants the skills without them has `disableAllHooks` or uninstall. In a
 managed repository each hooked event starts Python once, per subagent; the budget is
-100 ms on this repository's corpus — measured 2026-09-03: median 74 ms, worst 111 ms of
-twenty on this container, of which interpreter startup is 15 ms and the handler's own work
-5 ms, so the two runs over budget are container jitter rather than corpus size.
+100 ms on this repository's corpus. Measured 2026-09-03 over twenty `PreToolUse` events on
+this container: median 74 ms, worst 111 ms — the budget is met at the median and missed at
+the worst. The median divides into 2 ms for the shell gate, 15 ms of interpreter start,
+24 ms importing the modules, 5 ms of the handler's own work over 24 decisions, and the
+remaining 28 ms in process spawning and container jitter. The corpus is the smallest term,
+so the cost tracks the interpreter rather than the number of decisions, and a median over
+budget would mean something else had changed — which is why it is a revisit condition.
 **Risks:** A hook that misbehaves does so in every consumer's session at once, with no
 version pin between them and this repository's `main`.
 
