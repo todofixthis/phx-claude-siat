@@ -49,6 +49,9 @@ MAX_ROWS = 10
 MAX_CHARS = 9_000
 PRUNE_AFTER_SECONDS = 30 * 24 * 60 * 60
 STATE_SUBDIR = "sessions"
+# The session a valid event naming none is handled against, so it still gets state and the
+# crash-once rule rather than a KeyError reported on every call.
+UNKNOWN_SESSION = "unknown"
 
 NOTE = (
     "This repository records architectural decisions in docs/adr/ ({count} in force). Read "
@@ -113,6 +116,7 @@ class State:
         self.data.setdefault("injected", {})
         self.data.setdefault("roots", {})
         self.data.setdefault("crash_reported", False)
+        self._normalise()
         return self
 
     def __exit__(self, *exc) -> None:
@@ -125,6 +129,23 @@ class State:
             fcntl.flock(self.lock, fcntl.LOCK_UN)
             self.lock.close()
 
+    def _normalise(self) -> None:
+        """Bring a state file an older version wrote to the shape this one reads.
+
+        The file is a cache, so a shape that no longer fits costs the keys it is missing
+        rather than the session's whole memory: a root record gains the keys added since
+        it was written, and an `injected` that is no longer a mapping of lists is dropped,
+        there being nothing in it to key by agent.
+        """
+        if not isinstance(self.data["injected"], dict) or not all(
+            isinstance(value, list) for value in self.data["injected"].values()
+        ):
+            self.data["injected"] = {}
+        for record in self.data["roots"].values():
+            record.setdefault("baseline", None)
+            record.setdefault("raised", [])
+            record.setdefault("reported", [])
+
     def _load(self) -> dict:
         """The state on disk, or empty where it is missing, corrupt, or not a JSON object.
 
@@ -136,7 +157,9 @@ class State:
             return {}
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        # ValueError covers both ways the file can be unreadable: a JSONDecodeError from
+        # a partial write, and a UnicodeDecodeError from bytes that are not UTF-8 at all.
+        except (OSError, ValueError):
             return {}
         return data if isinstance(data, dict) else {}
 
@@ -308,9 +331,13 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
     named: list[str] = []
     for root, paths in by_root.items():
         for row in adr.binding(root, paths):
-            if row.number in injected:
+            # Keyed by root as well as number: two managed corpora in one session each
+            # number their decisions from 001, and a bare number would let the first
+            # corpus's 001 suppress the second's.
+            key = f"{root}:{row.number}"
+            if key in injected:
                 continue
-            injected.append(row.number)
+            injected.append(key)
             rows.append(row)
             named.extend(adr.relative_to_root(p, root) or p for p in paths)
     if not rows:
@@ -320,8 +347,13 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
     return output("PreToolUse", text, cap=False)
 
 
-def written_adr_root(event: dict) -> Path | None:
-    """The managed root of an ADR a file tool in the batch wrote, if any."""
+def written_adr_roots(event: dict) -> list[Path]:
+    """Every managed root under which a file tool in the batch wrote an ADR, in order.
+
+    One batch can write into two corpora, and stopping at the first would leave the
+    second's index stale with nothing to say so.
+    """
+    roots: dict[Path, None] = {}
     for result in event.get("tool_calls") or []:
         if result.get("tool_name") not in FILE_TOOLS or result.get("tool_name") == "Read":
             continue
@@ -333,8 +365,8 @@ def written_adr_root(event: dict) -> Path | None:
         if root is not None and Path(path).resolve().is_relative_to(
             (root / adr.ADR_DIR).resolve()
         ):
-            return root
-    return None
+            roots[root] = None
+    return list(roots)
 
 
 def new_findings(state: State, root: Path, findings: list[adr.Finding]) -> list[adr.Finding]:
@@ -347,22 +379,32 @@ def new_findings(state: State, root: Path, findings: list[adr.Finding]) -> list[
 
 
 def on_post_tool_batch(event: dict, state: State) -> dict | None:
-    """Reconcile; write only after an ADR edit; report each new finding once."""
-    root = written_adr_root(event)
-    write = root is not None
-    if root is None:
-        root = managed_root_for(Path(event.get("cwd", ".")))
-    if root is None:
+    """Reconcile every root the batch touched; write only where it wrote; report once.
+
+    A root the batch wrote an ADR under is regenerated; the working directory's root is
+    checked without writing, since an edit through the shell is not the agent's own ADR
+    edit. Each is reported under its own label, so two corpora are two sections rather
+    than one list of findings with no root against them.
+    """
+    written = written_adr_roots(event)
+    targets = [(root, True) for root in written]
+    cwd_root = managed_root_for(Path(event.get("cwd", ".")))
+    if cwd_root is not None and cwd_root not in written:
+        targets.append((cwd_root, False))
+    sections = []
+    for root, write in targets:
+        findings = adr.reconcile(root, write=write)
+        record = state.root(root)
+        fresh = [
+            f for f in new_findings(state, root, findings) if f.id not in record["reported"]
+        ]
+        if not fresh:
+            continue
+        record["reported"].extend(f.id for f in fresh)
+        sections.append(FINDINGS_LABEL.format(root=root) + "\n" + format_findings(fresh))
+    if not sections:
         return None
-    findings = adr.reconcile(root, write=write)
-    record = state.root(root)
-    fresh = [f for f in new_findings(state, root, findings) if f.id not in record["reported"]]
-    if not fresh:
-        return None
-    record["reported"].extend(f.id for f in fresh)
-    return output(
-        "PostToolBatch", FINDINGS_LABEL.format(root=root) + "\n" + format_findings(fresh)
-    )
+    return output("PostToolBatch", "\n\n".join(sections))
 
 
 def on_stop(event: dict, state: State) -> dict | None:
@@ -395,12 +437,19 @@ HANDLERS = {
 
 
 def prune(state_dir: Path, now: float) -> None:
-    """Drop session files older than the retention period; a lock sidecar is left alone."""
+    """Drop session files older than the retention period, and the locks left orphaned.
+
+    A lock sidecar goes only once no session file shares its stem: while the JSON stands
+    the lock is that session's, and taking it away from a live session would let two calls
+    edit the file at once.
+    """
     directory = state_dir / STATE_SUBDIR
     if not directory.is_dir():
         return
     for path in directory.iterdir():
-        if not path.is_file() or path.suffix == ".lock":
+        if not path.is_file():
+            continue
+        if path.suffix == ".lock" and path.with_suffix(".json").exists():
             continue
         try:
             if now - path.stat().st_mtime > PRUNE_AFTER_SECONDS:
@@ -421,7 +470,7 @@ def handle(event: dict, state_dir: Path, now: float) -> dict | None:
     if event.get("hook_event_name") == "SessionStart":
         prune(state_dir, now)
     try:
-        with State(state_dir, event.get("session_id", "unknown")) as state:
+        with State(state_dir, event.get("session_id") or UNKNOWN_SESSION) as state:
             return handler(event, state)
     except StateUnavailable:
         return None
@@ -438,11 +487,13 @@ def main(stdin: str, state_dir: Path) -> str:
 
     An event that fails to parse names no session to remember against, so its crash is
     reported on every call rather than silenced after one, and never touches state; a
-    crash from a parsed event is silenced once per the session it names.
+    crash from a parsed event is silenced once per the session it names. An event that
+    parses but names no session is handled against a session named `unknown`, which is a
+    shape the harness could send rather than a fault to report.
     """
     try:
         event = json.loads(stdin)
-        session_id = event["session_id"]
+        session_id = event.get("session_id") or UNKNOWN_SESSION
     except Exception as exc:  # noqa: BLE001 — no session to report to; nothing to silence
         return json.dumps(output("SessionStart", crash_context(exc)))
     try:

@@ -104,11 +104,15 @@ class RepoTestCase(unittest.TestCase):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("", encoding="utf-8")
 
-    def manage(self) -> None:
-        """Write a managed index, as `index` would, so hooks and resolution treat the corpus as the tool's."""
-        rows, findings = inspect(self.repo_root)
+    def manage_root(self, root: Path) -> None:
+        """Write a managed index for any fixture corpus, as `index` would."""
+        rows, findings = inspect(root)
         assert not findings, findings
-        (self.adr_dir / INDEX_FILENAME).write_text(render_index(rows), encoding="utf-8")
+        (root / ADR_DIR / INDEX_FILENAME).write_text(render_index(rows), encoding="utf-8")
+
+    def manage(self) -> None:
+        """Manage this repository's corpus, so hooks and resolution treat it as the tool's."""
+        self.manage_root(self.repo_root)
 
     def index(self) -> str:
         """Read the generated index."""
@@ -268,6 +272,16 @@ class ParseAdrTests(unittest.TestCase):
         """One fix must not be the thing that reveals the next."""
         content = "---\nstatus: Draft\nnonsense\n---\n\nNo heading.\n"
         self.assertEqual(len(self.problems(content)), 4)
+
+
+class ReadDocumentTests(RepoTestCase):
+    """Unit tests for ``read_document()``: what an editor on Windows leaves in a file."""
+
+    def test_parses_a_document_carrying_a_byte_order_mark_and_crlf_endings(self):
+        """The mark hides the frontmatter fence, so a file carrying one parses as no ADR."""
+        self.write("001-first.md", adr.BOM + adr_text().replace("\n", "\r\n"))
+        _, title, _, problems = parse_adr(adr.read_document(self.adr_dir / "001-first.md"))
+        self.assertEqual((title, problems), ("Do the thing", []))
 
 
 class ScopeProblemsTests(unittest.TestCase):
@@ -488,12 +502,50 @@ class InspectTests(RepoTestCase):
         self.assertEqual(rows, [])
         self.assertEqual([f.kind for f in findings], ["missing"])
 
+    def test_a_document_with_windows_line_endings_renders_a_clean_row(self):
+        """Nothing of a Windows file may reach a cell: it lands in the index and in every row."""
+        self.write("001-first.md", adr.BOM + adr_text().replace("\n", "\r\n"))
+        rows, _ = inspect(self.repo_root)
+        self.assertEqual(
+            render_index(rows), f"{INDEX_HEADER}\n{TABLE_HEADER}{ROWS['001-first.md']}"
+        )
+
     def test_leaves_the_scope_of_a_superseded_adr_alone(self):
         """Editing a superseded ADR is forbidden, so checking one could only deadlock the build."""
         fields = {"superseded-by": "12", SCOPE_FIELD: "[scripts/gone.py]"}
         self.write("001-superseded.md", adr_text(status="Superseded", **fields))
         _, findings = inspect(self.repo_root)
         self.assertEqual(findings, [])
+
+
+class FindingIdentityTests(RepoTestCase):
+    """Unit tests for ``Finding.id``: what a hook remembers must survive the file moving.
+
+    A command refuses to renumber while any finding stands, so the move is made by hand
+    here; the subject is the key, not the command that renames the file.
+    """
+
+    def ids(self) -> list[str]:
+        """The identities inspect() reports for the fixture."""
+        return [f.id for f in inspect(self.repo_root)[1]]
+
+    def test_a_dangling_entry_keeps_its_id_when_its_adr_is_renumbered(self):
+        """Keyed by the entry, so a hook that reported it stays silent once the ADR moves."""
+        self.write("001-first.md", adr_text(scope="[gone/]"))
+        before = self.ids()
+        (self.adr_dir / "001-first.md").unlink()
+        self.write("005-first.md", adr_text(title="5: Do the thing", scope="[gone/]"))
+        self.assertEqual((before, self.ids()), (["dangling:gone/"], ["dangling:gone/"]))
+
+    def test_a_malformed_file_is_keyed_by_its_name(self):
+        """Nothing inside a file that will not parse can key it, so a rename is a new finding."""
+        self.write("001-first.md", adr_text(status="Bogus"))
+        before = self.ids()
+        (self.adr_dir / "001-first.md").rename(self.adr_dir / "005-first.md")
+        self.assertEqual(
+            (before, self.ids()),
+            (["malformed:001-first.md"], ["malformed:005-first.md"]),
+        )
 
 
 class RenderIndexTests(RepoTestCase):
@@ -618,6 +670,21 @@ class InspectFailureTests(RepoTestCase):
         """An unnumbered ADR is a real decision that would drop out of the index silently."""
         self.write("keep-scripts-stdlib-only.md", adr_text())
         self.assertIn("rename it NNN-slug.md", self.findings()[0])
+
+    def test_reports_a_directory_sitting_among_the_adrs(self):
+        """A directory of assets is misfiled, and "rename it NNN-slug.md" is no instruction for one."""
+        self.write("001-first.md", adr_text())
+        (self.adr_dir / "images").mkdir()
+        self.assertEqual(
+            self.findings(), ["images is a directory; move it elsewhere under docs/"]
+        )
+
+    def test_reports_a_directory_named_like_an_adr_rather_than_opening_it(self):
+        """Read as a file it raises IsADirectoryError, which no finding would ever explain."""
+        (self.adr_dir / "009-x.md").mkdir()
+        self.assertEqual(
+            self.findings(), ["009-x.md is a directory; move it elsewhere under docs/"]
+        )
 
     def test_reports_a_problem_against_the_file_that_holds_it(self):
         """A parse problem names its file, since inspect() reports every file at once."""
@@ -787,6 +854,24 @@ class BindingTests(RepoTestCase):
             self.assertEqual(binding(self.repo_root, [SCOPED_FILE]), [])
         self.assertIn("001-bad.md could not be read, so it binds nothing here", err.getvalue())
 
+    def test_a_path_through_a_symlink_leaving_the_root_binds_nothing(self):
+        """The link is inside the root and its target is not, and the answer follows the target.
+
+        Without resolving, the path reads as `linked/x.py` and matches the entry; resolved,
+        it is outside the root, where this corpus has no answer to give.
+        """
+        outside = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        (outside / "x.py").write_text("", encoding="utf-8")
+        (self.repo_root / "linked").symlink_to(outside, target_is_directory=True)
+        self.write("001-first.md", adr_text(scope="[linked/]"))
+        self.assertEqual(binding(self.repo_root, [str(self.repo_root / "linked" / "x.py")]), [])
+
+    def test_a_directory_named_like_an_adr_binds_nothing(self):
+        """The lookup opens every ADR it sees, and a directory named like one would raise."""
+        self.write("001-first.md", adr_text())
+        (self.adr_dir / "009-x.md").mkdir()
+        self.assertEqual([r.number for r in binding(self.repo_root, [SCOPED_FILE])], ["001"])
+
     def test_stays_silent_for_a_path_nothing_binds(self):
         """Most files are bound by nothing, so the common case must not cry wolf."""
         self.write("001-first.md", adr_text())
@@ -934,6 +1019,42 @@ class NewAdrTests(RepoTestCase):
         self.assertIn("gone/", str(caught.exception))
         self.assertEqual(sorted(p.name for p in self.adr_dir.iterdir()), [])
 
+    def refuse(self, title: str, summary: str, scope: list[str]) -> str:
+        """Run `new` expecting a refusal, asserting nothing was written; return the message."""
+        with self.assertRaises(adr.AdrError) as caught:
+            adr.new_adr(self.repo_root, title, summary, scope, None, date(2026, 9, 2))
+        self.assertEqual(sorted(p.name for p in self.adr_dir.iterdir()), [])
+        return str(caught.exception)
+
+    def test_refuses_a_title_that_slugifies_to_nothing(self):
+        """A title of punctuation alone would name the file `001-.md`, which nothing catches later."""
+        self.assertEqual(
+            self.refuse("!!!", "A summary.", [SCOPED_FILE]), "title yields an empty slug"
+        )
+
+    def test_refuses_a_summary_holding_a_line_break(self):
+        """Written, the second line parses as a wrapped value and the ADR never reaches the index."""
+        self.assertEqual(
+            self.refuse("W", "A summary.\nAnd more.", [SCOPED_FILE]),
+            "summary holds a line break; frontmatter carries a value on one line",
+        )
+
+    def test_refuses_a_scope_entry_holding_a_comma(self):
+        """The inline list splits on commas, so one entry would land as two naming nothing."""
+        self.assertEqual(
+            self.refuse("W", "A summary.", ["a,b.py"]),
+            "scope entry 'a,b.py' holds a comma or a line break, and the inline list would "
+            "split it into entries naming nothing",
+        )
+
+    def test_refuses_a_scope_entry_holding_a_line_break(self):
+        """A break inside the list ends the field early, leaving the rest as stray frontmatter."""
+        self.assertEqual(
+            self.refuse("W", "A summary.", ["a\nb.py"]),
+            "scope entry 'a\\nb.py' holds a comma or a line break, and the inline list would "
+            "split it into entries naming nothing",
+        )
+
     def test_refuses_to_scaffold_beside_a_malformed_sibling(self):
         """An existing fault is caught before writing, so no new file lands beside it index-less."""
         self.write("001-broken.md", adr_text(status="Bogus"))
@@ -1021,6 +1142,14 @@ class SupersedeTests(RepoTestCase):
         with self.assertRaises(adr.AdrError):
             adr.supersede(self.repo_root, 9, 2)
 
+    def test_refuses_while_the_corpus_has_a_fault_and_writes_nothing(self):
+        """A fault elsewhere is refused before the field is set, not after it is on disk."""
+        self.write("003-third.md", adr_text(title="3: Third", scope="[gone/]"))
+        original = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        with self.assertRaises(adr.AdrError):
+            adr.supersede(self.repo_root, 1, 2)
+        self.assertEqual((self.adr_dir / "001-first.md").read_text(encoding="utf-8"), original)
+
 
 class DischargeTests(RepoTestCase):
     """Integration tests for ``discharge()``."""
@@ -1043,6 +1172,17 @@ class DischargeTests(RepoTestCase):
         self.write("001-first.md", adr_text())
         self.write("002-second.md", adr_text(title="2: Do another thing"))
         self.manage()
+        original = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        with self.assertRaises(adr.AdrError):
+            adr.discharge(self.repo_root, 1, 2)
+        self.assertEqual((self.adr_dir / "001-first.md").read_text(encoding="utf-8"), original)
+
+    def test_refuses_while_the_corpus_has_a_fault_and_writes_nothing(self):
+        """A fault elsewhere is refused before the discharge is recorded, not after."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A condition."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        self.write("003-third.md", adr_text(title="3: Third", scope="[gone/]"))
         original = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
         with self.assertRaises(adr.AdrError):
             adr.discharge(self.repo_root, 1, 2)
@@ -1127,6 +1267,13 @@ class RenumberTests(RepoTestCase):
         """Moving onto a number another ADR holds is refused before any write."""
         with self.assertRaises(adr.AdrError):
             adr.renumber(self.repo_root, 1, 2)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
+
+    def test_refuses_while_the_corpus_has_a_fault_and_moves_nothing(self):
+        """A fault elsewhere is refused before the move, which no rerun could undo."""
+        self.write("003-third.md", adr_text(title="3: Third", scope="[gone/]"))
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 1, 5)
         self.assertTrue((self.adr_dir / "001-first.md").exists())
 
 

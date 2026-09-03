@@ -30,9 +30,8 @@ Where the tool cannot run at all — no `python3`, or it breaks — stop and say
 writing the index or the fields it sets (`status`, `superseded-by`, `revisit-discharged-by`) by
 hand; `scope`, `summary` and `revisit-when` stay yours to edit. A refusal is not that: it
 prints `Error:` on stderr and exits 1, naming an ADR and what is wrong with it. Fix that ADR
-and rerun. `new`, `index` and `check` refuse while any fault stands, so an unrelated ADR's
-dangling `scope` entry blocks `new` too; `supersede`, `discharge` and `renumber` write their
-field first and refuse only to regenerate, so rerunning them after the fix finishes the job.
+and rerun. Every command refuses while any fault stands and writes nothing, so an unrelated
+ADR's dangling `scope` entry blocks `new` and `renumber` alike.
 
 Adopting a corpus somebody wrote by hand takes one pass. The tool refuses to act while any ADR
 under `docs/adr/` fails its rules — a lowercase `status: accepted`, a `tags` field where
