@@ -582,6 +582,20 @@ class HandleRobustnessTests(HookTestCase):
         )
         self.assertIn("001 (Accepted)", self.context(result))
 
+    def test_normalises_a_roots_value_that_is_not_a_mapping(self):
+        """A `roots` stored as a list holds no record to key by root, so it is replaced."""
+        self.write_state_bytes(json.dumps({"roots": []}).encode("utf-8"))
+        self.handle("SessionStart", source="startup")
+        self.assertEqual(self.state()["roots"][str(self.repo_root)]["baseline"], [])
+
+    def test_normalises_a_root_record_that_is_not_a_mapping(self):
+        """A record stored as a string carries no baseline to keep, so a fresh one replaces it."""
+        self.write_state_bytes(
+            json.dumps({"roots": {str(self.repo_root): "stale"}}).encode("utf-8")
+        )
+        self.handle("SessionStart", source="startup")
+        self.assertEqual(self.state()["roots"][str(self.repo_root)]["baseline"], [])
+
     def test_a_held_lock_returns_none_without_hanging(self):
         """A lock another handle holds gives up within the retry budget, never raises."""
         lock_path = self.state_dir / hook.STATE_SUBDIR / f"{self.session}.lock"

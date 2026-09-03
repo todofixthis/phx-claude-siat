@@ -30,10 +30,12 @@ Where the tool cannot run at all — no `python3`, or it breaks — stop and say
 writing the index or the fields it sets (`status`, `superseded-by`, `revisit-discharged-by`) by
 hand; `scope`, `summary` and `revisit-when` stay yours to edit. A refusal is not that: it
 prints `Error:` on stderr and exits 1, naming an ADR and what is wrong with it. Fix that ADR
-and rerun. Every command refuses while any fault stands and writes nothing, so an unrelated
-ADR's dangling `scope` entry blocks `new` and `renumber` alike.
+and rerun. `new`, `index`, `supersede`, `discharge` and `renumber` each refuse while any
+fault stands and write nothing, so an unrelated ADR's dangling `scope` entry blocks `new` and
+`renumber` alike. `for` is the exception: an ADR it cannot read draws a warning naming it,
+and the lookup still exits 0.
 
-Adopting a corpus somebody wrote by hand takes one pass. The tool refuses to act while any ADR
+Adopting a corpus somebody wrote by hand takes one pass. Those commands refuse while any ADR
 under `docs/adr/` fails its rules — a lowercase `status: accepted`, a `tags` field where
 `scope` belongs, no `scope` at all — and the hooks stay silent until `docs/adr/INDEX.md` opens
 with the tool's generated header line. Bring each ADR's frontmatter to the Format below —

@@ -30,7 +30,8 @@ Claude Code plugins ship [`hooks/hooks.json`][hooks], with `${CLAUDE_PLUGIN_ROOT
 `${CLAUDE_PROJECT_DIR}` expanded in hook commands; a [skill body][skills] may use
 `${CLAUDE_SKILL_DIR}`, substituted in its content and in `allowed-tools`, to reach a file
 bundled beside it — the harness's own form of the skill-relative resolution [ADR 003][]
-chose. Both verified against the references on 2026-09-02.
+chose. Both verified against the references on 2026-09-02, though, as Consequences records,
+a grant did not pre-approve the command when measured.
 
 ## Options
 

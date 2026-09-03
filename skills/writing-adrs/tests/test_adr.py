@@ -1019,10 +1019,12 @@ class NewAdrTests(RepoTestCase):
         self.assertIn("gone/", str(caught.exception))
         self.assertEqual(sorted(p.name for p in self.adr_dir.iterdir()), [])
 
-    def refuse(self, title: str, summary: str, scope: list[str]) -> str:
+    def refuse(
+        self, title: str, summary: str, scope: list[str], revisit_when: str | None = None
+    ) -> str:
         """Run `new` expecting a refusal, asserting nothing was written; return the message."""
         with self.assertRaises(adr.AdrError) as caught:
-            adr.new_adr(self.repo_root, title, summary, scope, None, date(2026, 9, 2))
+            adr.new_adr(self.repo_root, title, summary, scope, revisit_when, date(2026, 9, 2))
         self.assertEqual(sorted(p.name for p in self.adr_dir.iterdir()), [])
         return str(caught.exception)
 
@@ -1037,6 +1039,13 @@ class NewAdrTests(RepoTestCase):
         self.assertEqual(
             self.refuse("W", "A summary.\nAnd more.", [SCOPED_FILE]),
             "summary holds a line break; frontmatter carries a value on one line",
+        )
+
+    def test_refuses_a_revisit_trigger_holding_a_line_break(self):
+        """The trigger is written as a field like the summary, and breaks the same way."""
+        self.assertEqual(
+            self.refuse("W", "A summary.", [SCOPED_FILE], "A condition.\nAnd another."),
+            "revisit-when holds a line break; frontmatter carries a value on one line",
         )
 
     def test_refuses_a_scope_entry_holding_a_comma(self):

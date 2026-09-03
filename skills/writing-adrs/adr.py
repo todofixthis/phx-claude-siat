@@ -725,6 +725,10 @@ def new_adr(
         raise AdrError("title yields an empty slug")
     if "\n" in summary:
         raise AdrError("summary holds a line break; frontmatter carries a value on one line")
+    if revisit_when and "\n" in revisit_when:
+        raise AdrError(
+            "revisit-when holds a line break; frontmatter carries a value on one line"
+        )
     for entry in scope:
         if "," in entry or "\n" in entry:
             raise AdrError(

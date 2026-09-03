@@ -135,13 +135,19 @@ class State:
         The file is a cache, so a shape that no longer fits costs the keys it is missing
         rather than the session's whole memory: a root record gains the keys added since
         it was written, and an `injected` that is no longer a mapping of lists is dropped,
-        there being nothing in it to key by agent.
+        there being nothing in it to key by agent. A value of the wrong type entirely — a
+        list where the mapping belongs, a string where the record does — is replaced
+        rather than reset around, since nothing in it can be read either way.
         """
         if not isinstance(self.data["injected"], dict) or not all(
             isinstance(value, list) for value in self.data["injected"].values()
         ):
             self.data["injected"] = {}
-        for record in self.data["roots"].values():
+        if not isinstance(self.data["roots"], dict):
+            self.data["roots"] = {}
+        for name, record in self.data["roots"].items():
+            if not isinstance(record, dict):
+                record = self.data["roots"][name] = {}
             record.setdefault("baseline", None)
             record.setdefault("raised", [])
             record.setdefault("reported", [])
