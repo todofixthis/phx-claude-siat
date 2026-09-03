@@ -21,7 +21,7 @@ inside the repository. `${CLAUDE_SKILL_DIR}` is substituted before you see this 
 | Regenerate the index by hand (the hooks do it after an Edit or Write to an ADR; an edit through the shell leaves it for you) | `python3 ${CLAUDE_SKILL_DIR}/adr.py index` |
 | Validate without writing; exits 1 on any finding — what a CI job would run | `python3 ${CLAUDE_SKILL_DIR}/adr.py check` |
 | Mark an ADR superseded | `python3 ${CLAUDE_SKILL_DIR}/adr.py supersede OLD --by NEW` |
-| Record a discharged revisit trigger | `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW` |
+| Record a discharged revisit trigger | `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW --leaving "Conditions still live."` — `--leaving` is for a trigger NEW spent only part of; omit it where NEW spent the whole |
 | Renumber an ADR nothing outside your work cites | `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD NEW` |
 
 `new` writes the frontmatter complete and the body as the Format template below, for you
@@ -132,15 +132,15 @@ truncated index row.
   - **`scope: []`** is a real answer, for a decision whose subject is not a file at all — a platform setting, a habit at review time. Say in Decision why there is no file home.
   - **The tool rejects** an entry naming nothing on disk, a glob, and a directory written without its trailing `/`.
 - **`summary`** — one sentence: what was decided, not why. This appears verbatim in the index. Phrase it so a reader who sees _only_ the frontmatter won't breach the decision: name the binding choice, including the notable rejected alternative where one exists (e.g. "Use mypy, not ty"). Leave the revisit trigger to `revisit-when`: the index carries that in a column of its own, so naming it here spends the reader's sentence twice.
-- **`revisit-when`** — one sentence naming the condition that would change the choice; omit where none would. A condition the decision accommodates is a premise, not a trigger; one that would replace the decision outright is still a trigger, since it says when to look and what the answering ADR does is settled then, not now. State the condition alone and not the option it argues for — Decision has already weighed that. Where several conditions each reopen the ADR, put them on the one line and phrase each so it can be cut without the rest — the discharge workflow spends them one at a time.
-- **`revisit-discharged-by`** — the number of the ADR that met the trigger and answered it, as a bare integer (`11`, not `011`); omit until one has, and never set it without `revisit-when`. It empties the ADR's Revisit cell in the index, which is its job: a spent condition stops costing every reader context.
+- **`revisit-when`** — one sentence naming the condition that would change the choice; omit where none would. A condition the decision accommodates is a premise, not a trigger; one that would replace the decision outright is still a trigger, since it says when to look and what the answering ADR does is settled then, not now. State the condition alone and not the option it argues for — Decision has already weighed that. Where several conditions each reopen the ADR, put them on the one line and phrase each so it can be cut without the rest — the discharge workflow spends them one at a time. Write a recurring condition for any instance ("another skill ships tooling"), not the next ("a second skill ships tooling"): an ordinal reads as spent by the first arrival, where the question returns with each.
+- **`revisit-discharged-by`** — an inline list of the ADRs that spent a condition, as bare integers (`[11]`, then `[11, 14]`; never `011`); omit until one has. `discharge` appends to it and, unless told what is still live, removes `revisit-when`, which empties the ADR's Revisit cell in the index: a spent condition stops costing every reader context.
 - **`archived-because`** — one sentence naming the defence and where a breacher meets it, so whether and why an ADR left the index reads at a glance. Required when status is `Archived`; omit otherwise. One line, whichever defence applies:
   - `archived-because: A comment at the top of every workflow file names the pin, met while the workflow is being edited.`
   - `archived-because: Nothing breaches this without its own ADR, met at the archived-decisions check.`
   - `archived-because: The testing-conventions rule states the convention for every test file, met when an agent reads one.`
 - **`superseded-by`** — the superseding ADR's number, as a bare integer; omit unless status is `Superseded`.
 
-`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. The tool reports a breach of that pairing. The revisit fields pair with each other rather than with a status: the breach reported is a `revisit-discharged-by` with no `revisit-when` to spend, and neither field is constrained by status.
+`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. The tool reports a breach of that pairing. `check` constrains neither revisit field by status — `discharge` itself refuses a Superseded ADR, below — and reports a `revisit-discharged-by` written as a scalar, empty, or holding anything but ADR numbers.
 
 ## Conventions
 
@@ -152,7 +152,7 @@ truncated index row.
 - **Compare options on what differs, not on what they share** — where two or more options carry the same cost, name it once and set it aside, then rank on the residual. **Put it in a short paragraph directly under `## Options`, before Option 1**, naming which options share the cost and stating that it does not rank them; the per-option Pros/Cons/Risks have no slot for it, so without that paragraph the cost gets restated under each option and the section ranks by total weight rather than by substance — and the heavier-looking option loses without ever being compared. Worked example: two options both move every caller from `python3 x.py` to `uv run x.py`, so say that once; what remains — one of them lets each script pin a shared library independently, the other has a single lockfile — is the whole decision, and it reverses the ranking the migration cost implied.
 - **Number sequentially** — never reuse a number: giving a retired one to a new decision leaves every citation of it resolving to the wrong decision, and resolving quietly is what makes that unfindable. Renumbering is a different act: see **Renumbering an ADR** below.
 - **Check archived decisions before recording a new one** — `rg -l 'status: Archived' docs/adr/` and read any whose subject touches yours. They are out of the index by design, so writing an ADR is the one moment they resurface — which is what makes archiving on that defence safe, and unsafe for any breach too small to warrant one. A new decision contradicting an archived one supersedes it rather than sitting alongside it.
-- **Read the live revisit triggers before recording a new decision** — the index carries them in a column of its own, which is how a trigger reaches someone who never opens the ADR holding it. Meeting a condition is not by itself discharging it: a decision that *answers* the condition discharges the trigger, one that only makes it fail loudly arms it, one that closes a mechanism by which the condition could arrive narrows it, and one that reverses the older decision supersedes it. Each has its own workflow below; each is a step of the work, not a note in passing.
+- **Read the live revisit triggers before recording a new decision** — the index carries them in a column of its own, which is how a trigger reaches someone who never opens the ADR holding it. Meeting a condition is not by itself discharging it: a decision that *answers* the condition discharges the trigger, one that only makes it fail loudly arms it, one that closes a mechanism by which the condition could arrive narrows it, one that meets it and settles nothing beyond this instance renews it, and one that reverses the older decision supersedes it. Each has its own workflow below; each is a step of the work, not a note in passing.
 - **Never edit INDEX.md** — the tool generates it, and its first line says so
 - **Supersede, don't edit** — new ADR for changed decisions; mark the old one superseded
 - **Keep it concise** — enough to reconstruct the reasoning, not a thesis
@@ -372,15 +372,13 @@ Superseded ADRs are excluded from the index automatically. Marking the old one i
 
 ## Discharging a Revisit Trigger
 
-When a new ADR meets an older one's `revisit-when` and answers it:
+When a new ADR meets an older one's `revisit-when` and answers it, wholly or one condition of it:
 
 1. Write the new ADR, quoting in its Context the trigger it met
-2. Run `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW`, then strike the condition through everywhere the old ADR's body sets it out, naming the ADR that spent it
+2. Run `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW`, then strike the condition through everywhere the old ADR's body sets it out, naming the ADR that spent it. Where `revisit-when` names several conditions and the new ADR spends only some, pass the rest as `--leaving "…"`, which replaces the field verbatim, so it keeps a live trigger and the index keeps carrying it. The tool cannot tell conditions apart: without `--leaving` the field goes, live conditions included, and a rewording that spends nothing is a renewal (below), not a discharge
 3. Commit both files together
 
 Step 2 edits the body because that is where the condition reads as an instruction, and it is what someone who opened the file is reading. Leave it standing and the ADR tells them to revisit while its frontmatter says the question is answered. Search the whole body rather than the section you expect: where an ADR carries several conditions, one may be argued in Decision and another only named in Consequences, each worded to its paragraph rather than to the field.
-
-Where `revisit-when` names more than one condition and the new ADR spends only one, cut that condition from the field rather than setting `revisit-discharged-by`, striking it through in the body the same way. The ADR still holds a live trigger, so the field stays live and the index keeps carrying it.
 
 A new ADR that reverses the older decision supersedes it instead — follow the supersession workflow above and set no discharge field. A `Superseded` ADR is already out of the index, so a discharge recorded on one empties a cell nobody reads.
 
@@ -392,11 +390,13 @@ of the older decision with the claim narrowed to the cases it still covers and t
 named alongside, supersede the older ADR with it, and set no discharge field. A discharge
 fits only where the older decision survives the answer intact.
 
-A new ADR that closes one *mechanism* by which an older condition could arrive has not discharged it either: the condition survives, narrower. Cut the closed mechanism from `revisit-when` and name the closing ADR where the older body sets the condition out. This is the easiest of the four to miss, because the new ADR is not about the old one at all — and a narrowing left untraced reads as the two ADRs simply disagreeing.
+A new ADR that closes one *mechanism* by which an older condition could arrive has not discharged it either: the condition survives, narrower. Cut the closed mechanism from `revisit-when` and name the closing ADR where the older body sets the condition out. This is the easiest of the five to miss, because the new ADR is not about the old one at all — and a narrowing left untraced reads as the two ADRs simply disagreeing.
 
 An ADR that *arms* an older trigger has not discharged it either. Arming makes the condition fail loudly — a check that rejects the breach and names the ADR to reopen — where discharging answers the question the condition was waiting on. The condition is still the one to revisit on, so leave both fields as they are and record the arming as a Consequences bullet in the older ADR.
 
-None of the edits these four workflows make to an older ADR — marking it superseded, striking a spent condition, cutting a closed mechanism, recording an arming — is a substantial one, so none owes the review passes. The decision is untouched, and the new ADR carries both passes for the pair.
+A new ADR that meets a condition and finds the older decision still right has not discharged it either: the condition *renews*, since the next instance asks the same question. The test against discharging is whether the answer settled the question for every later instance — a matrix over every skill answers "a second skill ships tooling" for the third and fourth too — or for this one alone. Set no discharge field; where the condition was written as an ordinal, reword `revisit-when` for any instance; and record the finding — what arrived, what it showed, and the ADR — as a Consequences bullet in the older ADR.
+
+None of the edits these five workflows make to an older ADR — marking it superseded, cutting a spent condition and striking it through, cutting a closed mechanism, rewording an ordinal, recording an arming or a renewal — changes the decision, so none owes the review passes. The decision is untouched, and the new ADR carries both passes for the pair.
 
 ## Renumbering an ADR
 
@@ -428,5 +428,5 @@ noticed, there is no silent fix. Renumber the later one, move every citation you
 and say in its Context that it was renumbered and from what, so a citation you could not
 reach — a review comment, a link from outside the repository — still leads somewhere.
 
-A renumber is a mechanical edit, like the four workflow edits above, so it does not re-owe the
+A renumber is a mechanical edit, like the five workflow edits above, so it does not re-owe the
 Review passes: the decision itself is untouched.

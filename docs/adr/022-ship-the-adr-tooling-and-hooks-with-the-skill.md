@@ -110,11 +110,11 @@ the revisit condition. Option 4 fails the reader the system is for.
 This repository deletes `scripts/adr/` and consumes the shipped tool from its pre-commit
 hook and its `adr` job, so it is the first consumer rather than a second implementation.
 
-ADR 017's trigger — a third skill ships tooling, so the per-skill coupling assertions want
-generalising — fires here and is answered without generalising: this skill's drift test
+ADR 017's trigger — another skill ships tooling, so the per-skill coupling assertions want
+generalising — fires here and leaves 017 standing: this skill's drift test
 couples the Format template and the field names between `SKILL.md` and the tool, a shape
-`nz-english`'s table test does not share, so there is still nothing common to lift. That
-arm is spent from 017's `revisit-when`.
+`nz-english`'s table test does not share, so there is still nothing common to lift. The
+condition stays live on 017 for the next skill, and its Revisit watch records this reading.
 
 ## Consequences
 

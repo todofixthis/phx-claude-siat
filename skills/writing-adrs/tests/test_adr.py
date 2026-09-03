@@ -232,16 +232,39 @@ class ParseAdrTests(unittest.TestCase):
         """A live trigger is the ordinary case: it needs no discharge until one arrives."""
         self.assertEqual(self.problems(adr_text(**{REVISIT_WHEN_FIELD: TRIGGER})), [])
 
-    def test_accepts_a_discharge_paired_with_the_trigger_it_spent(self):
-        """The pairing is required, so the valid combination must pass cleanly."""
-        fields = {REVISIT_WHEN_FIELD: TRIGGER, REVISIT_DISCHARGED_BY_FIELD: "12"}
+    def test_accepts_a_discharge_beside_a_condition_still_live(self):
+        """One condition spent and one live is the partly-discharged state, and passes."""
+        fields = {REVISIT_WHEN_FIELD: TRIGGER, REVISIT_DISCHARGED_BY_FIELD: "[12]"}
         self.assertEqual(self.problems(adr_text(**fields)), [])
 
-    def test_rejects_a_discharge_with_no_trigger(self):
-        """A discharge alone records that something was spent without saying what."""
+    def test_accepts_a_discharge_with_no_condition_left(self):
+        """Every condition spent leaves the list alone, which is the wholly-discharged state."""
+        self.assertEqual(
+            self.problems(adr_text(**{REVISIT_DISCHARGED_BY_FIELD: "[12, 14]"})), []
+        )
+
+    def test_rejects_a_scalar_discharge(self):
+        """The pre-list form is refused rather than read, so one shape exists in a corpus."""
         self.assertIn(
-            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` but no `{REVISIT_WHEN_FIELD}` to spend",
+            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` as a scalar; write it as an inline "
+            f"list of the ADRs that spent a condition, e.g. `{REVISIT_DISCHARGED_BY_FIELD}: [12]`",
             self.problems(adr_text(**{REVISIT_DISCHARGED_BY_FIELD: "12"})),
+        )
+
+    def test_rejects_an_empty_discharge_list(self):
+        """An empty list says nothing was spent, which is what omitting the field says."""
+        self.assertIn(
+            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` empty; omit it until an ADR spends a "
+            "condition",
+            self.problems(adr_text(**{REVISIT_DISCHARGED_BY_FIELD: "[]"})),
+        )
+
+    def test_rejects_a_discharge_entry_that_is_not_a_number(self):
+        """Each entry names an ADR by number, so `renumber` can follow it."""
+        self.assertIn(
+            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` entry 'ADR 12', which is not an ADR "
+            "number",
+            self.problems(adr_text(**{REVISIT_DISCHARGED_BY_FIELD: "[ADR 12, 14]"})),
         )
 
     def test_rejects_the_field_scope_replaced(self):
@@ -615,11 +638,20 @@ class RenderIndexTests(RepoTestCase):
             f"| Do the thing | {SCOPED_FILE} | A summary. | {TRIGGER} |\n",
         )
 
-    def test_omits_a_discharged_trigger_from_its_column(self):
-        """A spent condition stops costing context, there being nothing left to act on."""
-        fields = {REVISIT_WHEN_FIELD: TRIGGER, REVISIT_DISCHARGED_BY_FIELD: "12"}
-        self.write("001-first.md", adr_text(**fields))
+    def test_leaves_the_revisit_cell_empty_once_every_condition_is_spent(self):
+        """A spent trigger stops costing context, there being nothing left to act on."""
+        self.write("001-first.md", adr_text(**{REVISIT_DISCHARGED_BY_FIELD: "[12]"}))
         self.assert_index_lists("001-first.md")
+
+    def test_keeps_the_conditions_still_live_in_the_revisit_cell(self):
+        """A partly spent trigger still carries what is left of it, whatever was spent."""
+        fields = {REVISIT_WHEN_FIELD: TRIGGER, REVISIT_DISCHARGED_BY_FIELD: "[12]"}
+        self.write("001-first.md", adr_text(**fields))
+        self.assertEqual(
+            self.rendered(),
+            f"{INDEX_HEADER}\n{TABLE_HEADER}| [001](001-first.md) | Accepted "
+            f"| Do the thing | {SCOPED_FILE} | A summary. | {TRIGGER} |\n",
+        )
 
     def test_leaves_the_scope_cell_empty_for_a_decision_binding_no_path(self):
         """An empty cell is a statement — nothing you edit will surface this decision."""
@@ -1184,17 +1216,69 @@ class DischargeTests(RepoTestCase):
     """Integration tests for ``discharge()``."""
 
     def test_records_the_discharge_and_empties_the_revisit_cell(self):
-        """revisit-discharged-by is set as a bare integer and the index's Revisit cell empties."""
+        """Spent wholly, revisit-when goes, the list gains the ADR, and the Revisit cell empties."""
         self.write("001-first.md", adr_text(**{"revisit-when": "A condition."}))
         self.write("002-second.md", adr_text(title="2: Do another thing"))
         self.manage()
         adr.discharge(self.repo_root, 1, 2)
         content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
-        self.assertIn("\nrevisit-discharged-by: 2\n", content)
+        self.assertIn("\nrevisit-discharged-by: [2]\n", content)
+        self.assertNotIn("revisit-when", content)
         self.assertIn(
             "| [001](001-first.md) | Accepted | Do the thing | README.md | A summary. |  |",
             self.index(),
         )
+
+    def test_leaving_keeps_the_conditions_still_live_and_appends_the_spender(self):
+        """Spent in part, revisit-when becomes what is left and the cell keeps carrying it."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.write("003-third.md", adr_text(title="3: Do a third thing"))
+        self.manage()
+        adr.discharge(self.repo_root, 1, 2, leaving="B fires.")
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        self.assertIn("\nrevisit-when: B fires.\n", content)
+        self.assertIn("\nrevisit-discharged-by: [2]\n", content)
+        self.assertIn(
+            "| [001](001-first.md) | Accepted | Do the thing | README.md | A summary. | B fires. |",
+            self.index(),
+        )
+        adr.discharge(self.repo_root, 1, 3)
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        self.assertIn("\nrevisit-discharged-by: [2, 3]\n", content)
+        self.assertNotIn("revisit-when", content)
+
+    def test_refuses_leaving_that_repeats_the_trigger_unchanged(self):
+        """`--leaving` equal to the field cut nothing, so no condition was spent."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        original = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        with self.assertRaises(adr.AdrError) as caught:
+            adr.discharge(self.repo_root, 1, 2, leaving=" A fires, or B fires. ")
+        self.assertIn("unchanged", str(caught.exception))
+        self.assertEqual((self.adr_dir / "001-first.md").read_text(encoding="utf-8"), original)
+
+    def test_refuses_leaving_that_is_empty_or_wrapped(self):
+        """A blank or multi-line `--leaving` cannot be a one-line frontmatter value."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        for leaving in (" ", "B fires,\nor C fires."):
+            with self.subTest(leaving=leaving), self.assertRaises(adr.AdrError):
+                adr.discharge(self.repo_root, 1, 2, leaving=leaving)
+
+    def test_refuses_an_adr_that_already_spent_a_condition(self):
+        """One ADR spends its conditions in one discharge; a second would list it twice."""
+        self.write(
+            "001-first.md",
+            adr_text(**{"revisit-when": "B fires.", "revisit-discharged-by": "[2]"}),
+        )
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        with self.assertRaises(adr.AdrError) as caught:
+            adr.discharge(self.repo_root, 1, 2)
+        self.assertIn("already spent", str(caught.exception))
 
     def test_refuses_where_there_is_no_trigger_to_spend(self):
         """An ADR with no revisit-when cannot be discharged, and the file is left untouched."""
@@ -1267,18 +1351,18 @@ class RenumberTests(RepoTestCase):
         )
 
     def test_moves_the_revisit_discharged_by_peer_field(self):
-        """revisit-discharged-by naming the old number follows the renumber too."""
+        """The entry naming the old number follows the renumber; its neighbours stay put."""
         self.write(
             "003-third.md",
             adr_text(
                 title="3: Third",
-                **{"revisit-when": "A condition.", "revisit-discharged-by": "1"},
+                **{"revisit-when": "A condition.", "revisit-discharged-by": "[2, 1]"},
             ),
         )
         self.manage()
         adr.renumber(self.repo_root, 1, 5)
         self.assertIn(
-            "\nrevisit-discharged-by: 5\n",
+            "\nrevisit-discharged-by: [2, 5]\n",
             (self.adr_dir / "003-third.md").read_text(encoding="utf-8"),
         )
 
@@ -1335,13 +1419,22 @@ class MainEditTests(RepoTestCase):
         self.assertIn("\nsuperseded-by: 2\n", content)
 
     def test_discharge_exits_zero_and_records_the_discharge(self):
-        """`discharge 1 --by 2` records the pair when a trigger is present."""
+        """`discharge 1 --by 2` records the spender when a trigger is present."""
         self.write("001-first.md", adr_text(**{"revisit-when": "A condition."}))
         self.manage()
         code, _, _ = self.run_main("discharge", "1", "--by", "2")
         self.assertEqual(code, 0)
         content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
-        self.assertIn("\nrevisit-discharged-by: 2\n", content)
+        self.assertIn("\nrevisit-discharged-by: [2]\n", content)
+
+    def test_discharge_leaving_reaches_the_field(self):
+        """`--leaving` on the command line becomes the conditions still live."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.manage()
+        code, _, _ = self.run_main("discharge", "1", "--by", "2", "--leaving", "B fires.")
+        self.assertEqual(code, 0)
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        self.assertIn("\nrevisit-when: B fires.\n", content)
 
     def test_discharge_without_a_trigger_exits_one_and_writes_nothing(self):
         """`discharge` on an ADR with no revisit-when fails and leaves the file untouched."""

@@ -9,7 +9,7 @@ reach it through hook.py, and a consumer's CI as `phx-adr`.
     adr.py [--repo-root DIR] check
     adr.py [--repo-root DIR] for PATH ...
     adr.py [--repo-root DIR] supersede OLD --by NEW
-    adr.py [--repo-root DIR] discharge OLD --by NEW
+    adr.py [--repo-root DIR] discharge OLD --by NEW [--leaving CONDITION]
     adr.py [--repo-root DIR] renumber OLD NEW
     adr.py [--repo-root DIR] reconcile [--write]
 
@@ -222,9 +222,24 @@ def parse_adr(content: str) -> tuple[dict, str, str | None, list[str]]:
         elif status != owner and fields.get(field):
             problems.append(f"declares `{field}` but its status is {status!r}, not {owner}")
 
-    if fields.get(REVISIT_DISCHARGED_BY_FIELD) and not fields.get(REVISIT_WHEN_FIELD):
+    # A list, one entry per ADR that spent a condition: the conditions are joined by "or",
+    # so each may be spent by a different ADR, and the tool appends as each one is.
+    spent = fields.get(REVISIT_DISCHARGED_BY_FIELD)
+    if spent is not None and not isinstance(spent, list):
         problems.append(
-            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` but no `{REVISIT_WHEN_FIELD}` to spend"
+            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` as a scalar; write it as an inline "
+            f"list of the ADRs that spent a condition, e.g. `{REVISIT_DISCHARGED_BY_FIELD}: [12]`"
+        )
+    elif spent is not None and not spent:
+        problems.append(
+            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` empty; omit it until an ADR spends a "
+            "condition"
+        )
+    elif spent is not None:
+        problems.extend(
+            f"declares `{REVISIT_DISCHARGED_BY_FIELD}` entry {entry!r}, which is not an ADR number"
+            for entry in spent
+            if not entry.isdigit()
         )
 
     if TAGS_FIELD in fields:
@@ -412,12 +427,6 @@ def inspect(root: Path) -> tuple[list[Row], list[Finding]]:
             continue
         if fields["status"] in HIDDEN_STATUSES:
             continue
-        # A discharged trigger leaves the index the way a Superseded ADR does: spent.
-        revisit = (
-            ""
-            if fields.get(REVISIT_DISCHARGED_BY_FIELD)
-            else fields.get(REVISIT_WHEN_FIELD, "")
-        )
         rows.append(
             Row(
                 number=number,
@@ -426,7 +435,9 @@ def inspect(root: Path) -> tuple[list[Row], list[Finding]]:
                 title=title,
                 scope=list(fields[SCOPE_FIELD]),
                 summary=fields.get(SUMMARY_FIELD, ""),
-                revisit=revisit,
+                # `discharge` removes the field once every condition is spent, so the
+                # cell empties by itself.
+                revisit=fields.get(REVISIT_WHEN_FIELD, ""),
             )
         )
     return rows, findings
@@ -524,11 +535,7 @@ def binding(root: Path, paths: list[str]) -> list[Row]:
                     title=title,
                     scope=list(fields[SCOPE_FIELD]),
                     summary=fields.get(SUMMARY_FIELD, ""),
-                    revisit=(
-                        ""
-                        if fields.get(REVISIT_DISCHARGED_BY_FIELD)
-                        else fields.get(REVISIT_WHEN_FIELD, "")
-                    ),
+                    revisit=fields.get(REVISIT_WHEN_FIELD, ""),
                 )
             )
     return matches
@@ -618,6 +625,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     discharge.add_argument("old", type=int)
     discharge.add_argument("--by", dest="new", type=int, required=True)
+    discharge.add_argument(
+        "--leaving",
+        help="the conditions still live, where NEW spent only some of them",
+    )
     renumber = commands.add_parser(
         "renumber", help="move OLD to NEW and every citation in docs/adr"
     )
@@ -647,7 +658,7 @@ def main(argv: list[str], cwd: Path) -> int:
     if args.command == "supersede":
         return command_edit(root, supersede, args.old, args.new)
     if args.command == "discharge":
-        return command_edit(root, discharge, args.old, args.new)
+        return command_edit(root, discharge, args.old, args.new, leaving=args.leaving)
     return command_renumber(root, args.old, args.new)
 
 
@@ -830,22 +841,45 @@ def supersede(root: Path, old: int, new: int) -> None:
     regenerate_or_raise(root)
 
 
-def discharge(root: Path, old: int, new: int) -> None:
-    """Record that `new` spent `old`'s revisit trigger. Striking the body through is the agent's."""
+def discharge(root: Path, old: int, new: int, leaving: str | None = None) -> None:
+    """Record that `new` spent `old`'s revisit trigger. Striking the body through is the agent's.
+
+    Without `leaving`, every condition is spent: `revisit-when` goes and the index cell
+    empties. With it, `leaving` is the conditions still live, and replaces the field. Either
+    way `new` is appended to `revisit-discharged-by`.
+    """
     path = find_adr(root, old)
     find_adr(root, new)
     refuse_on_findings(root)
     content = read_document(path)
     fields, _, _, _ = parse_adr(content)
-    if not fields.get(REVISIT_WHEN_FIELD):
+    condition = fields.get(REVISIT_WHEN_FIELD)
+    if not condition:
         raise AdrError(f"ADR {old} has no {REVISIT_WHEN_FIELD} to spend")
     if fields.get("status") == "Superseded":
         raise AdrError(
             f"ADR {old} is Superseded; a discharge on it empties a cell nobody reads"
         )
-    path.write_text(
-        set_fields(content, {REVISIT_DISCHARGED_BY_FIELD: str(new)}), encoding="utf-8"
-    )
+    spent = list(fields.get(REVISIT_DISCHARGED_BY_FIELD, []))
+    if str(new) in spent:
+        raise AdrError(f"ADR {new} already spent a condition of ADR {old}")
+    if leaving is not None:
+        if "\n" in leaving:
+            raise AdrError(
+                "--leaving holds a line break; frontmatter carries a value on one line"
+            )
+        if not leaving.strip():
+            raise AdrError("--leaving is empty; omit it where the whole trigger is spent")
+        if leaving.strip() == condition.strip():
+            raise AdrError(
+                f"--leaving repeats ADR {old}'s {REVISIT_WHEN_FIELD} unchanged; cut the "
+                f"condition ADR {new} spent, or omit it where the whole trigger is spent"
+            )
+    updates = {
+        REVISIT_WHEN_FIELD: leaving,
+        REVISIT_DISCHARGED_BY_FIELD: f"[{', '.join([*spent, str(new)])}]",
+    }
+    path.write_text(set_fields(content, updates), encoding="utf-8")
     regenerate_or_raise(root)
 
 
@@ -881,8 +915,13 @@ def renumber(root: Path, old: int, new: int) -> list[str]:
         peer_fields = parse_adr(text)[0]
         for field in (SUPERSEDED_BY_FIELD, REVISIT_DISCHARGED_BY_FIELD):
             # By value, as the citation regexes above compare: `007` names ADR 7.
-            if names_number(peer_fields.get(field), old):
-                peer_updates[field] = str(new)
+            value = peer_fields.get(field)
+            entries = value if isinstance(value, list) else [value]
+            if any(names_number(entry, old) for entry in entries):
+                moved = [str(new) if names_number(entry, old) else entry for entry in entries]
+                peer_updates[field] = (
+                    f"[{', '.join(moved)}]" if isinstance(value, list) else moved[0]
+                )
         if peer_updates:
             text = set_fields(text, peer_updates)
         peer.write_text(text, encoding="utf-8")
@@ -940,11 +979,11 @@ def command_new(root: Path, args: argparse.Namespace) -> int:
 
 
 def command_edit(
-    root: Path, action: Callable[[Path, int, int], None], old: int, new: int
+    root: Path, action: Callable[..., None], old: int, new: int, **options: str | None
 ) -> int:
     """`supersede` and `discharge` share one shape: act, or print the error."""
     try:
-        action(root, old, new)
+        action(root, old, new, **options)
     except AdrError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
