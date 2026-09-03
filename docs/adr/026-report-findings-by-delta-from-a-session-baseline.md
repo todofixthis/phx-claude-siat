@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-02
-scope: [skills/writing-adrs/]
+scope: [hooks/, skills/writing-adrs/]
 summary: A session hook reports a corpus finding — a dangling scope entry, a malformed ADR, a shared number, a stale index — once to the human and the agent where it was already present at session start, and where it arose during the session once when it appears and once more at Stop; never on every turn until fixed, and never by blocking.
 revisit-when: A finding reported at baseline survives three consecutive sessions unfixed, or a consumer's CI cannot gate on the tool and blocking becomes the only enforcement.
 ---
@@ -87,7 +87,6 @@ standing fault is gated, and the hooks do not change that.
 - A repository the session touches without having started in it has no baseline until its
   first check, which snapshots one then — after the write that triggered it, so a finding
   that write introduced is billed to the repository and reaches the human that way.
-- The scope gains `hooks/` with [ADR 022][]'s, once the directory exists.
 - The per-batch check runs for one root: the one resolved from the ADR a file tool in
   the batch wrote, else from the hook's `cwd` ([ADR 024][]). A root the session only ever
   reads from is injected into, never checked.

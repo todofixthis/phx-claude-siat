@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-02
-scope: [.agents/rules/, skills/writing-adrs/]
+scope: [.agents/rules/, hooks/, skills/writing-adrs/]
 summary: Inject the decisions binding a path from a PreToolUse hook the first time a session touches it — by a file tool or a shell command naming it — labelled as binding that path and not the corpus, beside a session-start instruction to read INDEX.md; still generate no rule files from frontmatter.
 revisit-when: A proposed ADR relitigates an indexed decision that was not among the rows injected for the paths it touched; the injection's cost is measured above the 100 ms per event ADR 022 budgets; or the harness delivers path-keyed context itself.
 ---
@@ -102,7 +102,6 @@ harness runs the plugin.
 - An injection stays under the harness's 10,000-character cap, past which the text is
   swapped for a file path: at most ten rows per event, and the rest named by number and
   path.
-- The scope gains `hooks/` with [ADR 022][]'s, once the directory exists.
 - `Grep`, `Glob`, MCP file readers and `@`-referenced files deliver nothing; the first two
   return matches rather than a file, the rest fire no matched tool call.
 - Root resolution follows ADR 024; what is reported after a change, and how often,

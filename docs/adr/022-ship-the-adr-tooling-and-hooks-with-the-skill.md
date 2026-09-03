@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-02
-scope: [.claude-plugin/, .githooks/pre-commit, .github/workflows/pr.yml, skills/writing-adrs/]
+scope: [.claude-plugin/, .githooks/pre-commit, .github/workflows/pr.yml, hooks/, skills/writing-adrs/]
 summary: Ship the ADR generator, index and scope checks as a stdlib tool beside the writing-adrs skill, wired to sessions by hooks the phx plugin declares — not a standalone plugin, and not hooks declared in the skill's frontmatter alone.
 revisit-when: A consumer needs the skills without the hooks and Claude Code offers no per-hook opt-out, or a hook needs more than a POSIX shell and python3 to run.
 ---
@@ -115,8 +115,7 @@ arm is spent from 017's `revisit-when`.
   a skill that gains tooling, and the `changes` job's `case` arm that selects the matrix
   names it too — a leg alone never runs, and the manifest check's substring test would not
   notice. One step runs the `uvx` recipe against the checkout so it cannot rot unnoticed.
-- `hooks/` at the plugin root is a new kind of shipped artefact. The change that creates
-  it adds `hooks/` to this ADR's scope and to [ADR 025][]'s and [ADR 026][]'s.
+- `hooks/` at the plugin root is a new kind of shipped artefact.
 - Hook commands run under a POSIX shell and need `python3` on `PATH`; where it is missing
   the `SessionStart` line says so in context and every other entry exits silently. Windows
   without Git Bash is out of scope.

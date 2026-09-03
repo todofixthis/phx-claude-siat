@@ -1,0 +1,72 @@
+{
+  "hooks": {
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "timeout": 20,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "timeout": 20,
+            "type": "command"
+          }
+        ],
+        "matcher": "Read|Edit|Write|NotebookEdit|Bash"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; command -v python3 >/dev/null 2>&1 || { printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"phx:writing-adrs hooks need python3 on PATH; the ADR corpus checks are off until it is installed.\"}}'; exit 0; }; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "timeout": 20,
+            "type": "command"
+          }
+        ],
+        "matcher": "startup|resume|clear|compact|fork"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "timeout": 20,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "timeout": 20,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "timeout": 20,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}
