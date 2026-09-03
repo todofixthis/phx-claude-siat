@@ -72,7 +72,7 @@ acts on the caller's tree — a tool shipped under `skills/` that resolves its r
 path it was given, per ADR 024 — cites ADR 024, has no anchor of its own to test, and owes
 tests that resolution follows the path given, a fixture root passed explicitly and a
 worktree-shaped one included, and never the module's location; the rest of this section
-does not apply to it. A module that acts on the tree it ships in cites ADR 016 and says
+does not apply to it. A module that acts on the tree it ships in cites ADR 027 and says
 that the subject requires a root so no call can reach the real repository. There is no
 working-directory-relative alternative for that second kind — ADR 015 described one and is
 superseded, so a rule found there is not in force.

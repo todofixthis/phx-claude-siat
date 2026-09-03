@@ -5,7 +5,7 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 
-The subject joins every path to a `repo_root` its entry point requires (ADR 016), so these
+The subject joins every path to a `repo_root` its entry point requires (ADR 027), so these
 tests pass a fixture root and never `chdir`. The one test that does change directory
 asserts that a `chdir` *cannot* redirect the anchored root, and reads the constant rather
 than calling the subject.

@@ -72,9 +72,10 @@ has nothing to anchor; the caller's tree is the only candidate, and the path in 
 most precise statement of which caller. `CLAUDE_PROJECT_DIR` stays in the hook's shell gate
 as a cheap first test beside `cwd`, and per-path resolution applies once the gate passes.
 
-This discharges ADR 016's trigger: the condition it waited on has arrived and is answered,
-by a rule for scripts outside `scripts/`, leaving ADR 016 in force for everything inside
-it.
+This answers the condition ADR 016's trigger waited on, with a rule for scripts outside
+`scripts/`. It also reverses 016's claim that every script anchors to `__file__`, so
+[ADR 027][] restates 016 by the tree a script acts on and supersedes it; this ADR is the
+caller's-tree half of that rule.
 
 ## Consequences
 
@@ -92,6 +93,7 @@ it.
 [ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
 [ADR 025]: 025-deliver-binding-decisions-by-hook-at-first-touch.md
 [ADR 026]: 026-report-findings-by-delta-from-a-session-baseline.md
+[ADR 027]: 027-anchor-a-script-to-the-tree-it-acts-on.md
 [hooks]: https://code.claude.com/docs/en/hooks
 [`testing.md`]: ../../.agents/rules/testing.md
 [`using-git-worktrees`]: https://github.com/obra/superpowers/blob/main/skills/using-git-worktrees/SKILL.md

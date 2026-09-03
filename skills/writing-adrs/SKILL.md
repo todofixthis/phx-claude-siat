@@ -384,6 +384,14 @@ Where `revisit-when` names more than one condition and the new ADR spends only o
 
 A new ADR that reverses the older decision supersedes it instead — follow the supersession workflow above and set no discharge field. A `Superseded` ADR is already out of the index, so a discharge recorded on one empties a cell nobody reads.
 
+The test between the two is the older ADR's own words, not the trigger's. An answer that
+contradicts a claim the older decision makes — "every script", "no exception", "never" — has
+reversed that claim for the case it introduces, however narrow, and the two ADRs would then
+sit in force disagreeing. That is a partial supersession: write the new ADR as a restatement
+of the older decision with the claim narrowed to the cases it still covers and the new case
+named alongside, supersede the older ADR with it, and set no discharge field. A discharge
+fits only where the older decision survives the answer intact.
+
 A new ADR that closes one *mechanism* by which an older condition could arrive has not discharged it either: the condition survives, narrower. Cut the closed mechanism from `revisit-when` and name the closing ADR where the older body sets the condition out. This is the easiest of the four to miss, because the new ADR is not about the old one at all — and a narrowing left untraced reads as the two ADRs simply disagreeing.
 
 An ADR that *arms* an older trigger has not discharged it either. Arming makes the condition fail loudly — a check that rejects the breach and names the ADR to reopen — where discharging answers the question the condition was waiting on. The condition is still the one to revisit on, so leave both fields as they are and record the arming as a Consequences bullet in the older ADR.

@@ -1,10 +1,10 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-08-15
 scope: [.agents/rules/testing.md, scripts/]
 summary: Anchor every script's default paths to `__file__`, read that anchor only on the `__main__` line, and require a `repo_root` everywhere below it — so tests inject a fixture root and never chdir, and a script given no path acts on the tree it ships in.
-revisit-discharged-by: 24
 revisit-when: A script must resolve a path it was given no argument for against whichever checkout the caller is standing in, rather than against the one it ships inside.
+superseded-by: 27
 ---
 
 # 016: Anchor every default path to the module
@@ -99,9 +99,9 @@ against the workflow's text, where only the repo-relative form appears.
 its target as a required `--file` and running its test command in the caller's tree
 deliberately, because the two must name the same checkout. An argument the caller must
 supply is not the failure this decision prevents, ~~which is why the revisit trigger names a
-path *no* argument was given for~~ — a trigger [ADR 024][] discharged: the shipped ADR tool
-is that script, and resolves its root from the caller's path rather than from the tree it
-ships in.
+path *no* argument was given for~~ — a trigger [ADR 024][] met: the shipped ADR tool is that
+script, and resolves its root from the caller's path rather than from the tree it ships in.
+[ADR 027][] restates this decision by the tree a script acts on and supersedes it.
 
 ADR 015's explicit `--repo-root`-on-every-script option is untouched by this correction
 and stays rejected for the reason it gave: the obvious way to supply the value is
@@ -134,6 +134,7 @@ where an unresolved anchor and a caller's resolved path compare unequal.
 [ADR 015]: 015-anchor-default-paths-to-the-module.md
 [`.agents/rules/testing.md`]: ../../.agents/rules/testing.md
 [ADR 024]: 024-resolve-the-repository-root-from-the-path-in-hand.md
+[ADR 027]: 027-anchor-a-script-to-the-tree-it-acts-on.md
 [`adr.py`]: ../../skills/writing-adrs/adr.py
 [`mutate.py`]: ../../scripts/dev/mutate.py
 [`release_notes.py`]: ../../scripts/ci/release_notes.py
