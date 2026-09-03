@@ -1,15 +1,40 @@
 ---
 name: writing-adrs
 description: Use when making significant architectural, tooling, or design decisions that would benefit from documented rationale — before implementing the decision
+allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/adr.py:*)
 ---
 
 # Writing Architecture Decision Records
 
 ADRs record _why_ things are the way they are, so future contributors don't relitigate settled decisions. Use one when choosing between libraries, patterns, or conventions, or any time "why didn't we just use X?" is a likely future question.
 
-**What this assumes.** ADRs live in `docs/adr/`, and a generator maintains an `INDEX.md` beside them from their frontmatter, enforcing the field rules below. Where a repo has no such generator, every rule here still holds as a convention — write the frontmatter the same way — but nothing checks it, so anything below that says a breach "fails" or "is reported" means "goes unnoticed" instead. Check for the generator before relying on it, and don't tell a reader a check exists that doesn't.
+## The tool
 
-Building or updating a generator against this contract: [`todofixthis/phx-claude-siat`](https://github.com/todofixthis/phx-claude-siat)'s own [`generate_index.py`](../../scripts/adr/generate_index.py) — together with its line parser, [`frontmatter.py`](../../scripts/frontmatter.py) — is the reference implementation of the Frontmatter Fields rules below (status pairing, revisit pairing, `scope` validation), and [its test suite](../../scripts/adr/test_generate_index.py) exercises each one. Port these rather than reverse-engineering the rules from prose, but expect to strip what's specific to that repository: the stdlib-only parsing, the `python3 -m scripts.adr.generate_index` invocation and `.githooks/pre-commit` wiring, and the ADR citations in its comments are how it satisfies the contract, not part of the contract itself.
+A bundled tool does the mechanics — scaffolding, the index, the frontmatter rules, scope
+checks, the reverse lookup — and never rewrites a sentence you wrote. You do the reasoning.
+Every command below resolves the repository from the path in hand, so run it from anywhere
+inside the repository. `${CLAUDE_SKILL_DIR}` is substituted before you see this text.
+
+| To | Run |
+|---|---|
+| Scaffold the next ADR, creating `docs/adr/` and the index on first use | `python3 ${CLAUDE_SKILL_DIR}/adr.py new "Title in imperative mood" --summary "What was decided." --scope path/ --scope file.py` — or `--no-scope` for a decision that binds no path; add `--revisit-when "Condition."` where one would reopen it |
+| See which decisions bind a path before changing it | `python3 ${CLAUDE_SKILL_DIR}/adr.py for path/to/file` |
+| Regenerate the index by hand (the hooks do it after your edits) | `python3 ${CLAUDE_SKILL_DIR}/adr.py index` |
+| Validate without writing, as CI does | `python3 ${CLAUDE_SKILL_DIR}/adr.py check` |
+| Mark an ADR superseded | `python3 ${CLAUDE_SKILL_DIR}/adr.py supersede OLD --by NEW` |
+| Record a discharged revisit trigger | `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW` |
+| Renumber an ADR nothing outside your work cites | `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD NEW` |
+
+`new` writes the frontmatter complete and the body as the Format template below, for you
+to fill. The tool refuses a `scope` entry naming nothing on disk, so name paths that exist.
+Where the tool cannot run — no `python3`, or it reports a fault in itself — stop and say so
+rather than editing the index or the frontmatter by hand.
+
+With the phx plugin's hooks active, the decisions binding a file arrive in your context the
+first time you touch it, the index is regenerated after you edit an ADR, and a `scope` entry
+left dangling by a move or delete is reported to you once, and once more before you finish.
+That report means: update `scope` if the code moved; if it is gone, ask whether the decision
+still binds anything, and revisit it here.
 
 ## Format
 
@@ -88,7 +113,7 @@ truncated index row.
   - **A repo-wide convention has no root shorthand** — name the top-level directories it genuinely reaches. Being made to list them is the point: most "repo-wide" decisions turn out not to be.
   - **An `Archived` ADR defended by a rule names that rule file too** — the files a comment defends are in `scope` already; the rule defending them is not. See Defending a decision with a path-scoped rule, below.
   - **`scope: []`** is a real answer, for a decision whose subject is not a file at all — a platform setting, a habit at review time. Say in Decision why there is no file home.
-  - **Getting it wrong fails loudly**, where a generator enforces it: an entry naming nothing on disk is an error, as is a directory written without its trailing `/`, which would otherwise match that one path and silently cover nothing beneath it.
+  - The tool rejects an entry naming nothing on disk, a glob, and a directory written without its trailing `/`.
 - **`summary`** — one sentence: what was decided, not why. This appears verbatim in the index. Phrase it so a reader who sees _only_ the frontmatter won't breach the decision: name the binding choice, including the notable rejected alternative where one exists (e.g. "Use mypy, not ty"). Leave the revisit trigger to `revisit-when`: the index carries that in a column of its own, so naming it here spends the reader's sentence twice.
 - **`revisit-when`** — one sentence naming the condition that would change the choice; omit where none would. A condition the decision accommodates is a premise, not a trigger; one that would replace the decision outright is still a trigger, since it says when to look and what the answering ADR does is settled then, not now. State the condition alone and not the option it argues for — Decision has already weighed that. Where several conditions each reopen the ADR, put them on the one line and phrase each so it can be cut without the rest — the discharge workflow spends them one at a time.
 - **`revisit-discharged-by`** — the number of the ADR that met the trigger and answered it, as a bare integer (`11`, not `011`); omit until one has, and never set it without `revisit-when`. It empties the ADR's Revisit cell in the index, which is its job: a spent condition stops costing every reader context.
@@ -98,7 +123,7 @@ truncated index row.
   - `archived-because: The testing-conventions rule states the convention for every test file, met when an agent reads one.`
 - **`superseded-by`** — the superseding ADR's number, as a bare integer; omit unless status is `Superseded`.
 
-`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. A generator reports a breach of that pairing, where one is wired in, so a status changed without its field can't leave the old one behind reading as current. The revisit fields pair with each other rather than with a status: the breach reported is a `revisit-discharged-by` with no `revisit-when` to spend, and neither field is constrained by status — though a discharge on a `Superseded` ADR is dead metadata, for the reason the discharge workflow gives. Find out what triggers the generator you have rather than assuming it sees every change: this skill's reference implementation runs in CI on a pull request touching `docs/adr/` or `scripts/`, and locally only from a pre-commit hook, and only when the commit stages an ADR — where the reverse lookup below is the same script in another mode, running on any staged path.
+`Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. The tool reports a breach of that pairing. The revisit fields pair with each other rather than with a status: the breach reported is a `revisit-discharged-by` with no `revisit-when` to spend, and neither field is constrained by status.
 
 ## Conventions
 
@@ -110,8 +135,8 @@ truncated index row.
 - **Compare options on what differs, not on what they share** — where two or more options carry the same cost, name it once and set it aside, then rank on the residual. **Put it in a short paragraph directly under `## Options`, before Option 1**, naming which options share the cost and stating that it does not rank them; the per-option Pros/Cons/Risks have no slot for it, so without that paragraph the cost gets restated under each option and the section ranks by total weight rather than by substance — and the heavier-looking option loses without ever being compared. Worked example: two options both move every caller from `python3 x.py` to `uv run x.py`, so say that once; what remains — one of them lets each script pin a shared library independently, the other has a single lockfile — is the whole decision, and it reverses the ranking the migration cost implied.
 - **Number sequentially** — never reuse a number: giving a retired one to a new decision leaves every citation of it resolving to the wrong decision, and resolving quietly is what makes that unfindable. Renumbering is a different act: see **Renumbering an ADR** below.
 - **Check archived decisions before recording a new one** — `rg -l 'status: Archived' docs/adr/` and read any whose subject touches yours. They are out of the index by design, so writing an ADR is the one moment they resurface — which is what makes archiving on that defence safe, and unsafe for any breach too small to warrant one. A new decision contradicting an archived one supersedes it rather than sitting alongside it.
-- **Read the live revisit triggers before recording a new decision** — the index carries them in a column where one is generated, and `rg 'revisit-when' docs/adr/` finds them where it is not. Either way they are how a trigger reaches someone who never opens the ADR holding it. Meeting a condition is not by itself discharging it: a decision that *answers* the condition discharges the trigger, one that only makes it fail loudly arms it, one that closes a mechanism by which the condition could arrive narrows it, and one that reverses the older decision supersedes it. Each has its own workflow below; each is a step of the work, not a note in passing.
-- **Never edit INDEX.md** — the generator regenerates it, however this repo runs it; find that out rather than assuming a hook or a workflow does
+- **Read the live revisit triggers before recording a new decision** — the index carries them in a column of its own, which is how a trigger reaches someone who never opens the ADR holding it. Meeting a condition is not by itself discharging it: a decision that *answers* the condition discharges the trigger, one that only makes it fail loudly arms it, one that closes a mechanism by which the condition could arrive narrows it, and one that reverses the older decision supersedes it. Each has its own workflow below; each is a step of the work, not a note in passing.
+- **Never edit INDEX.md** — the tool generates it, and its first line says so
 - **Supersede, don't edit** — new ADR for changed decisions; mark the old one superseded
 - **Keep it concise** — enough to reconstruct the reasoning, not a thesis
 - **Check every factual premise against the thing itself** before writing it — the tool's config, the workflow file, the live setting via its API. Documentation is not a source, including this repo's own: a doc asserting the same thing is as likely to be where the error came from. Premises outlive the session that wrote them and are read as settled. Where one can't be checked — a setting behind access you don't have — ask the maintainer rather than writing the gap into the ADR: a premise the decision rests on is worth waiting for, and one that isn't should come out.
@@ -324,7 +349,7 @@ renders as literal text rather than erroring, and over-linking is easy to miss. 
 When a new ADR overrides an existing one:
 
 1. Write the new ADR referencing the old one in the Context section
-2. In the **old** ADR, set `status: Superseded` and the new ADR's number as `superseded-by` (`13`, never `013`)
+2. Run `python3 ${CLAUDE_SKILL_DIR}/adr.py supersede OLD --by NEW`; it sets the status and the field and regenerates the index
 3. Commit both files together
 
 Superseded ADRs are excluded from the index automatically. Marking the old one is not a substantial edit — see the note at the foot of the next section.
@@ -334,7 +359,7 @@ Superseded ADRs are excluded from the index automatically. Marking the old one i
 When a new ADR meets an older one's `revisit-when` and answers it:
 
 1. Write the new ADR, quoting in its Context the trigger it met
-2. In the **old** ADR, set the new ADR's number as `revisit-discharged-by` (`13`, never `013`), leave `revisit-when` as written, and strike through the condition everywhere the body sets it out, naming the ADR that spent it
+2. Run `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW`, then strike the condition through everywhere the old ADR's body sets it out, naming the ADR that spent it
 3. Commit both files together
 
 Step 2 edits the body because that is where the condition reads as an instruction, and it is what someone who opened the file is reading. Leave it standing and the ADR tells them to revisit while its frontmatter says the question is answered. Search the whole body rather than the section you expect: where an ADR carries several conditions, one may be argued in Decision and another only named in Consequences, each worded to its paragraph rather than to the field.
@@ -352,9 +377,8 @@ None of the edits these four workflows make to an older ADR — marking it super
 ## Renumbering an ADR
 
 Expect to need this. Numbers are allocated by reading the directory, so any two branches open
-at once take the same one. Nothing surfaces that by itself unless your repo checks for it — an
-index generator will write two rows under one number and report success, and a collision can
-sit unnoticed for as long as nobody looks. Read the directory as you allocate, and read it
+at once take the same one. Nothing surfaces that while the branches are apart; the tool reports
+a collision once both numbers are in one tree. Read the directory as you allocate, and read it
 again after any rebase or merge from the trunk, before you publish: a collision usually
 arrives when someone else's number lands beside yours, which is after you chose one, so the
 allocation-time read alone would miss it.
@@ -365,24 +389,12 @@ being reachable from peer ADRs, code comments and the index — but a branch ope
 to collide has usually cited its own ADR already, so ask the question directly rather than
 reading the shorthand. Where you cannot tell, treat the number as cited.
 
-Renumber the ADR whose number is not cited outside your own work, and move everything naming
-it in the same change:
-
-1. the file, `NNN-<slug>.md`
-2. its `# NNN: Title` heading
-3. the rest of the ADR's own text — a `summary` or `revisit-when` naming its number, and any
-   prose in the body that does
-4. every `superseded-by`, `revisit-discharged-by` and `archived-because` in a peer ADR naming
-   it, and every reference link to it
-5. every other citation of the number anywhere in the repository: a code comment, an
-   agent-facing document such as `AGENTS.md`, a planning or backlog file, a skill. This is the
-   only item you cannot enumerate by inspection, and in most repositories it is the largest.
-   Search for whichever citation form your repo fixed: `rg 'ADR NNN'` and `rg 'NNN-'` are the
-   common ones, and a path form such as `docs/adr/NNN` matches neither
-6. the index, regenerated by your repo's generator where it has one
-
-Miss one and it still resolves — to whichever decision kept the number — which is the silent
-failure the numbering rule exists to prevent.
+Run `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD NEW` on the ADR whose number is not
+cited outside your own work. It moves the file, the heading, every peer ADR's fields and
+links naming the number, and the index, and refuses a number already claimed. It then lists
+every citation outside `docs/adr/` — a code comment, `AGENTS.md`, a plan, a skill — which
+are yours to move, in the same change. Miss one and it still resolves — to whichever
+decision kept the number — which is the silent failure the numbering rule exists to prevent.
 
 Where both numbers are cited outside your work, each branch having landed before anyone
 noticed, there is no silent fix. Renumber the later one, move every citation you can reach,
