@@ -106,6 +106,18 @@ class PathsInCommandTests(unittest.TestCase):
         found = hook.paths_in_command("git commit -m 'docs/adr/013 is fine'", self.cwd)
         self.assertEqual(found, [])
 
+    def test_a_here_doc_inside_a_command_substitution_does_not_crash(self):
+        """`"$(cat <<'EOF' ... EOF\n)"` closes its outer quote only at the final `)`, so
+        shlex hands back the whole body as one token — long enough that the stat call
+        underneath `exists()` raises `ENAMETOOLONG` on some Python versions rather than
+        answering "not a path" (3.13+ swallows it; earlier versions, including this
+        session's, do not — mock the raise so the test does not depend on which)."""
+        body = "\n".join(f"line {i} of a commit message body" for i in range(50))
+        command = f"git commit -m \"$(cat <<'EOF'\n{body}\nEOF\n)\""
+        with mock.patch.object(Path, "exists", side_effect=OSError(36, "File name too long")):
+            found = hook.paths_in_command(command, self.cwd)
+        self.assertEqual(found, [])
+
 
 class SessionStartTests(HookTestCase):
     """SessionStart: the standing note, the baseline, and what each source does to state."""
