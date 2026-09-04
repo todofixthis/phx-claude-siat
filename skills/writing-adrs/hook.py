@@ -81,7 +81,18 @@ def state_root(env: dict) -> Path:
 
 
 class State:
-    """One session's state file, edited under a lock and written by atomic rename."""
+    """One session's state file, edited under a lock and written by atomic rename.
+
+    The lock serialises read-modify-write of the whole file between hook processes that
+    share a session and run at the same time: the `PreToolUse` hooks of tool calls the
+    agent issued in parallel, and a subagent's hooks — `SubagentStart`, `PreToolUse`,
+    `SubagentStop` — running beside the main thread's and beside other subagents', since a
+    subagent carries the session's id and differs only by `agent_id`. Without it a slower
+    writer overwrites a faster one's update: a row recorded as injected is forgotten and
+    arrives twice, or a finding reported once is reported again. Two sessions never
+    contend, each having its own file. The atomic rename is for readers: a hook that opens
+    the file mid-write sees the old state whole, never a torn one.
+    """
 
     def __init__(self, state_dir: Path, session_id: str) -> None:
         self.directory = state_dir / STATE_SUBDIR
@@ -137,7 +148,9 @@ class State:
         it was written, and an `injected` that is no longer a mapping of lists is dropped,
         there being nothing in it to key by agent. A value of the wrong type entirely — a
         list where the mapping belongs, a string where the record does — is replaced
-        rather than reset around, since nothing in it can be read either way.
+        rather than reset around, since nothing in it can be read either way. No schema
+        version is kept: every value here can be recomputed, so a shape change between
+        releases costs a recompute and never a migration.
         """
         if not isinstance(self.data["injected"], dict) or not all(
             isinstance(value, list) for value in self.data["injected"].values()
@@ -321,6 +334,15 @@ def on_session_start(event: dict, state: State) -> dict | None:
 
 
 def on_subagent_start(event: dict, state: State) -> dict | None:
+    """The standing note only: a subagent starts inside a session that already has the rest.
+
+    Where `SessionStart` also snapshots the baseline and reports the findings standing at
+    it, a subagent shares the session's baseline through the state file, and the human has
+    already seen those findings once; anything new since reaches it at `PostToolBatch` and
+    `SubagentStop`. Nothing is written: its injected rows start empty by construction,
+    since `injected` is keyed by `agent_id`, so the decisions binding a file reach it on its
+    own first touch.
+    """
     root = managed_root_for(Path(event.get("cwd", ".")))
     if root is None:
         return None
