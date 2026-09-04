@@ -158,21 +158,21 @@ the precedent for recording one.
   mean hand-parsing a grammar the repo does not define. That was false, `fnmatch` being
   standard library, and the justification was removed; what ADR 013 rests on now stands on
   its own.
-- 2026-09-03: question 1 **fired**; question 2 still answers no. The trigger reads
-  "a second script hand-parses a grammar this repo does not define", the first being
-  `validate_manifests.py`'s substring match. The second is `scripts/frontmatter.py`.
-  The Decision section counts flat frontmatter as a grammar this repo defines, and for ADR frontmatter
-  that was never wholly true: GitHub renders the block through a real YAML parser, which
-  ADR 027's summary found the hard way. [`adr.py`][]'s `yaml_hazard()` now refuses values
+- 2026-09-03: question 1 **fired**; question 2 still answers no. The trigger reads "a second
+  script hand-parses a grammar this repo does not define", the first being
+  `validate_manifests.py`'s substring match. The second is `scripts/frontmatter.py`. The
+  Decision section counts flat frontmatter as a grammar this repo defines, and for ADR
+  frontmatter that was never wholly true: GitHub renders the block through a real YAML parser,
+  which ADR 027's summary found the hard way. [`adr.py`][]'s `yaml_hazard()` now refuses values
   that parser would misread. That is recognise-and-reject, which the 2026-08-10 entry ruled is
   not parsing — but `scope`'s grammar is this repo's own invention, so rejecting there is
-  definitional, where `RE_YAML_INDICATOR`'s character class is a hand-written approximation
-  of someone else's plain-scalar rules, wrong on exactly the inputs nobody tried. The
-  packaged skill could take PyYAML on its own, but `scripts/` reaches the parser by symlink
-  and would import it too, which this decision forbids; the answer it prescribes is a root
-  project, and the [monorepo backlog item][] carries that analysis. No amendment banner
-  yet: ADR 011's precedent names the amending ADR, and none exists until that analysis
-  lands, so this decision stays in force as written.
+  definitional, where `RE_YAML_INDICATOR`'s character class is a hand-written approximation of
+  someone else's plain-scalar rules, wrong on exactly the inputs nobody tried. The packaged
+  skill could take PyYAML on its own, but `scripts/` reaches the parser by symlink and would
+  import it too, which this decision forbids; the answer it prescribes is a root project, and
+  the [monorepo backlog item][] carries that analysis. No amendment banner yet: ADR 011's
+  precedent names the amending ADR, and none exists until that analysis lands, so this decision
+  stays in force as written.
 
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
