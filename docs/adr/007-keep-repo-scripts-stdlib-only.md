@@ -23,7 +23,7 @@ root. None declares a dependency, and the repo root carries no `pyproject.toml`.
 [ADR 006][] already reasons from that constraint (choosing `tomllib` because it is
 standard library, and rejecting alternatives needing "a dependency the repo lacks"), and
 [ADR 005][] already accepts one of its costs: the flat-frontmatter parser adapted between
-[`generate_index.py`][] and [`validate_manifests.py`][]. Neither states the constraint
+[`adr.py`][] and [`validate_manifests.py`][]. Neither states the constraint
 itself, so each new script re-decides it, and the first to answer "add a dependency"
 answers for everyone.
 
@@ -139,18 +139,9 @@ point of temptation rather than only here.
 
 ## Revisit watch
 
-Assessed while designing [ADR 013][]'s `scope` field, and **not fired**. `scope_matches()`
-compares string prefixes; `scope_problems()` recognises `*`, `?` and `[` to reject
-glob-shaped entries rather than interpreting them. Neither is parsing.
-
-An early ADR 013 draft did justify rejecting globs by this decision — matching one would
-mean hand-parsing a grammar the repo does not define. That was false, `fnmatch` being
-standard library, and the justification was removed; what ADR 013 rests on now stands on
-its own.
-
 The constraint is still shaping design at one remove, which the Risks above anticipated:
-a dependency-bearing matcher was never a live candidate. So at the next change under
-`scripts/`, however small, re-ask both:
+when ADR 013 needed a `scope` matcher, a dependency-bearing one was never a live candidate.
+So at the next change under `scripts/`, however small, re-ask both:
 
 1. Is anything under `scripts/` approximating a grammar — a glob, a semver range, a TOML
    subset, a path spec — rather than parsing it?
@@ -160,12 +151,36 @@ a dependency-bearing matcher was never a live candidate. So at the next change u
 If either answers yes, this decision is due a revisit, and ADR 011's amendment banner is
 the precedent for recording one.
 
+- 2026-08-10: assessed while designing [ADR 013][]'s `scope` field, and **not fired**.
+  `scope_matches()` compares string prefixes; `scope_problems()` recognises `*`, `?` and
+  `[` to reject glob-shaped entries rather than interpreting them. Neither is parsing. An
+  early ADR 013 draft did justify rejecting globs by this decision — matching one would
+  mean hand-parsing a grammar the repo does not define. That was false, `fnmatch` being
+  standard library, and the justification was removed; what ADR 013 rests on now stands on
+  its own.
+- 2026-09-03: question 1 **fired**; question 2 still answers no. The trigger reads "a second
+  script hand-parses a grammar this repo does not define", the first being
+  `validate_manifests.py`'s substring match. The second is `scripts/frontmatter.py`. The
+  Decision section counts flat frontmatter as a grammar this repo defines, and for ADR
+  frontmatter that was never wholly true: GitHub renders the block through a real YAML parser,
+  which ADR 027's summary found the hard way. [`adr.py`][]'s `yaml_hazard()` now refuses values
+  that parser would misread. That is recognise-and-reject, which the 2026-08-10 entry ruled is
+  not parsing — but `scope`'s grammar is this repo's own invention, so rejecting there is
+  definitional, where `RE_YAML_INDICATOR`'s character class is a hand-written approximation of
+  someone else's plain-scalar rules, wrong on exactly the inputs nobody tried. The packaged
+  skill could take PyYAML on its own, but `scripts/` reaches the parser by symlink and would
+  import it too, which this decision forbids; the answer it prescribes is a root project, and
+  the [monorepo backlog item][] carries that analysis. No amendment banner yet: ADR 011's
+  precedent names the amending ADR, and none exists until that analysis lands, so this decision
+  stays in force as written.
+
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [ADR 011]: 011-make-scripts-a-package.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`creative-commits`]: ../../skills/creative-commits/SKILL.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
+[monorepo backlog item]: ../backlog/decide-whether-the-repository-becomes-a-python-monorepo.md
 [PEP 723]: https://peps.python.org/pep-0723/
 [`pre-commit`]: https://pre-commit.com/
 [`PyYAML`]: https://pyyaml.org/

@@ -5,7 +5,7 @@ Stdlib `unittest` rather than pytest, so the suite needs no dependency of its ow
 
     python3 -m unittest discover -s scripts -t . -p 'test_*.py'
 
-The subject joins every path constant to a `repo_root` its checks require (ADR 016), so
+The subject joins every path constant to a `repo_root` its checks require (ADR 027), so
 these tests pass the fixture root and never `chdir`. Nothing here can fall back to the
 real repository: the checks carry no default, so omitting the root is a `TypeError`
 rather than a test that passes against the wrong tree. The only test that changes

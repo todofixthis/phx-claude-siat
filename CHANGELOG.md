@@ -1,5 +1,67 @@
 # Changelog
 
+## 6.0.0 - 2026-09-04
+
+### For phx plugin users
+
+#### Breaking changes
+
+- **`writing-adrs` now needs `python3` (3.10+) on your `PATH`.** The skill ships a bundled
+  tool and session hooks that do its mechanical work — nothing else to install.
+- **The skill's workflow changed:** the agent runs the shipped tool's commands
+  (`new`, `check`, `supersede`, `discharge`, `renumber`, …) rather than hand-editing your
+  `docs/adr/` files or index. If your own tooling or docs assumed the old hand-edit
+  workflow, update them. If you already have a hand-written `docs/adr/`, the hooks stay
+  silent until you bring it into the new format with one `adr.py index` pass.
+- **`revisit-discharged-by` is now a list**, one entry per ADR that spent a condition — a
+  scalar value fails `check` until you rewrite it as a list.
+- **A frontmatter value GitHub's YAML renderer would misread now fails `check`** — an
+  opening indicator character, `: ` or ` #` inside a value, or a trailing colon. Reword the
+  value.
+- **A lookup against a path outside your repository now answers silently rather than
+  erroring.** Anything scripting against `adr.py for` should check for empty output rather
+  than a non-zero exit.
+
+#### Added
+
+- **`writing-adrs` is now self-contained.** Nothing to set up: your agent's first ADR
+  creates `docs/adr/` and a generated `INDEX.md`, and from then on session hooks keep the
+  index current, hand the agent the decisions binding a file it touches, and flag a `scope`
+  entry a move or delete left dangling.
+- **A documented recipe for using the ADR tool outside the plugin:**
+  `uvx --from 'git+https://github.com/todofixthis/phx-claude-siat@<tag>#subdirectory=skills/writing-adrs' phx-adr check`.
+
+  Reasoning in [ADR 022](https://github.com/todofixthis/phx-claude-siat/blob/3affcff/docs/adr/022-ship-the-adr-tooling-and-hooks-with-the-skill.md),
+  [023](https://github.com/todofixthis/phx-claude-siat/blob/3affcff/docs/adr/023-let-a-shipped-tool-write-what-it-wholly-owns.md) and
+  [025](https://github.com/todofixthis/phx-claude-siat/blob/3affcff/docs/adr/025-deliver-binding-decisions-by-hook-at-first-touch.md).
+
+### For contributors
+
+#### Breaking changes
+
+- **`scripts/adr/` is gone.** Run `python3 skills/writing-adrs/adr.py check` (or `index`,
+  `for`) in place of `python3 -m scripts.adr.generate_index` — the pre-commit hook and
+  `pr.yml`'s `adr` job already do. `scripts/frontmatter.py` is now a symlink to
+  `skills/writing-adrs/frontmatter.py`; edit the parser at that target.
+
+#### Added
+
+- **Six new ADRs (022–027)** record the shipped-tool architecture: bundling the tool and
+  hooks with the skill, what a shipped tool may write, resolving its root from the path in
+  hand, delivering bindings by hook at first touch, reporting findings by delta from a
+  session baseline, and anchoring a script to the tree it acts on (superseding ADR 016).
+  ADR 019 is superseded; 013, 017 and 021 gain consequences or renewed conditions.
+- **`skills/writing-adrs` now carries its own `pyproject.toml`, `uv.lock` and pytest suite**
+  (238 tests), gated in CI alongside `ruff`/`black` and picked up by the release gate's
+  per-skill test loop — reproduce it locally with `uv run pytest`/`ruff check .`/`black
+  --check .` from `skills/writing-adrs/`.
+- **CI's `adr` job now runs `adr.py check` directly**, and a new step validates the `uvx`
+  consumer recipe above.
+
+  Reasoning in [ADR 024](https://github.com/todofixthis/phx-claude-siat/blob/3affcff/docs/adr/024-resolve-the-repository-root-from-the-path-in-hand.md),
+  [026](https://github.com/todofixthis/phx-claude-siat/blob/3affcff/docs/adr/026-report-findings-by-delta-from-a-session-baseline.md) and
+  [027](https://github.com/todofixthis/phx-claude-siat/blob/3affcff/docs/adr/027-anchor-a-script-to-the-tree-it-acts-on.md).
+
 ## 5.1.0 - 2026-09-02
 
 ### For phx plugin users

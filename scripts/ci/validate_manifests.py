@@ -20,7 +20,7 @@ from scripts.frontmatter import parse_frontmatter
 # Every path constant below stays repo-relative and is joined to a `repo_root` at the
 # call that touches the filesystem, so error messages name a repo-relative path rather
 # than a temp directory or a CI container path. `REPO_ROOT` is read only on the
-# `__main__` line (ADR 016): no default path resolves against the caller's tree, and a
+# `__main__` line (ADR 027): no default path resolves against the caller's tree, and a
 # test that omits its fixture root fails rather than reading the real repository.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

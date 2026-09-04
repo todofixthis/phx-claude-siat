@@ -73,7 +73,7 @@ who trusts them archives on a rule the harness has stopped loading.
 
 ### Option 3: Admit it and check glob coverage in the generator
 
-[`generate_index.py`][] gains a check: for an `Archived` ADR naming a rule, every path under every
+[`adr.py`][] gains a check: for an `Archived` ADR naming a rule, every path under every
 `scope` prefix must match some glob in that rule.
 
 **Pros:** Catches the one failure Context names as the natural mistake, and needs no new
@@ -205,9 +205,9 @@ case exactly.
 [ADR 014]: 014-cite-adrs-from-code-comments.md
 [ADR 016]: 016-anchor-every-default-path-to-the-module.md
 [ADR 019]: 019-do-not-generate-path-scoped-rules-from-adr-frontmatter.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [anthropics/claude-code#23478]: https://github.com/anthropics/claude-code/issues/23478
 [filters-pydantic ADR 004]: https://github.com/todofixthis/filters-pydantic/blob/main/docs/adr/004-docstring-per-test-function.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
 [`pr.yml`]: ../../.github/workflows/pr.yml
 [`testing.md`]: ../../.agents/rules/testing.md
 [`writing-adrs`]: ../../skills/writing-adrs/SKILL.md

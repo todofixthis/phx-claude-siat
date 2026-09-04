@@ -66,10 +66,16 @@ broken makes every negative test pass for the wrong reason.
 
 ## Say what the module does about the working directory, and why
 
-Where the subject takes paths at all, the module docstring states its stance on `chdir`:
-cite ADR 016, and say that the subject requires a root so no call can reach the real
-repository. There is one stance, and no working-directory-relative alternative — ADR 015
-described one and is superseded, so a rule found there is not in force.
+Where the subject takes paths at all, the module docstring states its stance on `chdir`,
+and which of two stances it takes depends on whose tree the module acts on. A module that
+acts on the caller's tree — a tool shipped under `skills/` that resolves its root from the
+path it was given, per ADR 024 — cites ADR 024, has no anchor of its own to test, and owes
+tests that resolution follows the path given, a fixture root passed explicitly and a
+worktree-shaped one included, and never the module's location; the rest of this section
+does not apply to it. A module that acts on the tree it ships in cites ADR 027 and says
+that the subject requires a root so no call can reach the real repository. There is no
+working-directory-relative alternative for that second kind — ADR 015 described one and is
+superseded, so a rule found there is not in force.
 
 **Pass a fixture root and never chdir.** The subject anchors itself with
 `REPO_ROOT = Path(__file__).resolve().parents[2]`, read on the `__main__` line and nowhere
@@ -77,9 +83,9 @@ else; every function below it requires the root, entry points included, and join
 repo-relative constants where each is read. So omitting the fixture root is a `TypeError`
 rather than a test that passes while reading the real repository — the guarantee a `chdir`
 used to buy with an assertion someone had to remember. Don't add a default back and reopen
-it. Where the subject takes a second anchor as well (`generate_index`'s `adr_dir`), the
-entry point derives it from the root and the tests inject each separately, so a fixture
-can point them at unrelated directories.
+it. Where a subject takes a second anchor as well, the entry point derives it from the
+root and the tests inject each separately, so a fixture can point them at unrelated
+directories.
 
 Two tests cover the anchor itself, and a module resolving paths owes both. Neither calls
 the subject; they read the constants, so they belong to a unit class named for the
@@ -89,7 +95,10 @@ constant rather than for an invocation:
   inside it — that a moved cwd *cannot* redirect it;
 - no `chdir` at all, asserting the anchor reaches this repository (`__file__` is relative
   to it, and a file the subject expects is really there). This is the one that catches
-  `parents[1]` for `parents[2]`, which the first test passes happily.
+  `parents[1]` for `parents[2]`, which the first test passes happily. Where the module
+  ships under `skills/` it runs from a plugin cache with the repository nowhere near it,
+  so this second test asserts instead that the anchor names the files the skill bundles —
+  true in a checkout and in a cache alike, and it still catches the miscounted parent.
 
 ## Guard against a partial pass
 
@@ -111,8 +120,9 @@ After adding a check to the code under test, disable it in place, confirm a test
 fails, and restore it before committing:
 
 ```
-python3 -m scripts.dev.mutate --file scripts/adr/generate_index.py \
-    --anchor 'if not target.exists():' --with 'if False:'
+python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
+    --anchor 'if not target.exists():' --with 'if False:' \
+    -- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .
 ```
 
 Only **CAUGHT** exits 0. Act on the other three rather than reading past them:

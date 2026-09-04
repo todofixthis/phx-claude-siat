@@ -12,7 +12,7 @@ revisit-when: An ADR is archived on a defence that rests on a comment in code.
 
 Code here already cites ADRs, and far more widely than the practice's undocumented status
 suggests: 54 references across eleven files outside `docs/adr/`, including
-[`validate_manifests.py`][], [`generate_index.py`][], [`versions.py`][],
+[`validate_manifests.py`][], [`adr.py`][], [`versions.py`][],
 [`frontmatter.py`][], [`release_notes.py`][] and four test modules. Nothing records this as
 a convention, so two things were settled by whoever wrote each one. The citation *format*
 split — `ADR 007` appears 33 times and `docs/adr/007` 21 — and so did what a citation
@@ -121,9 +121,9 @@ is watched, not unwatched.
   rather than a defence. If `Archived` is never used, that state is permanent and harmless.
 
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`AGENTS.md`]: ../../AGENTS.md
 [`frontmatter.py`]: ../../scripts/frontmatter.py
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
 [`release_notes.py`]: ../../scripts/ci/release_notes.py
 [`skills/`]: ../../skills/
 [`validate_manifests.py`]: ../../scripts/ci/validate_manifests.py

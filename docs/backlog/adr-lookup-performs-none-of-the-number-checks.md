@@ -1,4 +1,4 @@
-# The `--for` lookup performs none of the index generator's number checks
+# The `for` lookup performs none of the index generator's number checks
 
 > Recorded 2026-09-01, from the test-analyst and surrogate passes on the ADR number
 > collision check — the item that check closed was
@@ -6,9 +6,9 @@
 
 ## What
 
-Both number checks live in `generate()`, which writes `docs/adr/INDEX.md`.
-[`generate_index.py`][]'s `report_scoped_to()` — the `--for` reverse lookup — does neither,
-and its call discards the heading number in a `_`. So:
+Both number checks live in `inspect()`, which feeds `docs/adr/INDEX.md`. [`adr.py`][]'s
+`binding()` — the `for` reverse lookup — does neither, and its call discards the heading
+number in a `_`. So:
 
 - **two ADRs sharing a number** list as two decisions, each printed with the number its
   filename spells:
@@ -22,15 +22,15 @@ and its call discards the heading number in a `_`. So:
   have rendered it, number from the filename and title from the heading, naming a decision
   that does not exist.
 
-[`.githooks/pre-commit`][] reaches this. It runs `generate` only when a
-`docs/adr/[0-9]*-*.md` path is staged, but runs `--for` over every staged path — so a
+[`.githooks/pre-commit`][] reaches this. It runs `index` only when a
+`docs/adr/[0-9]*-*.md` path is staged, but runs `for` over every staged path — so a
 commit touching only `scripts/` meets the advisory while either fault sits undetected on
 disk.
 
 ## Why it is still worth doing
 
 The window is narrow, and that narrowness is the argument for deferring rather than for
-ignoring: `generate` fails as soon as any ADR is staged, and `pr.yml`'s `adr` job runs on
+ignoring: `index` fails as soon as any ADR is staged, and `pr.yml`'s `adr` job runs on
 every pull request whatever it touches (ADR 021), so neither fault can survive one.
 What survives is the interval before either fires — and the advisory is the one place a
 reader meets these decisions without going looking, which is the whole argument for it in
@@ -39,9 +39,9 @@ are the readings it is least equipped to give.
 
 ## The design call to make first
 
-Whether the advisory should report either fault at all. `report_scoped_to()` returns 0 by
+Whether the advisory should report either fault at all. `command_for()` returns 0 by
 convention, being advisory rather than a gate, and that contract is what a warning has to
-fit. Note the hook does not enforce it — its `--for` line ends `|| exit 0`, so a non-zero
+fit. Note the hook does not enforce it — its `for` line ends `|| exit 0`, so a non-zero
 return would be swallowed there — but `pr.yml` and any later caller read the code, so the
 contract is real and belongs in the decision rather than being inferred from the hook.
 
@@ -53,9 +53,9 @@ contract is real and belongs in the decision rather than being inferred from the
   bare "no" erases the analysis and the same output gets re-filed by the next review pass.
 - If it reports, it stays exit 0: the lookup is advisory, and a commit is not refused over
   a decision it merely mentions.
-- Fixtures in [`test_generate_index.py`][] cover whichever way it settles, `ReportScopedToTests`
+- Fixtures in [`tests/test_adr.py`][] cover whichever way it settles, `BindingTests`
   having no case with two ADRs sharing a number, and none with a disagreeing heading.
 
 [`.githooks/pre-commit`]: ../../.githooks/pre-commit
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
-[`test_generate_index.py`]: ../../scripts/adr/test_generate_index.py
+[`adr.py`]: ../../skills/writing-adrs/adr.py
+[`tests/test_adr.py`]: ../../skills/writing-adrs/tests/test_adr.py

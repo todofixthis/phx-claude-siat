@@ -1,16 +1,13 @@
 """Unit tests for ``parse_frontmatter()``.
 
-Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
-(ADR 007). The module under test is reached through the `scripts/frontmatter.py`
-symlink to `skills/writing-adrs/frontmatter.py`, which ships the same tests as its
-own `uv run pytest` suite. Run from the repo root:
+Run from the skill directory:
 
-    python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+    uv run pytest
 """
 
 import unittest
 
-from scripts.frontmatter import parse_frontmatter
+from frontmatter import parse_frontmatter
 
 
 class ScalarTests(unittest.TestCase):
@@ -62,7 +59,9 @@ class WrappedValueTests(unittest.TestCase):
         self.assertEqual(fields, {"summary": "Use mypy, not ty; revisit when"})
         self.assertEqual(
             problems,
-            ["continued onto another line; wrap it onto one: 'ty reaches 1.0: it is not ready'"],
+            [
+                "continued onto another line; wrap it onto one: 'ty reaches 1.0: it is not ready'"
+            ],
         )
 
     def test_flags_an_indented_continuation_without_a_colon(self):
@@ -81,8 +80,10 @@ class WrappedValueTests(unittest.TestCase):
         self.assertEqual(
             problems,
             [
-                "has a key containing whitespace, so it reads as a wrapped line: "
-                "'ty reaches 1.0'"
+                (
+                    "has a key containing whitespace, so it reads as a wrapped line: "
+                    "'ty reaches 1.0'"
+                )
             ],
         )
 
