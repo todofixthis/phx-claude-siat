@@ -1,7 +1,9 @@
 #!/bin/sh
 # Regenerate the ADR index when any ADR file is staged, then re-stage it so the
 # refreshed index lands in the same commit, and report any decision whose scope
-# covers a staged path. This is the adr-index hook the writing-adrs skill assumes.
+# covers a staged path. This is the writing-adrs tool the skill ships; the plugin's
+# session hooks run the same checks live, and this hook is the fast local aid for a
+# commit made from a shell.
 # Activate per clone with:
 #   git config core.hooksPath .githooks
 
@@ -22,7 +24,7 @@ STAGED
 for path in "$@"; do
     case "$path" in
         docs/adr/[0-9]*-*.md)
-            python3 -m scripts.adr.generate_index || exit 1
+            python3 skills/writing-adrs/adr.py index || exit 1
             git add docs/adr/INDEX.md
             break
             ;;
@@ -32,6 +34,6 @@ done
 # Advisory: a decision worth reading is not a commit worth refusing. This reports
 # Archived decisions too, which are in force but kept out of INDEX.md, so it is the
 # only place they surface (ADR 013).
-bound=$(python3 -m scripts.adr.generate_index --for "$@") || exit 0
+bound=$(python3 skills/writing-adrs/adr.py for "$@") || exit 0
 [ -n "$bound" ] || exit 0
 printf 'Decisions binding these paths:\n%s\n' "$bound"

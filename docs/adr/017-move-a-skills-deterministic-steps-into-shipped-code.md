@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-08-22
 scope: [.agents/skills/, .github/workflows/pr.yml, skills/]
 summary: Move a skill's deterministic steps into a tool that ships beside it, needs no install step, and reports rather than edits, holding the skill's prose and that code together with a test that fails when they drift — not an external linter such as Vale.
-revisit-when: A third skill ships tooling, so the per-skill coupling assertions want generalising, or nz-english's scope narrows back to prose only.
+revisit-when: Another skill ships tooling, so the per-skill coupling assertions want generalising, or nz-english's scope narrows back to prose only.
 ---
 
 # 017: Move a Skill's Deterministic Steps into Shipped Code
@@ -147,7 +147,7 @@ since the bundled tool would still reach every language underneath.
 The three coupling assertions are *this* skill's realisation of the general rule, not
 part of it. They exist because `nz-english` owns a Markdown table; a future skill with no
 table has nothing to couple and will need its own answer. Generalising them now would be
-the premature schema ADR 006 declined to design.
+the premature schema ADR 006 declined to design; each skill that ships tooling asks again.
 
 ADR 006's revisit trigger — "A second skill ships tooling" — fires here, and is
 answered by generalising the mirror rather than by making the declaration executable:
@@ -198,15 +198,28 @@ satisfies it.
   harness ships — is not guaranteed on a consumer's machine. `scan.py` states its floor
   and refuses to run below it rather than dying with a syntax error, but a machine with no
   `python3` at all cannot run this skill.
+- [ADR 023][] narrows the "reports rather than edits" clause: a shipped tool may write what
+  it wholly owns — a generated index, a field with one right value given the command, its
+  own template, text the agent passed it — and never a sentence the agent wrote. The other
+  two clauses stand as written.
 - **A sweep is slower than nine `rg` processes**, at roughly 28,000 lines a second in pure
   Python: seconds for an ordinary repository, minutes for a very large monorepo. The
   report is capped per row so its size stays bounded whatever the tree.
+
+## Revisit watch
+
+- 2026-09-02: [ADR 022][] shipped tooling with `writing-adrs`. Met, and the decision stands:
+  its drift test couples a template and field names, a shape `nz-english`'s table test
+  does not share, so there is still nothing common to lift. The condition stays live for
+  the next skill.
 
 [#769]: https://github.com/vale-cli/vale/issues/769
 [#884]: https://github.com/vale-cli/vale/issues/884
 [#1125]: https://github.com/vale-cli/vale/issues/1125
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
+[ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
+[ADR 023]: 023-let-a-shipped-tool-write-what-it-wholly-owns.md
 [`nz-english`]: ../../skills/nz-english/SKILL.md
 [`pr.yml`]: ../../.github/workflows/pr.yml
 [`scan.py`]: ../../skills/nz-english/scan.py

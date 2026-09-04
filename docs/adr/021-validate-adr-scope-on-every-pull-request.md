@@ -11,7 +11,7 @@ revisit-when: The job's runtime grows enough to matter across every PR, or a ses
 ## Context
 
 [ADR 013][] keys ADR `scope` entries to the paths a decision binds and has
-[`generate_index.py`][] reject any entry naming nothing on disk. That check runs only where
+[`adr.py`][] reject any entry naming nothing on disk. That check runs only where
 something invokes it, and on a pull request the sole place that happens is [`pr.yml`][]'s
 `adr` job, gated on the diff touching `docs/adr/` or `scripts/`. A rename or deletion under
 any other scoped path — `skills/`, `.claude-plugin/`, `.githooks/` — passes that PR clean,
@@ -106,10 +106,17 @@ only.
   by this decision — ADR 005 makes CI the layer enforcement depends on, so widening the hook
   too is a local convenience to reach for later, not a requirement here.
 
+## Revisit watch
+
+- 2026-09-02: [ADR 022][] built the session-time hook system Option 3 described. The trigger
+  has not fired: the hooks are advisory, and CI stays the layer enforcement depends on.
+  Reopen only if the hooks are ever taken as the authoritative check instead.
+
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [ADR 009]: 009-keep-a-standing-develop-bypass.md
 [ADR 012]: 012-advertise-one-plugin-per-catalogue.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
+[ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`pr.yml`]: ../../.github/workflows/pr.yml

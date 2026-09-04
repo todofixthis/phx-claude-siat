@@ -9,7 +9,7 @@ summary: Make scripts/ a Python package and run every script as `python3 -m scri
 
 ## Context
 
-[ADR 007][] recorded a flat-frontmatter parser adapted between [`generate_index.py`][] and
+[ADR 007][] recorded a flat-frontmatter parser adapted between [`adr.py`][] and
 [`validate_manifests.py`][], and set a revisit trigger: "The frontmatter parser gains a third
 copy, or the two copies disagree on input both must handle."
 
@@ -117,8 +117,8 @@ so a module pulled up is a signal that a second area started using it.
 
 [`.githooks/pre-commit`]: ../../.githooks/pre-commit
 [ADR 007]: 007-keep-repo-scripts-stdlib-only.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`frontmatter.py`]: ../../scripts/frontmatter.py
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
 [`pr.yml`]: ../../.github/workflows/pr.yml
 [`releasing`]: ../../.agents/skills/releasing/SKILL.md
 [`validate_manifests.py`]: ../../scripts/ci/validate_manifests.py

@@ -107,7 +107,7 @@ own options and its own costs; [ADR 006][] settles it.
   place, checked before the release mutates anything and again on the release PR.
 - Adding a skill with tooling means a new `case` arm in the workflow as well as a new job;
   ADR 006 decides what happens when someone forgets.
-- `validate_manifests.py` duplicates the frontmatter parser from [`generate_index.py`][],
+- `validate_manifests.py` duplicates the frontmatter parser from [`adr.py`][],
   the same duplication this ADR indicts elsewhere, accepted because coupling two sibling
   scripts costs more than the copy.
 - `[tool.autohooks]` remains declaration-only. It reads as though autohooks runs on commit;
@@ -118,9 +118,9 @@ own options and its own costs; [ADR 006][] settles it.
 
 [ADR 001]: 001-co-locate-marketplace-and-plugin.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`AGENTS.md`]: ../../AGENTS.md
 [autohooks]: https://github.com/greenbone/autohooks
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
 [PR workflow]: ../../.github/workflows/pr.yml
 [pre-commit hook]: ../../.githooks/pre-commit
 [`releasing`]: ../../.agents/skills/releasing/SKILL.md

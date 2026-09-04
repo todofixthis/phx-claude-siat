@@ -2,8 +2,9 @@
 
 Run from the repo root (ADR 011):
 
-    python3 -m scripts.dev.mutate --file scripts/adr/generate_index.py \
-        --anchor 'if not target.exists():' --with 'if False:'
+    python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
+        --anchor 'if not target.exists():' --with 'if False:' \
+        -- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .
 
 Exits 0 when the mutation is CAUGHT (some test failed, so the check is guarded) and 1
 when it is MISSED (every test passed without it, so nothing tests it). That mapping lets

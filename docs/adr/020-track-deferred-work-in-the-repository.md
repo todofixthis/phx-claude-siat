@@ -137,7 +137,7 @@ nothing checks. Closing this properly means giving an item a scope the pre-commi
 can read, which is recorded in `docs/backlog/` rather than built here.
 
 `docs/backlog/` gets no rot check, where `scope` entries are verified against the
-filesystem by [`generate_index.py`][]. An item quietly fixed months ago is caught by
+filesystem by [`adr.py`][]. An item quietly fixed months ago is caught by
 nobody, and a partly discharged one reads as live; deleting an item when its work lands is
 a habit, not an enforced step.
 
@@ -169,5 +169,5 @@ delete. #2 is Renovate's dependency dashboard and stays open by design.
 [ADR 010]: 010-pin-the-marketplace-entry-to-main.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: 014-cite-adrs-from-code-comments.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`releasing`]: ../../.agents/skills/releasing/SKILL.md

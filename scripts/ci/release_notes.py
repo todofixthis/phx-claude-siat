@@ -15,7 +15,7 @@ from pathlib import Path
 from scripts.ci.versions import RE_VERSION, VERSION
 
 # Every path below is repo-relative and joined to a `repo_root` where it is read, and
-# `REPO_ROOT` is read only on the `__main__` line (ADR 016): nothing resolves a default
+# `REPO_ROOT` is read only on the `__main__` line (ADR 027): nothing resolves a default
 # path against whichever tree the caller happens to be standing in.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -84,7 +84,7 @@ def top_entry(changelog: str) -> tuple[str, str]:
 
 def main(argv: list[str], repo_root: Path) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    # Both stay repo-relative and are joined to `repo_root` where they are read (ADR 016),
+    # Both stay repo-relative and are joined to `repo_root` where they are read (ADR 027),
     # so an error names the path a reader can act on. Joining an absolute path a caller
     # passed is a no-op, and a relative one they passed resolves against the repo, which
     # is the whole point of the anchor.

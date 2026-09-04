@@ -25,7 +25,7 @@ missing-file error but a *plausible* one — entries reported as rotten against 
 was never theirs.
 
 The two modules that resolve paths do it differently enough that one rule cannot obviously
-cover both. [`generate_index.py`][] takes its directories as parameters, defaulting them so
+cover both. [`adr.py`][] takes its directories as parameters, defaulting them so
 callers need no arguments. [`validate_manifests.py`][] holds five module-level constants and
 reads them directly, and [its tests][] `chdir` into a fixture repo rather than patching all
 five — a stance its module docstring already records, along with the warning that anchoring
@@ -111,6 +111,6 @@ hypothetical.
 
 [ADR 011]: 011-make-scripts-a-package.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
-[`generate_index.py`]: ../../scripts/adr/generate_index.py
+[`adr.py`]: ../../skills/writing-adrs/adr.py
 [`validate_manifests.py`]: ../../scripts/ci/validate_manifests.py
 [its tests]: ../../scripts/ci/test_validate_manifests.py
