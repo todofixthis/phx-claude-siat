@@ -294,7 +294,14 @@ def paths_in_command(command: str, cwd: Path) -> list[Path]:
         candidate = Path(token) if Path(token).is_absolute() else cwd / token
         # An existing path, or a redirect target whose directory exists. A bare slash in
         # any other token — a commit message naming a path — is not a path the command touches.
-        if candidate.exists() or (redirected and candidate.parent.exists()):
+        # A token no filesystem could hold — a here-doc body shlex hands back as one giant
+        # quoted word — makes the stat call raise on some Python versions rather than
+        # answer "not a path"; treat that the same as "not a path".
+        try:
+            exists = candidate.exists() or (redirected and candidate.parent.exists())
+        except (OSError, ValueError):
+            continue
+        if exists:
             found.append(candidate)
     return found
 
