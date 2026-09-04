@@ -1,5 +1,28 @@
 # Changelog
 
+## 6.0.1 - 2026-09-04
+
+### For phx plugin users
+
+#### Fixed
+
+- **The `writing-adrs` session hook could crash mid-session on certain `Bash` commands.**
+  A command wrapping a here-doc in a quoted command substitution, e.g.:
+
+  ```
+  git commit -m "$(cat <<'EOF'
+  ...
+  EOF
+  )"
+  ```
+
+  produced a single token long enough that the hook's path check raised rather than
+  answering "not a path", on Python 3.10–3.12 (silent on 3.13+, where `Path.exists()`
+  already tolerates it). The hook's own crash guard caught it once per session, but no
+  ADR bindings were injected for that call, and a *different* crash later in the same
+  session would have gone unreported too.
+  Full diagnosis in [PR #55](https://github.com/todofixthis/phx-claude-siat/pull/55).
+
 ## 6.0.0 - 2026-09-04
 
 ### For phx plugin users
