@@ -51,7 +51,7 @@ jobs:
                       python=true ;;
               esac
               case "$path" in
-                  CHANGELOG.md|.claude-plugin/*|scripts/*|\
+                  CHANGELOG.md|.claude-plugin/*|hooks/*|scripts/*|\
                   skills/*|.agents/skills/*)
                       manifests=true ;;
               esac
