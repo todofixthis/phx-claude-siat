@@ -165,6 +165,8 @@ precedence over any installed copy for the session), so edits take effect after
 You can tell which copy a session is using from the **base directory** Claude
 reports whenever a `phx:` skill loads: a path under this repo means the working
 tree is live; a `.../plugins/cache/...` path means the published copy is active.
+That reported path is a liveness check only — a skill reaches its own bundled
+tools via `${CLAUDE_SKILL_DIR}`, not by reading this base directory itself.
 
 > [!NOTE]
 > When working with Claude Code inside a container (e.g. using
