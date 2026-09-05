@@ -305,6 +305,24 @@ def scope_matches(entry: str, path: str) -> bool:
     return path == entry or (entry.endswith("/") and path.startswith(entry))
 
 
+def heading_disagrees(number: str, heading_number: str | None) -> bool:
+    """Whether a heading number disagrees with the filename number, compared by value.
+
+    Shared by `inspect()` and `binding()` (ADR 028) so `001` and `1` agree in both.
+    """
+    return heading_number is not None and int(heading_number) != int(number)
+
+
+def claim_number(claimed: dict[int, str], filename: str, number: str) -> str | None:
+    """Record `filename`'s claim to `number`, by value; the earlier claimant if it collides.
+
+    Shared by `inspect()` and `binding()` (ADR 028): both key `claimed` by `int(number)`,
+    so `001` and `1` name one ADR however either file pads it.
+    """
+    claimant = claimed.setdefault(int(number), filename)
+    return None if claimant == filename else claimant
+
+
 def cell(value: str | list[str]) -> str:
     """Render a frontmatter value for a Markdown table cell, escaping pipes."""
     if isinstance(value, list):
@@ -408,20 +426,20 @@ def inspect(root: Path) -> tuple[list[Row], list[Finding]]:
         scoped = []
         if not problems and fields["status"] in BINDING_STATUSES:
             scoped = scope_problems(fields[SCOPE_FIELD], root)
-        if heading_number is not None and int(heading_number) != int(number):
+        if heading_disagrees(number, heading_number):
             problems.append(
                 f"is numbered {number} by its filename and {heading_number} by its heading; "
                 "make them agree, since the index takes the number from one and the title "
                 "from the other"
             )
-        claimant = claimed.setdefault(int(number), path.name)
-        if claimant != path.name:
+        prior_claimant = claim_number(claimed, path.name, number)
+        if prior_claimant is not None:
             findings.append(
                 Finding(
                     "collision",
                     str(int(number)),
                     number,
-                    f"{path.name} shares its number with {claimant}; renumber whichever "
+                    f"{path.name} shares its number with {prior_claimant}; renumber whichever "
                     "number nothing cites yet, since a number already cited cannot move",
                 )
             )
@@ -431,7 +449,7 @@ def inspect(root: Path) -> tuple[list[Row], list[Finding]]:
             findings.append(
                 Finding("malformed", path.name, number, f"{path.name} " + "; ".join(problems))
             )
-        if problems or scoped or claimant != path.name:
+        if problems or scoped or prior_claimant is not None:
             continue
         if fields["status"] in HIDDEN_STATUSES:
             continue
@@ -497,6 +515,13 @@ def binding(root: Path, paths: list[str]) -> list[Row]:
     binding it. Archived decisions are reported too — in force, out of the index, and met
     at the moment someone edits what they bind. A directory is matched with its trailing
     slash, since that is how scope names one.
+
+    A shared number or a heading disagreeing with its filename (ADR 028) draws a warning
+    and binds nothing, the same as a file that cannot be parsed at all: either fault would
+    otherwise render as a decision the corpus does not really hold — the first case as two
+    decisions where there is one, the second with the number from one file and the title
+    from another. The advisory stays exit 0 regardless; only `binding()`'s own return value
+    changes, never a caller's exit code.
     """
     subjects = []
     for path in paths:
@@ -513,13 +538,35 @@ def binding(root: Path, paths: list[str]) -> list[Row]:
     if not adr_dir.is_dir():
         return []
     matches = []
+    # By value, as `inspect()` claims numbers (ADR 028): `001` and `1` name one ADR.
+    claimed: dict[int, str] = {}
     for path in sorted(adr_dir.iterdir()):
         if path.name.startswith(".") or not RE_ADR_FILENAME.match(path.name):
             continue
         # A directory named like an ADR binds nothing; `inspect` is where it is reported.
         if path.is_dir():
             continue
-        fields, title, _, problems = parse_adr(read_document(path))
+        number = RE_FILE_NUMBER.match(path.name).group(1)
+        fields, title, heading_number, problems = parse_adr(read_document(path))
+        # Computed unconditionally, as `inspect()` does, so a mismatched file still claims
+        # its number: skipping the claim here would let a later, well-formed file claim the
+        # same number as if it were first, hiding the very collision this exists to catch.
+        mismatch = heading_disagrees(number, heading_number)
+        prior_claimant = claim_number(claimed, path.name, number)
+        if mismatch:
+            print(
+                f"Warning: {path.name} is numbered {number} by its filename and "
+                f"{heading_number} by its heading, so it binds nothing here; make them agree",
+                file=sys.stderr,
+            )
+            continue
+        if prior_claimant is not None:
+            print(
+                f"Warning: {path.name} shares its number with {prior_claimant}, so it binds "
+                "nothing here; renumber whichever number nothing cites yet",
+                file=sys.stderr,
+            )
+            continue
         # A malformed ADR silently binds nothing, and this is the one place the lookup
         # speaks, so say so rather than skip.
         if problems:
@@ -537,7 +584,7 @@ def binding(root: Path, paths: list[str]) -> list[Row]:
         ):
             matches.append(
                 Row(
-                    number=RE_FILE_NUMBER.match(path.name).group(1),
+                    number=number,
                     filename=path.name,
                     status=fields["status"],
                     title=title,
