@@ -45,8 +45,11 @@ jobs:
           for path in $changed; do
               # Every prefix is spelled out rather than collapsed to skills/*: only
               # the skills shipping a pyproject.toml have a job to run, and a wider
-              # glob would run the matrix for every skill edit.
+              # glob would run the matrix for every skill edit. The root workspace
+              # files and scripts/pyproject.toml gate the same job (ADR 028): a
+              # change to either affects what every leg resolves and installs.
               case "$path" in
+                  pyproject.toml|uv.lock|scripts/pyproject.toml|\
                   skills/creative-commits/*|skills/nz-english/*|skills/writing-adrs/*)
                       python=true ;;
               esac
@@ -115,7 +118,10 @@ jobs:
   # plain substring of this file, so composing them from a bare name would leave
   # `skills/nz-english` absent and fail the manifest check with a message about missing
   # gating. A change to any one skill runs every leg, which is cheap and keeps the filter
-  # simple.
+  # simple. One uv workspace (ADR 028) now resolves all three against a shared root
+  # uv.lock, so sync runs once at the repo root and each leg scopes its own checks with
+  # `--directory` rather than a per-leg `uv sync`, which would prune the venv down to
+  # that leg's own dependency closure and undo the shared install.
   python:
     needs: changes
     if: needs.changes.outputs.python == 'true'
@@ -128,9 +134,6 @@ jobs:
           - skills/creative-commits
           - skills/nz-english
           - skills/writing-adrs
-    defaults:
-      run:
-        working-directory: ${{ matrix.skill }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -141,7 +144,7 @@ jobs:
       # manager keeps both digest and comment current.
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          cache-dependency-glob: ${{ matrix.skill }}/uv.lock
+          cache-dependency-glob: uv.lock
           enable-cache: true
           python-version: "3.12"
 
@@ -152,13 +155,13 @@ jobs:
         run: uv sync --locked
 
       - name: Lint
-        run: uv run ruff check .
+        run: uv run --directory ${{ matrix.skill }} ruff check .
 
       - name: Check formatting
-        run: uv run black --check .
+        run: uv run --directory ${{ matrix.skill }} black --check .
 
       - name: Test
-        run: uv run pytest
+        run: uv run --directory ${{ matrix.skill }} pytest
 
   # The single required status check. Path-filtered jobs report as "skipped"
   # rather than "success", which would deadlock branch protection if each were

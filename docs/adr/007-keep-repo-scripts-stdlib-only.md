@@ -2,8 +2,9 @@
 status: Accepted
 date: 2026-07-28
 scope: [scripts/]
-summary: Keep everything under scripts/ stdlib-only with no Python project at the repo root, and reach for a root project rather than per-script PEP 723 metadata if that ever changes.
-revisit-when: A second script hand-parses a grammar this repo does not define, or the workflow substring-match already under the constraint causes a miss in practice.
+summary: Keep every import under scripts/ stdlib-only, reaching for a root project rather than per-script PEP 723 metadata once a real dependency is needed — the root project ADR 028 later built, without scripts/ importing anything new.
+revisit-when: The workflow substring-match already under the constraint causes a miss in practice.
+revisit-discharged-by: [28]
 ---
 
 # 007: Keep repo scripts stdlib-only
@@ -14,6 +15,13 @@ revisit-when: A second script hand-parses a grammar this repo does not define, o
 > holds: scripts run as `python3 -m scripts.<area>.<name>`, `scripts/` is a package, the
 > frontmatter parser is shared rather than adapted per directory, and `scripts/adr` now has
 > tests. Statements below describing any of those as they were are history, not guidance.
+>
+> **Discharged in part by [ADR 028][].** The repository root now carries a Python
+> project — a uv workspace `scripts/` is a member of — which is the contingency this
+> decision's Decision section reserved for the day a script needed a real dependency.
+> No import in `scripts/` changed: PyYAML is deferred to a follow-up, tracked in
+> `docs/backlog/`. Read "no Python project at the repo root" below as history, not as a
+> constraint still standing.
 
 `scripts/` has grown to five files — ADR index generation, manifest validation, release
 notes, a shared version pattern, and one test module — run by CI, the pre-commit hook,
@@ -91,8 +99,9 @@ callers — `python3` becomes `uv run` — differing only in how much moves at o
 five scripts is not worth pricing. What separates them is coordination: a root manifest
 keeps one version of a shared library, in the place a developer looks first and the place
 this repo's Renovate configuration already reads, where per-file blocks let two scripts
-drift apart on the same dependency. **If a trigger below fires, the answer is a root
-project.** PEP 723 suits a genuinely standalone one-off, not the way in.
+drift apart on the same dependency. ~~If a trigger below fires, the answer is a root
+project.~~ **Built by ADR 028.** PEP 723 suits a genuinely standalone one-off, not
+the way in.
 
 Local feedback is not what this constrains, and should not be defended with it. The
 `pre-commit` framework resolves each hook's environment itself, so adopting it would need
@@ -112,13 +121,13 @@ it.
 
 **Revisit when either holds:**
 
-- A script must parse a grammar this repo does not define — real YAML, TOML beyond flat
-  lookups, semver *ordering* rather than shape. Hand-writing then approximates someone
-  else's specification, and the failure mode changes from "obviously wrong" to "wrong on
-  inputs nobody tried". One case already sits under the constraint: `validate_manifests.py`
-  substring-matches `.github/workflows/pr.yml` rather than parsing it, a blindness ADR 006
-  recorded knowingly. A second such compromise, or that one causing a miss in practice, is
-  the trigger.
+- ~~A second script hand-parses a grammar this repo does not define.~~ **Fired and
+  discharged by ADR 028** for `scripts/frontmatter.py` — see the 2026-09-05 entry
+  below. Hand-writing a grammar approximates someone else's specification, and the
+  failure mode changes from "obviously wrong" to "wrong on inputs nobody tried". The
+  surviving half: `validate_manifests.py` substring-matches `.github/workflows/pr.yml`
+  rather than parsing it, a blindness ADR 006 recorded knowingly, and whether that one
+  causes a miss in practice is still the live trigger.
 - ~~The frontmatter parser gains a third copy, or the two copies disagree on input both must
   handle.~~ **Fired and discharged by ADR 011**, which replaced both copies with one shared
   module. The general form survives it: a second site hand-parsing the same grammar is the
@@ -170,17 +179,23 @@ the precedent for recording one.
   someone else's plain-scalar rules, wrong on exactly the inputs nobody tried. The packaged
   skill could take PyYAML on its own, but `scripts/` reaches the parser by symlink and would
   import it too, which this decision forbids; the answer it prescribes is a root project, and
-  the [monorepo backlog item][] carries that analysis. No amendment banner yet: ADR 011's
-  precedent names the amending ADR, and none exists until that analysis lands, so this decision
-  stays in force as written.
+  the monorepo backlog item this repository carried at the time went on to become ADR 028.
+  No amendment banner yet: ADR 011's precedent names the amending ADR, and none exists until
+  that analysis lands, so this decision stays in force as written.
+- 2026-09-05: discharged by ADR 028, which built the root project this decision reserved
+  for the trigger above — `scripts/` is now a uv workspace member, resolved against a shared
+  root `uv.lock`. `scripts/frontmatter.py` itself is untouched: ADR 028 answers only whether
+  `scripts/` can reach a dependency, deferring the PyYAML swap to a follow-up tracked in
+  `docs/backlog/`. The surviving half of the trigger — the workflow substring-match causing a
+  miss in practice — is unaffected and stays live.
 
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [ADR 011]: 011-make-scripts-a-package.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
+[ADR 028]: 028-adopt-a-uv-workspace-at-the-repository-root.md
 [`adr.py`]: ../../skills/writing-adrs/adr.py
 [`creative-commits`]: ../../skills/creative-commits/SKILL.md
-[monorepo backlog item]: ../backlog/decide-whether-the-repository-becomes-a-python-monorepo.md
 [PEP 723]: https://peps.python.org/pep-0723/
 [`pre-commit`]: https://pre-commit.com/
 [`PyYAML`]: https://pyyaml.org/
