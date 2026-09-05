@@ -37,3 +37,10 @@ done
 bound=$(python3 skills/writing-adrs/adr.py for "$@") || exit 0
 [ -n "$bound" ] || exit 0
 printf 'Decisions binding these paths:\n%s\n' "$bound"
+
+# Advisory sibling of the block above, over docs/backlog/ instead of docs/adr/: a
+# backlog item naming a path that no longer exists is never reported here, and never
+# fails the build (ADR 028).
+backlog=$(python3 skills/writing-adrs/backlog.py for "$@") || exit 0
+[ -n "$backlog" ] || exit 0
+printf 'Backlog items concerning these paths:\n%s\n' "$backlog"
