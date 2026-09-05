@@ -6,6 +6,16 @@ paths:
 
 # Testing conventions
 
+Every suite here is `unittest.TestCase` classes — a skill's `tests/` directory follows
+`scripts/`'s idiom even though its `pyproject.toml` names `pytest` as the runner:
+pytest runs `TestCase` subclasses natively, so naming it picks a runner, not an idiom.
+Pytest-only affordances — bare test functions, fixtures such as `capsys` and
+`tmp_path`, `pytest.raises` — play no part here, since pytest cannot inject a fixture
+into a `TestCase` method. Capture printed output with
+`contextlib.redirect_stdout`/`redirect_stderr` around a `StringIO` instead of `capsys`
+(see `RepoTestCase.run_main` in `skills/writing-adrs/tests/test_adr.py`), and assert a
+raise with `self.assertRaises`.
+
 ## Name each class for its subject, and say which layer it is
 
 Every test class opens with a docstring naming its layer and its subject, and takes
