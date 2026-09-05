@@ -115,6 +115,14 @@ class IsNoiseTests(unittest.TestCase):
         """`behaviorist` is the second word the skill warns is a hit, not noise."""
         self.assertFalse(scan.is_noise("behaviorist"))
 
+    def test_treats_an_unenumerated_aging_word_as_noise(self):
+        """`triaging` is not on the hand-enumerated list, so only a suffix rule catches it."""
+        self.assertTrue(scan.is_noise("triaging"))
+
+    def test_leaves_the_bare_word_aging_reportable(self):
+        """`aging` itself is the real hit the row exists to report, not a suffix match."""
+        self.assertFalse(scan.is_noise("aging"))
+
 
 class UnderOwnSkillTests(unittest.TestCase):
     """Unit tests for ``under_own_skill()``."""
@@ -244,6 +252,23 @@ class ScanFunctionTests(TempTreeTestCase):
         results = scan.scan([path], self.root)
         row = next(row for row in ROWS if row.us == "-og endings")
         self.assertEqual([hit["token"] for hit in results[row]["hits"]], ["cataloged"])
+
+    def test_treats_an_unenumerated_aging_word_as_noise_not_a_hit(self):
+        """`triaging` must be suppressed by the suffix rule, not reported as a hit."""
+        path = write(self.root, "a.md", "triaging the queue")
+        results = scan.scan([path], self.root)
+        row = next(row for row in ROWS if row.us == "aluminum / artifact / aging")
+        self.assertEqual(
+            (results[row]["hits"], dict(results[row]["noise"])), ([], {"triaging": 1})
+        )
+
+    def test_still_reports_aging_as_a_whole_word_in_a_compound(self):
+        """A hyphen breaks the letter run, so `anti-aging` is `aging` itself, not a longer
+        word, and must still report."""
+        path = write(self.root, "a.md", "an anti-aging cream")
+        results = scan.scan([path], self.root)
+        row = next(row for row in ROWS if row.us == "aluminum / artifact / aging")
+        self.assertEqual([hit["token"] for hit in results[row]["hits"]], ["aging"])
 
     def test_scans_two_files(self):
         """A subject that read only the first path would pass every other test here."""

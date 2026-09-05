@@ -50,7 +50,12 @@ try:
     # Guarded because a missing or broken bundle is a broken tool, and an unguarded
     # ImportError exits 1 — which this tool's own contract reads as "hits to triage".
     # A broken install must never be mistaken for a result.
-    from table import CLASS_LABELS, NOISE, ROWS  # noqa: F401  (re-exported for tests)
+    from table import (  # noqa: F401  (CLASS_LABELS and ROWS are re-exported for tests)
+        CLASS_LABELS,
+        NOISE,
+        NOISE_SUFFIXES,
+        ROWS,
+    )
 except ImportError as exc:  # pragma: no cover - exercised by a subprocess test
     sys.stderr.write(f"error: cannot load the substitution table beside this script: {exc}\n")
     raise SystemExit(EXIT_ERROR) from exc
@@ -245,7 +250,13 @@ def discover(targets: list, own_dir: Path) -> tuple:
 
 
 def is_noise(token: str) -> bool:
-    """Report whether a token is a word the noise list already accounts for.
+    """Report whether a token is a word the noise mechanism already accounts for.
+
+    Two mechanisms. `NOISE` names an exact word by hand, right for a drop list that is
+    closed and irregular. `NOISE_SUFFIXES` names a suffix instead: any word strictly
+    longer than the suffix that ends with it is noise, right for a row like `aging`
+    whose false positives are unbounded but all share one shape — the suffix word
+    itself is excluded by being equal to it rather than longer.
 
     A trailing `s` is stripped so a plural matches the singular the list carries —
     `parameters` against `parameter`. Nothing else is normalised: `-ies` and `-es` would
@@ -256,7 +267,9 @@ def is_noise(token: str) -> bool:
     folded = token.casefold()
     if folded in NOISE:
         return True
-    return folded.endswith("s") and folded[:-1] in NOISE
+    if folded.endswith("s") and folded[:-1] in NOISE:
+        return True
+    return any(folded != suffix and folded.endswith(suffix) for suffix in NOISE_SUFFIXES)
 
 
 def word_at(line: str, start: int, end: int) -> str:
