@@ -197,6 +197,16 @@ ROWS = (
     Row(us="sizable", nz="sizeable", patterns=(Pattern("sizable"),)),
 )
 
+# A suffix whose matched words are noise unless the word IS the suffix. `NOISE` below
+# names each word by hand — right for the `-our` drop list, which is closed and
+# irregular. This is the other shape: the aluminum/artifact/aging row's unanchored
+# `aging` pattern matches inside any word containing it, and every one of those longer
+# words is a false positive by the same rule, not a fact to notice and enumerate one at
+# a time — `triaging`, `damaging`, `encouraging`, and any other `-aging` word not yet
+# met. `aging` on its own is still the real hit, so it is excluded by being equal to the
+# suffix rather than longer than it.
+NOISE_SUFFIXES = frozenset({"aging"})
+
 # Words a pattern matches that are already correct, so a reader has nothing to decide
 # about them. Compared case-folded, like the sweep, or `Literal` reports as a hit while
 # `literal` is noise.
@@ -238,23 +248,18 @@ NOISE = frozenset(
         "evaporate",
         "evaporation",
         "feeling",
-        "imaging",
         "kneeling",
         "laboratory",
         "literal",
         "literally",
         "literary",
         "literature",
-        "managing",
-        "messaging",
         "oversize",
-        "packaging",
         "parameter",
         "peeler",
         "peeling",
         "perimeter",
         "resize",
-        "staging",
         "wheeling",
         # Already-correct NZ forms the patterns match by construction.
         "analogous",
