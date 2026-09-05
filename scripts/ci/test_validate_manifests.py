@@ -28,6 +28,7 @@ from pathlib import Path
 
 from scripts.ci import validate_manifests as vm
 
+HOOK_COMMAND = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py"'
 PLUGIN_NAME = "example"
 SKILL_FRONTMATTER = "---\nname: {name}\ndescription: Does a thing.\n---\n\n# Skill\n"
 WORKFLOW = "jobs:\n  python:\n    # runs skills/example-tooling under black\n    steps: []\n"
@@ -42,6 +43,7 @@ class ManifestTestCase(unittest.TestCase):
 
         self.write_plugin_manifest()
         self.write_marketplace()
+        self.write_hooks()
         for root in vm.SKILL_ROOTS:
             self.write_skill(root / "plain")
         self.write(vm.WORKFLOW_FILE, WORKFLOW)
@@ -63,6 +65,15 @@ class ManifestTestCase(unittest.TestCase):
         if not entries:
             entries = ({"name": PLUGIN_NAME, "source": dict(vm.EXPECTED_SOURCE)},)
         self.write(vm.MARKETPLACE_FILE, json.dumps({"plugins": list(entries)}))
+
+    def write_hooks(self, command: str | None = None, type_: str | None = None) -> None:
+        """Write hooks/hooks.json with one event and one hook entry, valid by default."""
+        entry = {
+            "type": type_ if type_ is not None else vm.HOOK_TYPE,
+            "command": command if command is not None else HOOK_COMMAND,
+        }
+        manifest = {"hooks": {"SessionStart": [{"hooks": [entry]}]}}
+        self.write(vm.HOOKS_FILE, json.dumps(manifest))
 
     def write_skill(
         self, path: str | Path, name: str | None = None, body: str | None = None
@@ -236,6 +247,62 @@ class CheckMarketplaceTests(ManifestTestCase):
         """An empty catalogue is well-formed and advertises nothing."""
         self.write(vm.MARKETPLACE_FILE, json.dumps({"plugins": []}))
         self.assertEqual(self.check(), [f"{vm.MARKETPLACE_FILE} lists no plugins"])
+
+
+class CheckHooksTests(ManifestTestCase):
+    """Unit tests for ``check_hooks()``."""
+
+    def check(self) -> list:
+        """Run the hooks check over the fixture's hooks manifest."""
+        return self.errors_from(vm.check_hooks, self.root)
+
+    def test_accepts_the_fixture(self):
+        """The default fixture must validate clean, or every other case here is meaningless."""
+        self.assertEqual(self.check(), [])
+
+    def test_rejects_a_command_that_does_not_name_the_hook_script(self):
+        """A command that stopped naming the script breaks the hook silently for consumers."""
+        self.write_hooks(command="echo hi")
+        error = self.check()[0]
+        self.assertIn("'echo hi'", error)
+        self.assertIn(vm.HOOK_SCRIPT, error)
+
+    def test_rejects_a_type_that_is_not_command(self):
+        """Every entry must run as a shell command, not any other hook type."""
+        self.write_hooks(type_="prompt")
+        error = self.check()[0]
+        self.assertIn("'prompt'", error)
+        self.assertIn(vm.HOOK_TYPE, error)
+
+    def test_reports_both_faults_on_one_entry(self):
+        """A malformed type and a malformed command must both surface, not just the first."""
+        self.write_hooks(command="echo hi", type_="prompt")
+        self.assertEqual(len(self.check()), 2, self.check())
+
+    def test_rejects_a_missing_hooks_object(self):
+        """Without the top-level `hooks` object there is nothing to walk."""
+        self.write(vm.HOOKS_FILE, json.dumps({}))
+        self.assertIn(f"{vm.HOOKS_FILE} has no hooks object", self.check())
+
+    def test_rejects_an_event_that_is_not_a_list(self):
+        """A hand-edit that turns an event's blocks into a single object must not crash the run."""
+        self.write(vm.HOOKS_FILE, json.dumps({"hooks": {"Stop": {"hooks": []}}}))
+        self.assertIn(f"{vm.HOOKS_FILE} Stop is not a list of hook blocks", self.check())
+
+    def test_rejects_a_block_that_is_not_an_object(self):
+        """A block that is not an object has no `hooks` list to look for."""
+        self.write(vm.HOOKS_FILE, json.dumps({"hooks": {"Stop": ["nope"]}}))
+        self.assertIn(f"{vm.HOOKS_FILE} Stop block 'nope' is not an object", self.check())
+
+    def test_rejects_a_block_without_a_hooks_list(self):
+        """A block missing its own `hooks` list declares no command to run."""
+        self.write(vm.HOOKS_FILE, json.dumps({"hooks": {"Stop": [{"matcher": "*"}]}}))
+        self.assertIn(f"{vm.HOOKS_FILE} Stop block has no hooks list", self.check())
+
+    def test_rejects_an_entry_that_is_not_an_object(self):
+        """A malformed entry is named rather than crashing the run on a missing `.get`."""
+        self.write(vm.HOOKS_FILE, json.dumps({"hooks": {"Stop": [{"hooks": ["nope"]}]}}))
+        self.assertIn("is not an object", self.check()[0])
 
 
 class CheckSkillsTests(ManifestTestCase):
