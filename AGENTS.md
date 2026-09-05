@@ -18,13 +18,18 @@ preceding the code they document, not as trailing comments.
 
 ## Python
 
-- `scripts/` is stdlib-only and the repo root carries no Python project (ADR 007);
-  packaged skills under `skills/<name>/` may declare dependencies.
+- The repo root is a uv workspace (ADR 028): one root `pyproject.toml` and `uv.lock`
+  resolve `scripts/` and every skill that ships its own `pyproject.toml`. Toolchain pins
+  and `black`/`ruff` settings live once at the root; a skill's own `pyproject.toml` keeps
+  only what makes it independently buildable — `[project]`, `[build-system]`, its entry
+  point, `[tool.autohooks]`. `scripts/` stays stdlib-only (ADR 007) — the workspace gives
+  it a dependency path, not a dependency.
 - `scripts/` is a package (ADR 011), so run a script as `python3 -m scripts.<area>.<name>`
-  from the repo root — a path invocation fails to import. The `scripts/` suite is
-  `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`; each skill shipping a
-  `pyproject.toml` runs `uv run pytest`, `uv run ruff check .` and `uv run black --check .`
-  from its directory, all three gated by `pr.yml`.
+  from the repo root — a path invocation fails to import, and this is unchanged by the
+  workspace, since `scripts/` still declares nothing to install. The `scripts/` suite is
+  `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`. After `uv sync --locked`
+  at the repo root, each skill's checks run as `uv run --directory skills/<name> pytest`,
+  `ruff check .` and `black --check .`, all three gated by `pr.yml`.
 - `scripts/frontmatter.py` is a symlink into `skills/writing-adrs/`; edit the parser there.
 - Every function annotates its return type and its named parameters, `-> None`
   included; `*args` and `**kwargs` are left bare. Test functions are exempt from

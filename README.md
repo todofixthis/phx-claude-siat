@@ -214,10 +214,12 @@ Paths may be repo-relative or absolute; one outside the repository binds nothing
 prints nothing.
 
 Contributions go to `develop` — `main` carries releases only. Run the `scripts/` suite
-with `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`, and each skill shipping
-a `pyproject.toml` with `uv run pytest`, `uv run ruff check .` and `uv run black --check .`
-from its directory, which is what CI gates; `AGENTS.md` has the rest of the
-maintainer guidance.
+with `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`. The repository root
+is a uv workspace (`pyproject.toml` plus one shared `uv.lock`) spanning `scripts/` and
+every skill that ships its own `pyproject.toml`; after `uv sync --locked` at the repo
+root, each skill's checks run as `uv run --directory skills/<name> pytest`,
+`ruff check .` and `black --check .`, which is what CI gates. `AGENTS.md` has the rest
+of the maintainer guidance.
 
 ## Licence
 
