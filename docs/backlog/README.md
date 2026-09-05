@@ -8,6 +8,12 @@ Read this directory before starting on an area — nothing routes you to it, and
 prose**: an item that never mentions the file it concerns cannot be found by the only means
 of finding it, and nothing reports the miss.
 
+`.githooks/pre-commit` also reports an item whose reference-link definitions (see Shape,
+below) name a staged path — the same links, resolved the way an ADR's own links resolve
+(ADR 028). A link to an external URL, or into `docs/adr/` or `docs/backlog/` itself,
+derives no scope; an item without the link block, or one that names a path only in
+prose, derives none either and stays as unreachable as it was before.
+
 An item is deleted by the branch that finishes its work. `AGENTS.md`'s "Deferred work"
 section decides what belongs here rather than on an ADR or in a comment.
 

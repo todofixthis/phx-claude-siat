@@ -1,9 +1,10 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-08-28
 scope: [AGENTS.md, docs/backlog/]
 summary: Record deferred work as files under docs/backlog/, leaving the GitHub issue tracker enabled for Renovate's dependency dashboard but not using it to track work.
 revisit-when: A second person needs to see what is deferred without cloning, or bug reports start arriving in the tracker and need triaging beside deferred work.
+superseded-by: 28
 ---
 
 # 020: Track Deferred Work in the Repository
