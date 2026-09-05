@@ -972,6 +972,38 @@ class BindingTests(RepoTestCase):
         result = binding(self.repo_root, ["docs/unrelated.md", SCOPED_FILE])
         self.assertEqual([r.number for r in result], ["001"])
 
+    def test_warns_of_a_shared_number_and_binds_only_the_first_claimant(self):
+        """Two files sharing a number must not render as two decisions (ADR 028)."""
+        self.write("001-first.md", adr_text(title="1: Do the thing"))
+        self.write("1-second.md", adr_text(title="1: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual([r.filename for r in result], ["001-first.md"])
+        self.assertIn("1-second.md shares its number with 001-first.md", err.getvalue())
+
+    def test_warns_of_a_heading_that_disagrees_with_its_filename(self):
+        """A mismatch would otherwise name a decision from one file's number and another's title (ADR 028)."""
+        self.write("002-second.md", adr_text(title="1: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual(result, [])
+        self.assertIn(
+            "002-second.md is numbered 002 by its filename and 1 by its heading",
+            err.getvalue(),
+        )
+
+    def test_a_mismatched_first_claimant_still_hides_a_later_collision(self):
+        """A skipped mismatch must still claim its number, or a later file reads as first."""
+        self.write("002-first.md", adr_text(title="1: Do the thing"))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual(result, [])
+        self.assertIn("002-second.md shares its number with 002-first.md", err.getvalue())
+
 
 class MainTests(RepoTestCase):
     """Integration tests through the entry point: exit codes and what is left on disk."""
