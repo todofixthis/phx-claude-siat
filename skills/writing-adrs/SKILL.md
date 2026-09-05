@@ -122,7 +122,7 @@ three.
 
 - **`status`** — `Accepted`, `Archived`, or `Superseded`. All three stay in the repo; the last two are excluded from `docs/adr/INDEX.md`, which is what an agent loads by default.
   - `Accepted` — in force, and worth carrying in context.
-  - `Archived` — in force, but defended by something other than being read, so it need not be carried in context. Archive only when you can **name a defence the breach path passes through while the work is still being planned**. Only three qualify, unless another meets that same timing test: a comment wherever a breach would be authored, met as an agent explores the code; a path-scoped rule reaching what the decision binds, met when an agent reads one of those files and qualifying only on the terms set out below; and a breach so large it needs its own ADR, met when the archived-decisions check below runs. An automated check is not enough on its own — a failing hook or pull request arrives after the wrong work is built, protecting the branch rather than the effort. Judge a defence by whether a breacher meets it in time; how tempting the rejected option is decides nothing. Four ways one fails: a comment covers only the sites it sits in, so treat a set of files as growing unless you can call it closed; a rule reaches only the reader whose tools load it, so a breacher reading from a shell meets nothing at all, and one creating a file meets nothing unless something matching the rule's globs was read earlier in the same session; a note in the files that *keep* a decision does not guard the new file that would break it; and where an ADR rejects several options, a defence covering one covers none. **Name the defence in `archived-because`**; archiving without one is a bet nobody recorded. Set the status whenever a defence that passes the timing test exists, including long after writing.
+  - `Archived` — in force, but defended by something other than being read, so it need not be carried in context. Archive only when you can **name a defence the breach path passes through while the work is still being planned**. Only four qualify, unless another meets that same timing test: a comment wherever a breach would be authored, met as an agent explores the code; a path-scoped rule reaching what the decision binds, met when an agent reads one of those files and qualifying only on the terms set out below; a project's ambient instructions (`AGENTS.md`, or the harness's equivalent) that forbid every option the ADR rejected, met before the session's first action and qualifying only on the terms set out in Defending a decision with ambient project instructions, below; and a breach so large it needs its own ADR, met when the archived-decisions check below runs. An automated check is not enough on its own — a failing hook or pull request arrives after the wrong work is built, protecting the branch rather than the effort. Judge a defence by whether a breacher meets it in time; how tempting the rejected option is decides nothing. Four ways one fails: a comment covers only the sites it sits in, so treat a set of files as growing unless you can call it closed; a rule or an ambient-instructions defence reaches only the reader whose tools or harness load it, so a breacher reading from a shell meets nothing at all, and one creating a file meets nothing unless something matching the rule's globs was read earlier in the same session; a note in the files that *keep* a decision does not guard the new file that would break it; and where an ADR rejects several options, a defence covering one covers none. **Name the defence in `archived-because`**; archiving without one is a bet nobody recorded. Set the status whenever a defence that passes the timing test exists, including long after writing — unless the ADR's `revisit-when` is still live: archiving drops the decision from `docs/adr/INDEX.md`, taking its trigger out of the Revisit column too, the column this skill already sends a reader to for what is still worth watching. A trigger that is unfired, or close to firing, is a reason to stay `Accepted` even once a qualifying defence exists.
   - `Superseded` — replaced by a later ADR; set `superseded-by`.
 
   Status tracks only whether a decision is in force and how it is defended. A provisional decision, or one near its revisit trigger, stays `Accepted` — nearly reopenable makes it more worth carrying, not less.
@@ -142,6 +142,7 @@ three.
   - `archived-because: A comment at the top of every workflow file names the pin, met while the workflow is being edited.`
   - `archived-because: Nothing breaches this without its own ADR, met at the archived-decisions check.`
   - `archived-because: The testing-conventions rule states the convention for every test file, met when an agent reads one.`
+  - `archived-because: AGENTS.md's ## Deferred work section forbids every option this ADR rejected, met before the session's first action; revisit-when is unset.`
 - **`superseded-by`** — the superseding ADR's number, as a bare integer; omit unless status is `Superseded`.
 
 `Archived` and `Superseded` each require the field above bearing their name and refuse the other's; `Accepted` refuses both. The tool reports a breach of that pairing. `check` constrains neither revisit field by status — `discharge` itself refuses a Superseded ADR, below — and reports a `revisit-discharged-by` written as a scalar, empty, or holding anything but ADR numbers.
@@ -243,6 +244,62 @@ never, however many matching files it touches. Verified in Claude Code on 2026-0
 within single sessions; whether a load survives a context compaction was not measured, so
 do not lean on it for one.
 
+## Defending a decision with ambient project instructions
+
+A project's ambient instructions — `AGENTS.md`, or the harness's equivalent, such as
+`CLAUDE.md` symlinked to it — load before a session's first action, ahead of a comment
+(met only once an agent explores the code) and a path-scoped rule (met only once a read
+matches its globs). That earlier load is what makes ambient project instructions a
+candidate fourth defence; it does not by itself make one qualify.
+
+It does not reach every agent. Measured in Claude Code on 2026-09-01, by asking one
+subagent of each type to report its own context with no tool use, against a control
+question — a Markdown line-length rule the corpus does not have — whose honest answer was
+"not present": every type answered the control correctly, so the split below is signal,
+not confabulation.
+
+| Agent type | Project `AGENTS.md` |
+|---|---|
+| `claude` | present |
+| `claude-code-guide` | present |
+| `Explore` | **absent** |
+| `general-purpose` | present |
+| `Plan` | **absent** |
+| `statusline-setup` | present |
+
+The two absent types are the two the harness describes as read-only — a weaker guarantee
+than it sounds, since both keep `Bash` and so can author a breach through a heredoc, and
+`Plan` is the type doing the planning the timing test is named after. **Re-measure before
+relying on this table.** Which agent types exist and what each is given is harness
+behaviour, not repository state, so nothing here fails a check when it changes; the method
+is one probe per type against one control question, so re-running it costs little.
+
+Two gates decide whether that load is enough to archive on, and a defence failing either
+stays merely a candidate:
+
+- **Does the text forbid every option the ADR rejected**, not merely state the rule it
+  chose? This is the rejected-options coverage test the `status` field entry already
+  states for every defence: prescriptive prose that only states a preference guards
+  nothing.
+- **Is `revisit-when` still live?** Same test as above for every defence — don't archive
+  while a trigger is unfired or close to firing.
+
+Both gates were worked out from real archivals attempted on this ground and reverted, not
+from theory, so treat a proposed one as no more settled than either of those was — check
+both explicitly rather than trusting that ambient instructions "obviously" cover the case.
+
+One argument for archiving anyway is worth naming so it is not re-derived and believed:
+that an agent lacking ambient project instructions also lacks any route to
+`docs/adr/INDEX.md`, since reading the index is itself an ambient-instructions rule — so
+the defence would cover a superset of what archiving removes. It does not: this skill's
+own `status` field entry, above, names `INDEX.md` as what an agent loads by default, so
+anyone invoking `phx:writing-adrs` reaches the index without a project's ambient
+instructions ever loading. That one counterexample is all the refutation needs.
+
+Written in the same change as the archival, naming the ADR's number and stating what the
+decision forbids while the reasoning stays in the ADR, and named in `archived-because` —
+as for a comment or a rule.
+
 ## Linking references
 
 Link every reference to something outside the ADR's own prose — GitHub issues/PRs, web
@@ -334,7 +391,7 @@ Dispatch a subagent to review the draft as a senior engineer would. Give it the 
 - **Soundness** — does the accepted option make sense for _this_ project, given its constraints and prior ADRs? Would a principal engineer choose differently?
 - **Unsurfaced trade-offs** — are there notable costs, risks, or downsides of the accepted option the ADR does not mention?
 - **Implicit assumptions** — what does the decision take for granted that a reader would not know? Each should be stated explicitly.
-- **Archival** — if the ADR is `Archived`, does `archived-because` name a defence that exists and lands early enough to change the plan rather than only reject the result? Push back hard: a decision that merely feels settled is the tempting one to archive, and a wrongly archived one stays invisible until someone re-litigates it. Where the defence is a path-scoped rule, have it open the rule file: does it exist, does it live in the repository, did it go in with the archival, is every path in `scope` bar the rule's own entry reached by the rule's globs or by another named defence, does it state the constraint itself rather than only pointing at the ADR, and did the archiver watch it load in a session that had read nothing matching beforehand? Then the gate the rule stands or falls on: would the breaches it defends against be authored by an agent reading through the tool the rule loads on, and do comments cover the files a person editing by hand would author in? If it is `Accepted`, ask whether a *qualifying* defence could be named — not whether anything defends it, since a real defence can still fail the timing test.
+- **Archival** — if the ADR is `Archived`, does `archived-because` name a defence that exists and lands early enough to change the plan rather than only reject the result? Push back hard: a decision that merely feels settled is the tempting one to archive, and a wrongly archived one stays invisible until someone re-litigates it. Where the defence is a path-scoped rule, have it open the rule file: does it exist, does it live in the repository, did it go in with the archival, is every path in `scope` bar the rule's own entry reached by the rule's globs or by another named defence, does it state the constraint itself rather than only pointing at the ADR, and did the archiver watch it load in a session that had read nothing matching beforehand? Then the gate the rule stands or falls on: would the breaches it defends against be authored by an agent reading through the tool the rule loads on, and do comments cover the files a person editing by hand would author in? Where the defence is ambient project instructions, have it open the file: does the text forbid every option the ADR rejected rather than merely state the one it chose, and is `revisit-when` unfired or spent? Whatever the defence, does a live or near-fired `revisit-when` argue for staying `Accepted` regardless? If it is `Accepted`, ask whether a *qualifying* defence could be named — not whether anything defends it, since a real defence can still fail the timing test.
 - **Revisit trigger** — does `revisit-when` state a condition whose arrival would change the choice, rather than one the decision already accommodates? Where it is unset, ask what would reopen the decision: nothing reopening it is a real answer, an unstated condition is one nobody will act on.
 - **Factual accuracy** — is every claim about tooling, workflow, or platform behaviour true of the actual configuration? Have it check config, workflow files, and live settings itself rather than review your notes, and report what each claim was verified against.
 - **Frontmatter sufficiency** — would an agent that reads _only_ the frontmatter (`summary`, `scope`, `status`, `revisit-when`) avoid breaching this decision? If the decision constrains future work, the `summary` must make that constraint discoverable and `scope` must name the paths where a breach would be authored — an ADR scoped narrower than it binds is unreachable from the files it governs. This holds for `Archived` ADRs too, even though nothing reads their frontmatter by default: archiving is reversible, and one restored later — perhaps because it was archived in error — carries whatever it was written with.
