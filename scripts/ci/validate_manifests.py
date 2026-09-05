@@ -24,6 +24,7 @@ from scripts.frontmatter import parse_frontmatter
 # test that omits its fixture root fails rather than reading the real repository.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+HOOKS_FILE = Path("hooks/hooks.json")
 MARKETPLACE_FILE = Path(".claude-plugin/marketplace.json")
 PLUGIN_FILE = Path(".claude-plugin/plugin.json")
 
@@ -37,6 +38,10 @@ EXPECTED_SOURCE = {
     "repo": "todofixthis/phx-claude-siat",
     "source": "github",
 }
+# What every hooks.json entry must run and how (ADR 022): the writing-adrs hook
+# script, invoked as a shell command — the only shape the file ships today.
+HOOK_SCRIPT = "skills/writing-adrs/hook.py"
+HOOK_TYPE = "command"
 PYPROJECT_FILENAME = "pyproject.toml"
 SKILL_FILENAME = "SKILL.md"
 SKILL_ROOTS = (Path("skills"), Path(".agents/skills"))
@@ -161,6 +166,63 @@ def check_marketplace(plugin_manifest: dict | None, repo_root: Path, errors: lis
             f"{MARKETPLACE_FILE} lists no entry named {plugin_name!r}, which is what "
             f"{PLUGIN_FILE} calls the plugin; installs resolve by name. Entries: {names!r}"
         )
+
+
+def check_hooks(repo_root: Path, errors: list) -> None:
+    """Every hooks.json entry must run the writing-adrs hook, and nothing else.
+
+    ADR 022 ships this file to every consumer with no opt-in: a malformed entry —
+    the wrong `type`, or a `command` that stopped naming the hook script — breaks
+    the hooked event for everyone on their next plugin update, with nothing else
+    in CI to catch it before the merge to main.
+
+    Each level is checked independently, same as `check_marketplace`: a hand-edit
+    that breaks the shape (an event that is not a list, a block with no `hooks`
+    list) is reported and skipped rather than reaching a subscript that crashes
+    the run, and an entry breaking both `type` and `command` reports both.
+    """
+    hooks_manifest = load_json(HOOKS_FILE, repo_root, errors)
+    if hooks_manifest is None:
+        return
+
+    events = hooks_manifest.get("hooks")
+    if not isinstance(events, dict):
+        errors.append(f"{HOOKS_FILE} has no hooks object")
+        return
+
+    for event, blocks in events.items():
+        if not isinstance(blocks, list):
+            errors.append(f"{HOOKS_FILE} {event} is not a list of hook blocks")
+            continue
+
+        for block in blocks:
+            if not isinstance(block, dict):
+                errors.append(f"{HOOKS_FILE} {event} block {block!r} is not an object")
+                continue
+
+            entries = block.get("hooks")
+            if not isinstance(entries, list):
+                errors.append(f"{HOOKS_FILE} {event} block has no hooks list")
+                continue
+
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    errors.append(f"{HOOKS_FILE} {event} hook entry {entry!r} is not an object")
+                    continue
+
+                if entry.get("type") != HOOK_TYPE:
+                    errors.append(
+                        f"{HOOKS_FILE} {event} hook entry has type {entry.get('type')!r}; "
+                        f"every entry must be {HOOK_TYPE!r} (see docs/adr/022)"
+                    )
+
+                command = entry.get("command")
+                if not isinstance(command, str) or HOOK_SCRIPT not in command:
+                    errors.append(
+                        f"{HOOKS_FILE} {event} hook entry command {command!r} does not "
+                        f"name {HOOK_SCRIPT}; every entry runs that script alone "
+                        "(see docs/adr/022)"
+                    )
 
 
 def skill_dirs(root: Path, repo_root: Path) -> list[Path]:
@@ -305,6 +367,7 @@ def validate(repo_root: Path) -> int:
     plugin = load_json(PLUGIN_FILE, repo_root, errors)
     check_plugin(plugin, errors)
     check_marketplace(plugin, repo_root, errors)
+    check_hooks(repo_root, errors)
     check_skills(repo_root, errors)
     check_skill_tooling(repo_root, errors)
 
