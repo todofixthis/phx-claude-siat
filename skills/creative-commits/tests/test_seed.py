@@ -86,9 +86,7 @@ class GitFailureTests(unittest.TestCase):
         with (
             patch(
                 "subprocess.run",
-                return_value=_git_result(
-                    "", returncode=128, stderr="not a git repository"
-                ),
+                return_value=_git_result("", returncode=128, stderr="not a git repository"),
             ),
             contextlib.redirect_stderr(err),
             self.assertRaises(SystemExit) as ctx,
