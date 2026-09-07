@@ -508,21 +508,13 @@ def reconcile(root: Path, write: bool) -> list[Finding]:
     ]
 
 
-def binding(root: Path, paths: list[str]) -> list[Row]:
-    """Return the decisions in force whose scope covers any of `paths`.
+def resolve_subjects(root: Path, paths: list[str]) -> list[str]:
+    """Return `paths` as repo-relative subjects, directories trailing-slashed.
 
-    This is the direction the index cannot serve: from the file in hand to the decisions
-    binding it. Archived decisions are reported too — in force, out of the index, and met
-    at the moment someone edits what they bind. A directory is matched with its trailing
-    slash, since that is how scope names one.
-
-    A shared number or a heading disagreeing with its filename (ADR 029) draws a warning
-    and binds nothing, the same as a file that cannot be parsed at all: either fault would
-    otherwise render as a decision the corpus does not really hold — the first case as two
-    decisions where there is one, the second with the number from one file and the title
-    from another. The advisory stays exit 0 regardless; only `binding()`'s own return value
-    changes, never a caller's exit code. A file failing both draws both warnings, matching
-    `inspect()` rather than stopping at whichever is checked first.
+    Shared by this module's `binding()` and `backlog.py`'s own: both answer the
+    direction neither an index nor a derived scope can serve alone, from a file in hand
+    to what covers it, and both match a directory subject the way scope names one — with
+    its trailing slash.
     """
     subjects = []
     for path in paths:
@@ -532,6 +524,25 @@ def binding(root: Path, paths: list[str]) -> list[Row]:
         if (root / relative).is_dir() and not relative.endswith("/"):
             relative += "/"
         subjects.append(relative)
+    return subjects
+
+
+def binding(root: Path, paths: list[str]) -> list[Row]:
+    """Return the decisions in force whose scope covers any of `paths`.
+
+    This is the direction the index cannot serve: from the file in hand to the decisions
+    binding it. Archived decisions are reported too — in force, out of the index, and met
+    at the moment someone edits what they bind.
+
+    A shared number or a heading disagreeing with its filename (ADR 029) draws a warning
+    and binds nothing, the same as a file that cannot be parsed at all: either fault would
+    otherwise render as a decision the corpus does not really hold — the first case as two
+    decisions where there is one, the second with the number from one file and the title
+    from another. The advisory stays exit 0 regardless; only `binding()`'s own return value
+    changes, never a caller's exit code. A file failing both draws both warnings, matching
+    `inspect()` rather than stopping at whichever is checked first.
+    """
+    subjects = resolve_subjects(root, paths)
     if not subjects:
         return []
 
