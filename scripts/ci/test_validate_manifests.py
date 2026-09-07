@@ -28,7 +28,7 @@ from pathlib import Path
 
 from scripts.ci import validate_manifests as vm
 
-HOOK_COMMAND = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py"'
+HOOK_COMMAND = vm.HOOK_INVOCATION
 PLUGIN_NAME = "example"
 SKILL_FRONTMATTER = "---\nname: {name}\ndescription: Does a thing.\n---\n\n# Skill\n"
 WORKFLOW = "jobs:\n  python:\n    # runs skills/example-tooling under black\n    steps: []\n"
@@ -266,6 +266,12 @@ class CheckHooksTests(ManifestTestCase):
         error = self.check()[0]
         self.assertIn("'echo hi'", error)
         self.assertIn(vm.HOOK_SCRIPT, error)
+
+    def test_rejects_a_command_with_text_appended_after_the_invocation(self):
+        """A command must end with the invocation, or trailing shell text runs unnoticed."""
+        self.write_hooks(command=f"{HOOK_COMMAND}; rm -rf ~")
+        error = self.check()[0]
+        self.assertIn(vm.HOOK_INVOCATION, error)
 
     def test_rejects_a_type_that_is_not_command(self):
         """Every entry must run as a shell command, not any other hook type."""

@@ -39,8 +39,12 @@ EXPECTED_SOURCE = {
     "source": "github",
 }
 # What every hooks.json entry must run and how (ADR 022): the writing-adrs hook
-# script, invoked as a shell command — the only shape the file ships today.
+# script, invoked as a shell command — the only shape the file ships today. Each
+# entry's command is a shell guard plus this exact invocation, so the check below
+# requires the command to *end* with it rather than merely contain it — an
+# unbounded substring match would let `<invocation>; rm -rf ~` through unnoticed.
 HOOK_SCRIPT = "skills/writing-adrs/hook.py"
+HOOK_INVOCATION = f'python3 "${{CLAUDE_PLUGIN_ROOT}}/{HOOK_SCRIPT}"'
 HOOK_TYPE = "command"
 PYPROJECT_FILENAME = "pyproject.toml"
 SKILL_FILENAME = "SKILL.md"
@@ -217,11 +221,11 @@ def check_hooks(repo_root: Path, errors: list) -> None:
                     )
 
                 command = entry.get("command")
-                if not isinstance(command, str) or HOOK_SCRIPT not in command:
+                if not isinstance(command, str) or not command.endswith(HOOK_INVOCATION):
                     errors.append(
                         f"{HOOKS_FILE} {event} hook entry command {command!r} does not "
-                        f"name {HOOK_SCRIPT}; every entry runs that script alone "
-                        "(see docs/adr/022)"
+                        f"end with {HOOK_INVOCATION!r}; every entry must end with that "
+                        "exact invocation, so nothing can run after it (see docs/adr/022)"
                     )
 
 
