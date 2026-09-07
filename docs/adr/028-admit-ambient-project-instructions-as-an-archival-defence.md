@@ -101,7 +101,7 @@ its own citation-liveness check rather than specifying one nothing could run.
 
 ## Decision
 
-Adopt Option 2, extending the archival-defence framework [ADR 018][] established for the
+Adopt Option 2, extending the archival-defence framework ADR 018 established for the
 rule to ambient project instructions, on the same terms: authored judgement now, a dated
 measurement standing in for a mechanical check no generator can run.
 
@@ -132,7 +132,7 @@ should meet the reason 020 failed without having to jump elsewhere to find it.
 - `docs/adr/` and `skills/writing-adrs/` in scope, matching ADR 018, means an ADR touching
   either now reports both decisions.
 - The "ambient instructions are a superset of what archiving removes" argument is refuted
-  in [`writing-adrs`][] itself rather than here: the counterexample rests on the skill's own
+  in `writing-adrs` itself rather than here: the counterexample rests on the skill's own
   hook injecting `docs/adr/INDEX.md` regardless of `AGENTS.md`, which is repository tooling
   this ADR does not own.
 
