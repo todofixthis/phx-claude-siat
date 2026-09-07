@@ -11,9 +11,12 @@ The skill runs it as `python3 ${CLAUDE_SKILL_DIR}/scan.py`:
 Exit codes follow ripgrep's, which the skill already teaches: 0 nothing to triage, 1
 hits needing triage, 2 the run failed. 3 is a usage error, kept separate from 2 because
 the skill escalates a 2 as a broken tool and a mistyped argument is not that. 4 is
-nothing to check — every given path was missing or excluded, or an empty selection was
-given with --no-implicit-cwd — which a pre-commit hook needs told apart from 2: a
-healthy commit routinely selects nothing for this tool to do.
+nothing to check — every given path was excluded, or missing under --hook, or an empty
+selection was given with --hook — which a pre-commit hook needs told apart from 2: a
+healthy commit routinely selects nothing for this tool to do. Without --hook a missing
+path is instead a fail-fast ScanError (exit 2): outside a hook it is more likely a typo
+than a routine staged deletion, and a silently-shorter sweep is the failure this tool
+exists to end.
 
 Paths are anchored to this file's own directory so the tool finds its fixtures wherever
 the plugin is installed; that anchor is read on the `__main__` line only, and every
@@ -224,15 +227,21 @@ def common_base(targets: list) -> Path:
         return Path(resolved[0].anchor)
 
 
-def discover(targets: list, own_dir: Path) -> tuple:
+def discover(targets: list, own_dir: Path, *, skip_missing: bool = False) -> tuple:
     """Return the files to search and the header's provenance label for how.
 
     Each target is discovered separately, so two paths in different repositories both
-    work. A target that is a file is taken as given rather than walked. A target that no
-    longer exists is skipped rather than failing the whole run — the routine shape of a
-    staged deletion reaching this tool from a hook that ran `git diff --cached
-    --name-only` without `--diff-filter` — so the files that do still exist are still
-    checked.
+    work. A target that is a file is taken as given rather than walked.
+
+    `skip_missing` decides what a missing target means. Default false: a missing target
+    fails the whole run, because for an explicit or interactive call — someone naming
+    paths by hand — a path that does not exist is very likely a typo, and silently
+    reading fewer files than asked is exactly the "reported clean for a search that never
+    ran" failure this tool exists to end. True skips it and keeps checking the rest: the
+    routine shape of a staged deletion reaching this tool from a hook that ran `git diff
+    --cached --name-only` without `--diff-filter`, where a missing path is healthy rather
+    than a mistake. `main` sets it from `--hook`, so a hook invocation opts in and a bare
+    one keeps failing fast.
 
     The provenance is `files` where every target was a file, so no directory was ever
     walked or asked of git; `git` where at least one target was a directory inside a
@@ -247,7 +256,9 @@ def discover(targets: list, own_dir: Path) -> tuple:
     for target in targets:
         resolved = target.resolve()
         if not resolved.exists():
-            continue
+            if skip_missing:
+                continue
+            raise ScanError(f"no such path: {target}")
         if resolved.is_file():
             found.append(resolved)
             continue
@@ -281,7 +292,7 @@ def discover(targets: list, own_dir: Path) -> tuple:
         keep.append(path)
 
     # Nothing to search is not a tree with nothing to convert. Point the tool at a lock
-    # file, a CHANGELOG, a path that does not exist, or its own directory and every one
+    # file, a CHANGELOG, a path deleted under --hook, or its own directory and every one
     # is skipped or excluded, leaving nothing read — which used to report as a clean
     # sweep over zero files. It is instead a distinct outcome from either a clean sweep
     # or a broken run: for a hook, a commit touching only excluded or deleted paths is
@@ -685,11 +696,14 @@ def build_parser() -> argparse.ArgumentParser:
         "paths", nargs="*", help="paths to sweep (default: the working directory)"
     )
     parser.add_argument(
-        "--no-implicit-cwd",
+        "--hook",
         action="store_true",
         help=(
-            "an empty path list is nothing to check (exit 4) rather than the default "
-            "working-directory sweep — for a hook, whose file list can genuinely be empty"
+            "treat this as a pre-commit hook's invocation: an empty path list is "
+            "nothing to check (exit 4) rather than the default working-directory sweep, "
+            "and a missing path among those given is skipped rather than failing the "
+            "run — both routine for a hook's staged-file list, where either an empty "
+            "selection or a staged deletion is healthy, not a typo"
         ),
     )
     # One name per flag, repeated, rather than `nargs="+"`: a greedy list swallows the
@@ -728,15 +742,14 @@ def main(argv: list, own_dir: Path) -> int:
             print(report)
             return code
 
-        if args.no_implicit_cwd and not args.paths:
+        if args.hook and not args.paths:
             raise NothingToCheck(
-                "no paths given, and --no-implicit-cwd disables the default "
-                "working-directory sweep"
+                "no paths given, and --hook disables the default working-directory sweep"
             )
 
         targets = [Path(path) for path in args.paths] or [Path.cwd()]
         base = common_base(targets)
-        paths, source = discover(targets, own_dir)
+        paths, source = discover(targets, own_dir, skip_missing=args.hook)
 
         if args.verify:
             if args.show_noise:

@@ -69,9 +69,11 @@ They are rarely the same place. Name paths instead of `.` to sweep less — any 
 them, and individual files as well as directories.
 
 Read the exit code, not the output — a shell pipeline throws that distinction away.
-**0** nothing to triage, **1** hits to triage, **2** the run failed, **3** a bad argument
-(yours to fix, not a breakage to escalate), **4** nothing to check — every path given was
-missing or excluded, distinct from a broken run (see Pre-commit hook, below).
+**0** nothing to triage, **1** hits to triage, **2** the run failed — including a missing
+path, which here is more likely a typo than a routine deletion (see Pre-commit hook,
+below, for the opt-in that changes that) — **3** a bad argument (yours to fix, not a
+breakage to escalate), **4** nothing to check — every path given was excluded, distinct
+from a broken run.
 
 A sweep reads tens of thousands of lines a second — faster on code than on prose — so it
 takes seconds on an ordinary repository and minutes on a very large monorepo. It always
@@ -98,9 +100,10 @@ searches to replace it: the patterns carry a guard and a noise list a typed comm
 not, and a search that covers less than it appears to is the failure this tool exists to
 end.
 
-A sweep that read **nothing** — every path missing or excluded, or a tree wholly
-gitignored — exits 4, not 2: nothing was searched, so nothing was proved, but that is a
-different state from a broken run (see Pre-commit hook, below).
+A sweep that read **nothing** — every path excluded, or a tree wholly gitignored — exits
+4, not 2: nothing was searched, so nothing was proved, but that is a different state from
+a broken run. A *missing* path is exit 2 here, not 4 (see Pre-commit hook, below, for the
+opt-in that changes that).
 
 **A low file count is the failure this cannot catch.** The header reads
 `swept: <path> (N files, files|git|walk)`, and both halves are diagnostic:
@@ -154,19 +157,24 @@ while IFS= read -r path; do
 done <<STAGED
 $(git diff --cached --name-only)
 STAGED
-python3 ${CLAUDE_SKILL_DIR}/scan.py --no-implicit-cwd "$@"
+python3 ${CLAUDE_SKILL_DIR}/scan.py --hook "$@"
 ```
 
 (The `while read` loop is not incidental: `$(...)` word-splits unquoted, breaking on a
 path containing whitespace — the same reason this repo's own `.githooks/pre-commit`
 collects staged paths the same way.)
 
-`--no-implicit-cwd` turns an empty selection into exit 4 instead of the default no-args
-behaviour of sweeping the working directory — without it, a commit touching nothing this
-tool cares about would silently sweep the whole repository instead of skipping cleanly.
-And a staged **deletion** among the paths — routine, since `git diff --cached --name-only`
-carries deletions unless you add `--diff-filter` — no longer fails the run: a path that no
-longer exists is skipped, and the files that do still exist are still swept.
+`--hook` covers both routine shapes of a hook's staged-file list that would otherwise fail
+the run. An empty selection turns into exit 4 instead of the default no-args behaviour of
+sweeping the working directory — without it, a commit touching nothing this tool cares
+about would silently sweep the whole repository instead of skipping cleanly. And a staged
+**deletion** among the paths — routine, since `git diff --cached --name-only` carries
+deletions unless you add `--diff-filter` — no longer fails the run: a path that no longer
+exists is skipped, and the files that do still exist are still swept.
+
+Without `--hook`, a missing path instead fails loudly (`ScanError`, exit 2) rather than
+being silently dropped from the sweep — what you want at an interactive prompt, where a
+missing path is far more likely a typo than a staged deletion.
 
 Read the exit code:
 

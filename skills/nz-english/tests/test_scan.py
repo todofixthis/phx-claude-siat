@@ -222,21 +222,38 @@ class DiscoverTests(TempTreeTestCase):
         paths, _ = scan.discover([self.root], OWN_DIR)
         self.assertEqual([path.name for path in paths], ["a.md"])
 
-    def test_skips_a_missing_target_but_keeps_the_rest(self):
+    def test_a_missing_target_raises_by_default(self):
+        """An explicit/interactive invocation must fail loudly on a mistyped path.
+
+        Without `skip_missing`, a missing target is a typo until proven otherwise — the
+        pre-existing-target case below is `skip_missing=True`, which is the hook's opt-in,
+        not the default.
+        """
+        existing = write(self.root, "a.md", "color")
+        with self.assertRaises(scan.ScanError):
+            scan.discover([self.root / "nope", existing], OWN_DIR)
+
+    def test_skips_a_missing_target_but_keeps_the_rest_when_asked(self):
         """A staged deletion must not block the files that do still exist.
 
         A hook handing scan.py `git diff --cached --name-only` without `--diff-filter`
-        includes deleted paths, which no longer exist on disk.
+        includes deleted paths, which no longer exist on disk — the case `skip_missing`
+        exists for.
         """
         existing = write(self.root, "a.md", "color")
-        paths, source = scan.discover([self.root / "nope", existing], OWN_DIR)
+        paths, source = scan.discover(
+            [self.root / "nope", existing], OWN_DIR, skip_missing=True
+        )
         self.assertEqual(paths, [existing.resolve()])
         self.assertEqual(source, scan.SOURCE_FILES)
 
-    def test_a_wholly_missing_selection_is_nothing_to_check_not_an_error(self):
-        """Every target missing must read as nothing to check, never a clean empty result."""
+    def test_a_wholly_missing_selection_is_nothing_to_check_when_skipping(self):
+        """Every target missing must read as nothing to check, never a clean empty result.
+
+        Only under `skip_missing=True`: the default instead raises, per the test above.
+        """
         with self.assertRaises(scan.NothingToCheck):
-            scan.discover([self.root / "nope"], OWN_DIR)
+            scan.discover([self.root / "nope"], OWN_DIR, skip_missing=True)
 
 
 class ScanFunctionTests(TempTreeTestCase):
@@ -697,15 +714,38 @@ class MainTests(TempTreeTestCase):
         write(self.root, "a.md", "the license")
         self.assertEqual(scan.main([str(self.root)], OWN_DIR), scan.EXIT_HITS)
 
-    def test_a_wholly_missing_selection_exits_nothing_to_check(self):
-        """A staged deletion with nothing else given must not read as a broken tool."""
-        code = scan.main([str(self.root / "nope")], OWN_DIR)
-        self.assertEqual(code, scan.EXIT_NOTHING_TO_CHECK)
+    def test_a_missing_path_exits_error_by_default(self):
+        """An interactive/explicit invocation must fail loudly on a mistyped path.
 
-    def test_a_missing_target_beside_a_real_one_still_sweeps(self):
-        """A staged deletion among other staged files must not block checking the rest."""
+        This is the regression this test replaces a stale expectation for: a bare
+        invocation used to raise `ScanError` on a missing path, then this skill's own
+        pre-commit-hook change made `discover()` skip it unconditionally, so a typo
+        among explicit arguments silently reported a shorter sweep as clean instead of
+        failing. `--hook` (below) is how a hook opts back into skipping.
+        """
+        code = scan.main([str(self.root / "nope")], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_ERROR)
+
+    def test_a_missing_target_beside_a_real_one_still_fails_by_default(self):
+        """A mistyped path beside a real one must not be silently dropped from the sweep.
+
+        Concretely: `scan.py mistyped_path.md real.md` after fixing spellings in two
+        files but typing one filename wrong must fail rather than quietly checking only
+        `real.md` and reporting it clean.
+        """
         existing = write(self.root, "a.md", "gray")
         code = scan.main([str(self.root / "nope"), str(existing)], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_ERROR)
+
+    def test_hook_flag_makes_a_wholly_missing_selection_nothing_to_check(self):
+        """A hook's staged deletion with nothing else given must not read as a broken tool."""
+        code = scan.main(["--hook", str(self.root / "nope")], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_NOTHING_TO_CHECK)
+
+    def test_hook_flag_skips_a_missing_target_beside_a_real_one(self):
+        """Under `--hook`, a staged deletion among other staged files must not block the rest."""
+        existing = write(self.root, "a.md", "gray")
+        code = scan.main(["--hook", str(self.root / "nope"), str(existing)], OWN_DIR)
         self.assertEqual(code, scan.EXIT_HITS)
 
     def test_an_unknown_verify_name_exits_three(self):
@@ -752,7 +792,7 @@ class MainTests(TempTreeTestCase):
         code = scan.main([str(self.root / "CHANGELOG.md")], OWN_DIR)
         self.assertEqual(code, scan.EXIT_NOTHING_TO_CHECK)
 
-    def test_empty_paths_with_no_implicit_cwd_is_nothing_to_check(self):
+    def test_empty_paths_with_hook_is_nothing_to_check(self):
         """A hook's empty file list must not silently fall back to sweeping the whole tree.
 
         The working directory is switched to one holding a real hit first, so a mutation
@@ -765,16 +805,16 @@ class MainTests(TempTreeTestCase):
         here = os.getcwd()
         os.chdir(self.root)
         self.addCleanup(os.chdir, here)
-        code = scan.main(["--no-implicit-cwd"], OWN_DIR)
+        code = scan.main(["--hook"], OWN_DIR)
         self.assertEqual(code, scan.EXIT_NOTHING_TO_CHECK)
 
-    def test_no_implicit_cwd_does_not_change_a_real_invocation(self):
+    def test_hook_does_not_change_a_real_invocation(self):
         """The flag only changes behaviour when the path list is actually empty."""
         write(self.root, "a.md", "gray")
-        code = scan.main(["--no-implicit-cwd", str(self.root)], OWN_DIR)
+        code = scan.main(["--hook", str(self.root)], OWN_DIR)
         self.assertEqual(code, scan.EXIT_HITS)
 
-    def test_no_paths_with_no_implicit_cwd_absent_still_sweeps_cwd(self):
+    def test_no_paths_with_hook_absent_still_sweeps_cwd(self):
         """Without the flag, an interactive no-args run keeps sweeping the working directory."""
         import os
 
