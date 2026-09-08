@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backlog import (
+from scripts.backlog import (
     BACKLOG_DIR,
     Item,
     binding,

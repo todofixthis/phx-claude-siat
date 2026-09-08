@@ -1,13 +1,17 @@
 """Route docs/backlog/ items from the paths they bind — the backlog's own `for` lookup.
 
-Standard library only, kept beside `adr.py`: the skill runs it as
-`python3 ${CLAUDE_SKILL_DIR}/backlog.py for PATH ...`, and `.githooks/pre-commit` runs it
-as a sibling to `adr.py`'s own `for`, over every staged path.
+This repository's own tool, not part of the `writing-adrs` skill a consumer invokes:
+`.githooks/pre-commit` runs it directly, as a sibling to `adr.py`'s own `for`, over every
+staged path. Standard library only. `adr.py` and `frontmatter.py`, whose helpers this
+module and `adr.py` each need, reach `scripts/` the way `frontmatter.py` itself already
+does — a symlink to `skills/writing-adrs/`, the canonical source both are edited in — so
+this module inserts its own directory onto `sys.path` before importing either, making the
+import resolve the same way whether this file is run directly or imported by name.
 
     backlog.py [--repo-root DIR] for PATH ...
 
-A backlog item carries no `scope` frontmatter — `docs/backlog/`'s items are plain
-Markdown (ADR 020) — so scope is derived from the reference-style link definitions every
+A backlog item carries no frontmatter at all — `docs/backlog/`'s items are plain
+Markdown (ADR 032) — so scope is derived from the reference-style link definitions every
 item already ends with (`docs/backlog/README.md`'s Shape), resolved the way an ADR's own
 links resolve: from the item's own file, so `../../skills/x.py` names `skills/x.py` from
 the repo root (ADR 030). A link to an external URL, or into `docs/adr/` or
@@ -29,7 +33,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from adr import (
+# Makes `adr` bare-importable regardless of how this file itself was reached — a direct
+# script invocation already puts this directory first, so this only matters when Python
+# imported this module by dotted name (`scripts.backlog`) instead.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from adr import (  # noqa: E402 — after the sys.path insert it depends on
     ADR_DIR,
     RE_H1_TITLE,
     read_document,

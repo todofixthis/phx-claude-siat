@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-05
-scope: [.githooks/pre-commit, docs/backlog/, skills/writing-adrs/]
+scope: [.githooks/pre-commit, docs/backlog/, scripts/backlog.py, skills/writing-adrs/adr.py]
 summary: Derive each docs/backlog/ item's scope from its own reference-style links, resolved the way an ADR's own links resolve, and report it from a sibling backlog.py `for` lookup .githooks/pre-commit runs alongside adr.py's; a dangling scope entry is never reported and never fails the build.
 revisit-when: This lookup runs only in the opt-in pre-commit hook, with no pr.yml mirror the way ADR 021 gives ADR scope one.
 ---
