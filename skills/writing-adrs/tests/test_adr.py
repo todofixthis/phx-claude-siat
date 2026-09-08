@@ -972,6 +972,51 @@ class BindingTests(RepoTestCase):
         result = binding(self.repo_root, ["docs/unrelated.md", SCOPED_FILE])
         self.assertEqual([r.number for r in result], ["001"])
 
+    def test_warns_of_a_shared_number_and_binds_only_the_first_claimant(self):
+        """Two files sharing a number must not render as two decisions (ADR 029)."""
+        self.write("001-first.md", adr_text(title="1: Do the thing"))
+        self.write("1-second.md", adr_text(title="1: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual([r.filename for r in result], ["001-first.md"])
+        self.assertIn("1-second.md shares its number with 001-first.md", err.getvalue())
+
+    def test_warns_of_a_heading_that_disagrees_with_its_filename(self):
+        """A mismatch would otherwise name a decision from one file's number and another's title (ADR 029)."""
+        self.write("002-second.md", adr_text(title="1: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual(result, [])
+        self.assertIn(
+            "002-second.md is numbered 002 by its filename and 1 by its heading",
+            err.getvalue(),
+        )
+
+    def test_a_mismatched_first_claimant_still_hides_a_later_collision(self):
+        """A skipped mismatch must still claim its number, or a later file reads as first."""
+        self.write("002-first.md", adr_text(title="1: Do the thing"))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual(result, [])
+        self.assertIn("002-second.md shares its number with 002-first.md", err.getvalue())
+
+    def test_reports_a_mismatch_and_a_collision_on_the_same_file(self):
+        """Both faults are real, so neither may short-circuit the other's warning."""
+        self.write("005-a.md", adr_text(title="5: Do the thing"))
+        self.write("005-b.md", adr_text(title="9: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual([r.filename for r in result], ["005-a.md"])
+        self.assertIn(
+            "005-b.md is numbered 005 by its filename and 9 by its heading", err.getvalue()
+        )
+        self.assertIn("005-b.md shares its number with 005-a.md", err.getvalue())
+
 
 class MainTests(RepoTestCase):
     """Integration tests through the entry point: exit codes and what is left on disk."""
