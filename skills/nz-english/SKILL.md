@@ -70,8 +70,8 @@ them, and individual files as well as directories.
 
 Read the exit code, not the output — a shell pipeline throws that distinction away.
 **0** nothing to triage, **1** hits to triage, **2** the run failed — including a missing
-path, which here is more likely a typo than a routine deletion (see Pre-commit hook,
-below, for the opt-in that changes that) — **3** a bad argument (yours to fix, not a
+path, which here is more likely a typo than a routine deletion (see the [README] for the
+`--hook` opt-in that changes that) — **3** a bad argument (yours to fix, not a
 breakage to escalate), **4** nothing to check — every path given was excluded, distinct
 from a broken run.
 
@@ -102,8 +102,9 @@ end.
 
 A sweep that read **nothing** — every path excluded, or a tree wholly gitignored — exits
 4, not 2: nothing was searched, so nothing was proved, but that is a different state from
-a broken run. A *missing* path is exit 2 here, not 4 (see Pre-commit hook, below, for the
-opt-in that changes that).
+a broken run. A *missing* path is exit 2 here, not 4 — `--hook` treats both as a skip
+instead, for a hook's routine staged-file shapes (see `--help`, and the
+[`todofixthis/phx-claude-siat` README][README] for wiring it into a pre-commit hook).
 
 **A low file count is the failure this cannot catch.** The header reads
 `swept: <path> (N files, files|git|walk)`, and both halves are diagnostic:
@@ -143,47 +144,6 @@ that the hand-run version of this skill could not reach at all.
 The price is a SCREAMING_CASE `DIALOGUE` or `ANALOGUE` coming back as a hit, because the
 character after `DIALOG` is a capital `U`. Skip those: they are already correct. One
 false hit costs you a second, where the miss it buys back survives indefinitely.
-
-## Pre-commit hook
-
-Sweeping the whole tree on every commit is minutes on a large repository, so a hook that
-passes the staged paths instead is a good use of the tool. Two things make that safe:
-
-```sh
-set --
-while IFS= read -r path; do
-    [ -n "$path" ] || continue
-    set -- "$@" "$path"
-done <<STAGED
-$(git diff --cached --name-only)
-STAGED
-python3 ${CLAUDE_SKILL_DIR}/scan.py --hook "$@"
-```
-
-(The `while read` loop is not incidental: `$(...)` word-splits unquoted, breaking on a
-path containing whitespace — the same reason this repo's own `.githooks/pre-commit`
-collects staged paths the same way.)
-
-`--hook` covers both routine shapes of a hook's staged-file list that would otherwise fail
-the run. An empty selection turns into exit 4 instead of the default no-args behaviour of
-sweeping the working directory — without it, a commit touching nothing this tool cares
-about would silently sweep the whole repository instead of skipping cleanly. And a staged
-**deletion** among the paths — routine, since `git diff --cached --name-only` carries
-deletions unless you add `--diff-filter` — no longer fails the run: a path that no longer
-exists is skipped, and the files that do still exist are still swept.
-
-Without `--hook`, a missing path instead fails loudly (`ScanError`, exit 2) rather than
-being silently dropped from the sweep — what you want at an interactive prompt, where a
-missing path is far more likely a typo than a staged deletion.
-
-Read the exit code:
-
-- **0** and **1** mean what they always do: clean, or hits to triage.
-- **4** means nothing staged needed checking — every staged path was excluded (`*.lock`,
-  `CHANGELOG.md`) or deleted. Let the commit through: this is the healthy common case,
-  not a misconfiguration.
-- **2** and **3** keep their meanings: escalate a 2, fix a 3 — a hook seeing either has a
-  genuine problem, unlike 4.
 
 ## Triage
 
@@ -247,3 +207,5 @@ Four checks, all of them, in order:
    running a search that would find nothing.
 3. **Read `git diff` word by word.** What the diff shows and the other checks do not is a conversion that should never have happened — a name from the copied-outside list, or a US spelling sitting inside an external identifier. The half a rename is *missing* is by definition not in the diff, which is check 2's job.
 4. **Run the test suite.** Where you renamed anything this is load-bearing rather than a formality, so run it even where the pass looked like prose only. Two blind spots to state rather than trust it through: a golden fixture holding a name you renamed must move with the rename, where one asserting on a US spelling as its subject must not — read which kind you have rather than letting red or green decide; and a round trip through your own renamed serialiser passes green while stored data written under the old name no longer matches, which is why those names are skipped above. Where the suite does not cover what you edited — a docs-wide pass in a repo whose tests cover one package — say so rather than reporting the suite green, because it verified none of it.
+
+[README]: https://github.com/todofixthis/phx-claude-siat/blob/main/README.md
