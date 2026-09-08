@@ -59,6 +59,32 @@ those two — the tool uses only the standard library, and builds no virtualenv.
 it to find that out: an absent `git` stops the sweep before the non-repository
 path is reached. Where either program is missing, the skill says so and stops.
 
+> [!IMPORTANT]
+> To run the sweep from a pre-commit hook instead of by hand, ask your agent — with
+> `phx:nz-english` loaded, so `${CLAUDE_SKILL_DIR}` resolves to a real path — to add the
+> following to your project's `.githooks/pre-commit`. Redo this after updating the
+> plugin, since that path can change:
+>
+> ````sh
+> set --
+> while IFS= read -r path; do
+>     [ -n "$path" ] || continue
+>     set -- "$@" "$path"
+> done <<STAGED
+> $(git diff --cached --name-only)
+> STAGED
+> python3 ${CLAUDE_SKILL_DIR}/scan.py --hook "$@"
+> ````
+>
+> The `while read` loop matters: `$(...)` word-splits unquoted, breaking on a path
+> containing whitespace. `--hook` treats an empty staged selection and a staged deletion
+> as a skip (exit 4) rather than a failure. Read the exit code:
+>
+> - **0** and **1** mean what they always do: clean, or hits to triage.
+> - **4** means nothing staged needed checking — every staged path was excluded
+>   (`*.lock`, `CHANGELOG.md`) or deleted. Let the commit through.
+> - **2** and **3** keep their meanings: escalate a 2, fix a 3.
+
 #### writing-adrs
 
 `writing-adrs` ships a tool and session hooks, so the skill needs **`python3` (3.10 or
@@ -165,6 +191,8 @@ precedence over any installed copy for the session), so edits take effect after
 You can tell which copy a session is using from the **base directory** Claude
 reports whenever a `phx:` skill loads: a path under this repo means the working
 tree is live; a `.../plugins/cache/...` path means the published copy is active.
+That reported path is a liveness check only — a skill reaches its own bundled
+tools via `${CLAUDE_SKILL_DIR}`, not by reading this base directory itself.
 
 > [!NOTE]
 > When working with Claude Code inside a container (e.g. using
