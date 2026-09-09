@@ -1,5 +1,39 @@
 # Changelog
 
+## 8.0.0 - 2026-09-09
+
+### For phx plugin users
+
+#### Breaking changes
+
+- **`writing-adrs`'s `check` now fails on a numbering gap** — a number between two real
+  ADRs that no file claims — the same way it already failed on two files sharing a
+  number. If your `docs/adr/` already has such a gap, your next `check` (and anything
+  gating on it) will fail until it's closed. **Migrate:** run `adr.py check` to see which
+  number is missing, then either author the missing ADR or renumber an existing one to
+  fill it — `renumber` refuses a target that wouldn't actually close the gap, so a wrong
+  guess corrects itself rather than making things worse.
+- **`renumber`'s target number is now optional, and some moves that used to succeed are
+  now refused.** `renumber OLD NEW` still works, but any move — with or without an
+  explicit `NEW` — that would leave a number unclaimed is refused before it writes
+  anything. In practice this removes the old workaround for two branches independently
+  claiming the same next number: skipping ahead to dodge the clash is no longer possible.
+  Both branches now keep the number they picked, and whichever merges second can resolve
+  the resulting collision with `renumber OLD` (`NEW` omitted) for the first time — this
+  used to fail outright, since any existing finding blocked every command including the
+  one meant to fix it. `renumber`'s printed output also changed: omitting `NEW` now prints
+  the number it picked, and the "citations to move by hand" message no longer says
+  "outside docs/adr" (it can now include an ambiguous citation inside the corpus too) — a
+  script parsing either message should re-check it.
+  Reasoning in [ADR 033](https://github.com/todofixthis/phx-claude-siat/blob/7fe0831a3ee56852aef3a5a06b48914a0c1de5e3/docs/adr/033-report-a-gap-in-adr-numbering-and-let-renumber-close-it.md).
+
+#### Fixed
+
+- `creative-commits`'s Emoji Selection step didn't say the `emoji-seed` command needs
+  your shell's working directory inside the repo you're committing to — it shells out to
+  `git log` there for the off-limits list. Running it from elsewhere failed with a bare
+  `fatal: not a git repository` and no pointer back to this step.
+
 ## 7.0.0 - 2026-09-09
 
 ### For phx plugin users
