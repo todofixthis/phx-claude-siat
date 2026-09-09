@@ -562,6 +562,20 @@ class InspectTests(RepoTestCase):
         _, findings = inspect(self.repo_root)
         self.assertEqual([(f.kind, f.value) for f in findings], [("collision", "1")])
 
+    def test_a_gap_is_keyed_by_the_missing_number(self):
+        """A hole between two real files yields a gap finding keyed by the missing number."""
+        self.write("001-first.md", adr_text())
+        self.write("003-third.md", adr_text(title="3: Third"))
+        _, findings = inspect(self.repo_root)
+        self.assertEqual([(f.kind, f.value, f.adr) for f in findings], [("gap", "2", None)])
+
+    def test_two_gaps_each_yield_their_own_finding(self):
+        """Every number missing between the lowest and highest on disk is reported."""
+        self.write("001-first.md", adr_text())
+        self.write("004-fourth.md", adr_text(title="4: Fourth"))
+        _, findings = inspect(self.repo_root)
+        self.assertEqual([(f.kind, f.value) for f in findings], [("gap", "2"), ("gap", "3")])
+
     def test_a_missing_directory_is_a_finding_not_an_error(self):
         """A root with no docs/adr reports one finding rather than raising."""
         root = self.repo_root / "empty"
@@ -1462,14 +1476,14 @@ class RenumberTests(RepoTestCase):
 
     def test_moves_the_file_heading_peer_links_and_index(self):
         """Every reference inside docs/adr follows the number."""
-        adr.renumber(self.repo_root, 1, 5)
+        adr.renumber(self.repo_root, 1, 3)
         self.assertFalse((self.adr_dir / "001-first.md").exists())
-        moved = (self.adr_dir / "005-first.md").read_text(encoding="utf-8")
-        self.assertIn("\n# 005: Do the thing\n", moved)
+        moved = (self.adr_dir / "003-first.md").read_text(encoding="utf-8")
+        self.assertIn("\n# 003: Do the thing\n", moved)
         peer = (self.adr_dir / "002-second.md").read_text(encoding="utf-8")
-        self.assertIn("See [ADR 005][] and ADR 005 again.", peer)
-        self.assertIn("[ADR 005]: 005-first.md", peer)
-        self.assertIn("| [005](005-first.md)", self.index())
+        self.assertIn("See [ADR 003][] and ADR 003 again.", peer)
+        self.assertIn("[ADR 003]: 003-first.md", peer)
+        self.assertIn("| [003](003-first.md)", self.index())
         self.assertNotIn("001", self.index())
 
     def test_moves_peer_fields_naming_the_number(self):
@@ -1479,9 +1493,9 @@ class RenumberTests(RepoTestCase):
             adr_text(status="Superseded", title="3: Third", **{"superseded-by": "1"}),
         )
         self.manage()
-        adr.renumber(self.repo_root, 1, 5)
+        adr.renumber(self.repo_root, 1, 4)
         self.assertIn(
-            "\nsuperseded-by: 5\n", (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+            "\nsuperseded-by: 4\n", (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
         )
 
     def test_moves_the_revisit_discharged_by_peer_field(self):
@@ -1494,9 +1508,9 @@ class RenumberTests(RepoTestCase):
             ),
         )
         self.manage()
-        adr.renumber(self.repo_root, 1, 5)
+        adr.renumber(self.repo_root, 1, 4)
         self.assertIn(
-            "\nrevisit-discharged-by: [2, 5]\n",
+            "\nrevisit-discharged-by: [2, 4]\n",
             (self.adr_dir / "003-third.md").read_text(encoding="utf-8"),
         )
 
@@ -1506,9 +1520,30 @@ class RenumberTests(RepoTestCase):
         (self.repo_root / "src" / "x.py").write_text(
             "# ADR 001 forbids this\n", encoding="utf-8"
         )
-        remaining = adr.renumber(self.repo_root, 1, 5)
+        _, remaining = adr.renumber(self.repo_root, 1, 3)
         self.assertEqual(remaining, ["src/x.py:1: # ADR 001 forbids this"])
         self.assertIn("ADR 001", (self.repo_root / "src" / "x.py").read_text(encoding="utf-8"))
+
+    def test_omitting_new_appends_one_past_the_current_highest(self):
+        """With no target given, the tool moves `old` to `next_number()`'s own choice."""
+        resolved, _ = adr.renumber(self.repo_root, 1, None)
+        self.assertEqual(resolved, 3)
+        self.assertTrue((self.adr_dir / "003-first.md").exists())
+
+    def test_omitting_new_on_the_corpus_max_still_refuses_the_gap_it_would_open(self):
+        """Auto-picking gets no exemption: vacating the current max always opens a hole."""
+        self.write("003-third.md", adr_text(title="3: Third"))
+        self.manage()
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 3, None)
+        self.assertTrue((self.adr_dir / "003-third.md").exists())
+
+    def test_refuses_a_target_that_would_open_a_gap(self):
+        """Moving onto a number past a hole is refused before any write."""
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 1, 5)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
+        self.assertFalse((self.adr_dir / "005-first.md").exists())
 
     def test_refuses_a_number_already_claimed(self):
         """Moving onto a number another ADR holds is refused before any write."""
@@ -1523,6 +1558,77 @@ class RenumberTests(RepoTestCase):
             adr.renumber(self.repo_root, 1, 5)
         self.assertTrue((self.adr_dir / "001-first.md").exists())
 
+    def test_resolves_a_collision_on_old_by_moving_one_file_past_the_max(self):
+        """A pre-existing collision naming `old` is the one fault `renumber` may act through."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        resolved, _ = adr.renumber(self.repo_root, 1, None)
+        self.assertEqual(resolved, 3)
+        self.assertTrue((self.adr_dir / "001-second.md").exists())
+        self.assertTrue((self.adr_dir / "003-first.md").exists())
+        _, findings = inspect(self.repo_root)
+        self.assertEqual(findings, [])
+
+    def test_a_collision_elsewhere_still_blocks_a_renumber_of_old(self):
+        """The collision exemption is scoped to `old` alone; an unrelated one still refuses."""
+        self.write("003-third.md", adr_text(title="3: Third"))
+        self.write("3-fourth.md", adr_text(title="3: Fourth"))
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 1, None)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
+
+    def test_a_collision_leaves_an_undecidable_peer_citation_for_the_agent(self):
+        """A bare `ADR 1` mention with no definition of its own could name either file."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write("003-third.md", adr_text(title="3: Third") + "\nSee ADR 1 for context.\n")
+        _, remaining = adr.renumber(self.repo_root, 1, None)
+        peer = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+        self.assertIn("See ADR 1 for context.", peer)
+        self.assertTrue(any("003-third.md" in line and "ADR 1" in line for line in remaining))
+
+    def test_a_collision_reports_a_bare_citation_even_beside_a_settling_link(self):
+        """A citation is never guessed safe from a link elsewhere in the same peer."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write(
+            "003-third.md",
+            adr_text(title="3: Third")
+            + "\nSee [ADR 1][] for context.\n\n[ADR 1]: 001-second.md\n",
+        )
+        _, remaining = adr.renumber(self.repo_root, 1, None)
+        peer = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+        self.assertIn("See [ADR 1][] for context.", peer)
+        self.assertTrue(any("003-third.md" in line and "ADR 1" in line for line in remaining))
+
+    def test_a_collisions_slug_anchored_link_target_still_moves_regardless(self):
+        """The one part of a citation the tool can trust — path's own slug — still moves."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write(
+            "003-third.md",
+            adr_text(title="3: Third")
+            + "\nSee [ADR 1][] for context.\n\n[ADR 1]: 001-first.md\n",
+        )
+        _, remaining = adr.renumber(self.repo_root, 1, None)
+        peer = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+        self.assertIn("[ADR 1]: 004-first.md", peer)
+        self.assertTrue(
+            any(
+                "003-third.md" in line and "[ADR 1]: 004-first.md" in line for line in remaining
+            )
+        )
+
+    def test_renumber_refuses_to_repeat_old_back_as_new(self):
+        """`renumber OLD OLD` is a no-op the tool refuses, not a silent self-delete."""
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 1, 1)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
+
+    def test_a_three_way_collision_refuses_rather_than_resolve_one_pair(self):
+        """A number claimed by three files needs a file moved by hand first, not a guess."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write("1-third.md", adr_text(title="1: Do the thing, a third time"))
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 1, None)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
+
     def test_moves_a_padded_peer_field(self):
         """A hand-authored `superseded-by: 001` names the same ADR as `1` and follows it."""
         self.write(
@@ -1530,9 +1636,37 @@ class RenumberTests(RepoTestCase):
             adr_text(status="Superseded", title="3: Third", **{"superseded-by": "001"}),
         )
         self.manage()
-        adr.renumber(self.repo_root, 1, 5)
+        adr.renumber(self.repo_root, 1, 4)
         content = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
-        self.assertIn("\nsuperseded-by: 5\n", content)
+        self.assertIn("\nsuperseded-by: 4\n", content)
+
+    def test_a_collision_leaves_an_undecidable_peer_field_for_the_agent(self):
+        """`superseded-by: 1` with no citation to anchor it could name either colliding file."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write(
+            "003-third.md",
+            adr_text(status="Superseded", title="3: Third", **{"superseded-by": "1"}),
+        )
+        _, remaining = adr.renumber(self.repo_root, 1, None)
+        content = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+        self.assertIn("\nsuperseded-by: 1\n", content)
+        self.assertTrue(
+            any("003-third.md" in line and "superseded-by" in line for line in remaining)
+        )
+
+    def test_an_undecidable_list_valued_field_is_reported_as_written_not_as_repr(self):
+        """A reported `revisit-discharged-by: [1, 2]` reads as YAML, not a Python list."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write(
+            "003-third.md",
+            adr_text(
+                title="3: Third",
+                **{"revisit-when": "A condition.", "revisit-discharged-by": "[1, 2]"},
+            ),
+        )
+        _, remaining = adr.renumber(self.repo_root, 1, None)
+        self.assertTrue(any("`revisit-discharged-by: [1, 2]`" in line for line in remaining))
+        self.assertFalse(any("'1'" in line or "['1'" in line for line in remaining))
 
 
 class MainEditTests(RepoTestCase):
@@ -1584,13 +1718,20 @@ class MainEditTests(RepoTestCase):
         (self.repo_root / "src" / "x.py").write_text(
             "# ADR 001 forbids this\n", encoding="utf-8"
         )
-        code, out, _ = self.run_main("renumber", "1", "5")
+        code, out, _ = self.run_main("renumber", "1", "3")
         self.assertEqual(code, 0)
         self.assertEqual(
             out,
-            "Citations outside docs/adr still name the old number; move each by hand:\n"
+            "Citations still name the old number; move each by hand:\n"
             "  src/x.py:1: # ADR 001 forbids this\n",
         )
+
+    def test_renumber_without_new_reports_the_number_it_picked(self):
+        """Omitting NEW on the command line still moves the ADR, and says where to."""
+        code, out, _ = self.run_main("renumber", "1")
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "ADR 1 is now 3\n")
+        self.assertTrue((self.adr_dir / "003-first.md").exists())
 
     def test_renumber_onto_a_claimed_number_exits_one_and_writes_nothing(self):
         """`renumber` onto a number another ADR holds fails before any write."""
