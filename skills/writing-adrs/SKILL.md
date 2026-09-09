@@ -480,20 +480,22 @@ not by one guessing ahead of the other.
 Once a real collision exists — your rebase brought a sibling's ADR in under the same number as
 your own — run `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD` on your own file, `OLD` being
 the number you now share; leave `NEW` for the tool to pick (one past everything now in the
-tree). It moves the file, the heading, and the index outright. For every other ADR, it judges
-once whether that file's citations of `OLD` are safe to rewrite to `NEW`: safe when the file
-carries its own `[ADR OLD]: <target>` reference-link definition naming the file being moved,
-since the target settles it either way; unsafe once `OLD` names two files and the file has no
-such link, since nothing left in its text says which one a bare `ADR OLD` or
-`superseded-by: OLD` meant. Where it is safe, every citation of `OLD` in that file is
-rewritten to `NEW`; where it is not, every one is left naming `OLD` and reported for you to
-move by hand — alongside every citation outside `docs/adr/` (a code comment, `AGENTS.md`, a
-plan, a skill), which this never edits either. The search covers the `ADR NNN` and `NNN-<slug>` forms alone: a path form such as `docs/adr/NNN` matches
-neither, and the renumbered ADR's own `summary`, `revisit-when` or body naming its number is
-yours too. Miss one and it still resolves — to whichever decision kept the number — which is
-the silent failure the numbering rule exists to prevent. Say in its Context that it was
-renumbered and from what, so a citation you could not reach — a review comment, a link from
-outside the repository — still leads somewhere.
+tree). It picks whichever of the two `OLD`-numbered files sorts first by filename — check
+that this is the one you meant to move before trusting the result, since the tool has no
+other way to tell your file from the sibling's, and refuses outright rather than guess if a
+third file also claims `OLD`. It moves the file, the heading, and the index outright, and a
+peer's link target naming the moved file's own slug follows too, since that slug belongs to
+no other file. Everything else a peer says about `OLD` — a bare `ADR OLD` citation,
+`superseded-by: OLD`, `revisit-discharged-by: [OLD]` — is safe to rewrite the same way only
+while `OLD` names one file; the moment it names two, nothing left in that text says which one
+was meant, so every one of those is left naming `OLD` and reported for you to move by hand —
+alongside every citation outside `docs/adr/` (a code comment, `AGENTS.md`, a plan, a skill),
+which this never edits either. The search covers the `ADR NNN` and `NNN-<slug>` forms alone: a
+path form such as `docs/adr/NNN` matches neither, and the renumbered ADR's own `summary`,
+`revisit-when` or body naming its number is yours too. Miss one and it still resolves — to
+whichever decision kept the number — which is the silent failure the numbering rule exists to
+prevent. Say in its Context that it was renumbered and from what, so a citation you could not
+reach — a review comment, a link from outside the repository — still leads somewhere.
 
 Give `NEW` yourself only to land on a specific, already-gap-free number for a reason unrelated
 to the collision — grouping related decisions adjacently, say. The tool refuses either way, an

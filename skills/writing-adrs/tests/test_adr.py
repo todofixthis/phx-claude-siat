@@ -1585,8 +1585,8 @@ class RenumberTests(RepoTestCase):
         self.assertIn("See ADR 1 for context.", peer)
         self.assertTrue(any("003-third.md" in line and "ADR 1" in line for line in remaining))
 
-    def test_a_peers_own_link_definition_settles_which_colliding_file_it_meant(self):
-        """A peer citing `[ADR 1]: 001-second.md` clearly means the sibling, never path."""
+    def test_a_collision_reports_a_bare_citation_even_beside_a_settling_link(self):
+        """A citation is never guessed safe from a link elsewhere in the same peer."""
         self.write("001-second.md", adr_text(title="1: Do the thing, again"))
         self.write(
             "003-third.md",
@@ -1595,8 +1595,39 @@ class RenumberTests(RepoTestCase):
         )
         _, remaining = adr.renumber(self.repo_root, 1, None)
         peer = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
-        self.assertIn("[ADR 1]: 001-second.md", peer)
-        self.assertFalse(any("003-third.md" in line for line in remaining))
+        self.assertIn("See [ADR 1][] for context.", peer)
+        self.assertTrue(any("003-third.md" in line and "ADR 1" in line for line in remaining))
+
+    def test_a_collisions_slug_anchored_link_target_still_moves_regardless(self):
+        """The one part of a citation the tool can trust — path's own slug — still moves."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write(
+            "003-third.md",
+            adr_text(title="3: Third")
+            + "\nSee [ADR 1][] for context.\n\n[ADR 1]: 001-first.md\n",
+        )
+        _, remaining = adr.renumber(self.repo_root, 1, None)
+        peer = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
+        self.assertIn("[ADR 1]: 004-first.md", peer)
+        self.assertTrue(
+            any(
+                "003-third.md" in line and "[ADR 1]: 004-first.md" in line for line in remaining
+            )
+        )
+
+    def test_renumber_refuses_to_repeat_old_back_as_new(self):
+        """`renumber OLD OLD` is a no-op the tool refuses, not a silent self-delete."""
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 1, 1)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
+
+    def test_a_three_way_collision_refuses_rather_than_resolve_one_pair(self):
+        """A number claimed by three files needs a file moved by hand first, not a guess."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write("1-third.md", adr_text(title="1: Do the thing, a third time"))
+        with self.assertRaises(adr.AdrError):
+            adr.renumber(self.repo_root, 1, None)
+        self.assertTrue((self.adr_dir / "001-first.md").exists())
 
     def test_moves_a_padded_peer_field(self):
         """A hand-authored `superseded-by: 001` names the same ADR as `1` and follows it."""
@@ -1622,6 +1653,20 @@ class RenumberTests(RepoTestCase):
         self.assertTrue(
             any("003-third.md" in line and "superseded-by" in line for line in remaining)
         )
+
+    def test_an_undecidable_list_valued_field_is_reported_as_written_not_as_repr(self):
+        """A reported `revisit-discharged-by: [1, 2]` reads as YAML, not a Python list."""
+        self.write("001-second.md", adr_text(title="1: Do the thing, again"))
+        self.write(
+            "003-third.md",
+            adr_text(
+                title="3: Third",
+                **{"revisit-when": "A condition.", "revisit-discharged-by": "[1, 2]"},
+            ),
+        )
+        _, remaining = adr.renumber(self.repo_root, 1, None)
+        self.assertTrue(any("`revisit-discharged-by: [1, 2]`" in line for line in remaining))
+        self.assertFalse(any("'1'" in line or "['1'" in line for line in remaining))
 
 
 class MainEditTests(RepoTestCase):

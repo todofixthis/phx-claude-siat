@@ -1021,30 +1021,39 @@ def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[st
 
     `new` omitted is the tool's own choice (ADR 033): `next_number()`, computed with
     `old`'s own file still on disk. Given explicitly, `new` is still the caller's — but
-    either way, the move is refused before any write if it would leave a hole: only `old`
-    sitting at the corpus's current edge can move without opening one, since nothing else
-    shifts to close the gap it vacates. That closes the move this ADR was written
-    against — skip ahead of a number a sibling branch has not yet merged, leaving a hole
-    for it. Two branches landing on the same number is resolved by both keeping it and
-    whichever merges second renumbering afterward, not by one guessing ahead of the other.
+    either way, the move is refused before any write if it would repeat `old` back or
+    open a gap between whatever is left on disk: only `old` sitting at the corpus's
+    current top edge can move without opening one, since nothing else shifts to close the
+    gap it vacates. That closes the move this ADR was written against — skip ahead of a
+    number a sibling branch has not yet merged, leaving a hole for it. Two branches
+    landing on the same number is resolved by both keeping it and whichever merges second
+    renumbering afterward, not by one guessing ahead of the other.
 
     A pre-existing collision naming `old` itself does not block this call — resolving
-    exactly that collision is what it is for — but any other existing fault still does,
-    the same as every other command here.
+    exactly that collision is what it is for — but only where `old` names exactly two
+    files: a third would need a second call, since one move can close one collision. Any
+    other existing fault still blocks, the same as every other command here.
 
-    Rewrites the filename and the heading number outright. A peer's own citations follow
-    only where they can be trusted: its `[ADR <old>]: <target>` reference-link definition,
-    when it has one, names the specific file `old` means in that peer — path itself, or
-    (mid-collision) the sibling keeping the number — and every citation in that peer
-    follows that verdict. A peer with no such definition is judged by `old` alone: safe to
-    treat as path's while `old` names one file, ambiguous the moment it names two, since
-    nothing left in the text says which of them a bare `ADR <old>` or `superseded-by: <old>`
-    meant. An ambiguous citation is reported instead of guessed — same as one outside
-    docs/adr, which this never edits either.
+    Rewrites the filename and the heading number outright, and a peer's `<old>-slug` link
+    target wherever it appears — that slug belongs to no file but this one, collision or
+    not. A peer's bare `ADR <old>` citation or field naming `old` (`superseded-by`,
+    `revisit-discharged-by`) is safe to rewrite the same way only while `old` names one
+    file; the moment it names two, nothing left in that text says which of them a bare
+    mention meant, so every one is left as `old` and reported instead of guessed — same as
+    a citation outside docs/adr, which this never edits either.
     """
     path = find_adr(root, old)
     _, findings = inspect(root)
-    has_collision = any(f.kind == "collision" and f.value == str(old) for f in findings)
+    collisions_on_old = [f for f in findings if f.kind == "collision" and f.value == str(old)]
+    if len(collisions_on_old) > 1:
+        # A number claimed by three or more files collides pairwise more than once;
+        # resolving one pair still leaves a real collision for `regenerate_or_raise` to
+        # catch after writing, which is a fault left half-fixed rather than reported.
+        raise AdrError(
+            f"ADR {old} is claimed by more than two files; move one by hand first, since "
+            "this resolves one collision at a time"
+        )
+    has_collision = bool(collisions_on_old)
     blocking = [f for f in findings if (f.kind, f.value) != ("collision", str(old))]
     if blocking:
         raise AdrError("; ".join(f.message for f in blocking))
@@ -1056,6 +1065,8 @@ def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[st
     }
     if new is None:
         new = next_number(adr_dir)
+    elif new == old:
+        raise AdrError(f"ADR {old} is already numbered {old}; give a different NEW")
     elif new in others:
         raise AdrError(f"ADR {new} already exists; pick a number nothing claims")
     opened = find_gaps(others | {new})
@@ -1068,7 +1079,6 @@ def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[st
     slug = path.name[len(RE_FILE_NUMBER.match(path.name).group(1)) :]
     re_citation = re.compile(rf"\bADR 0*{old}\b")
     re_link = re.compile(rf"\b0*{old}({re.escape(slug)})")
-    re_definition = re.compile(rf"^\[ADR 0*{old}\]:\s*(\S+)", re.MULTILINE)
     re_heading = re.compile(rf"^# 0*{old}:", re.MULTILINE)
 
     ambiguous = []
@@ -1077,15 +1087,10 @@ def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[st
             continue
         text = read_document(peer)
         relative = peer.relative_to(root).as_posix()
-        definition = re_definition.search(text)
-        targets_path = bool(re_link.fullmatch(definition.group(1))) if definition else None
-        if targets_path is False:
-            # This peer's own definition names the sibling keeping `old`, not path — none
-            # of its citations are path's to follow.
-            peer.write_text(text, encoding="utf-8")
-            continue
-        undecidable = has_collision and targets_path is None
-        if undecidable:
+        # The slug-anchored target names path uniquely, collision or not, so it always
+        # moves first — everything reported below reflects what is left on disk after.
+        text = re_link.sub(rf"{new_padded}\1", text)
+        if has_collision:
             ambiguous.extend(
                 f"{relative}:{index}: {line}"
                 for index, line in enumerate(text.split("\n"), start=1)
@@ -1093,7 +1098,6 @@ def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[st
             )
         else:
             text = re_citation.sub(f"ADR {new_padded}", text)
-        text = re_link.sub(rf"{new_padded}\1", text)
         peer_updates = {}
         peer_fields = parse_adr(text)[0]
         for field in (SUPERSEDED_BY_FIELD, REVISIT_DISCHARGED_BY_FIELD):
@@ -1101,8 +1105,9 @@ def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[st
             value = peer_fields.get(field)
             entries = value if isinstance(value, list) else [value]
             if any(names_number(entry, old) for entry in entries):
-                if undecidable:
-                    ambiguous.append(f"{relative}: `{field}: {value}`")
+                rendered = f"[{', '.join(entries)}]" if isinstance(value, list) else value
+                if has_collision:
+                    ambiguous.append(f"{relative}: `{field}: {rendered}`")
                     continue
                 moved = [str(new) if names_number(entry, old) else entry for entry in entries]
                 peer_updates[field] = (

@@ -155,5 +155,12 @@ either.
 - Does not and cannot make two branches choosing the same `next_number()` unreachable —
   only a gap surviving unnoticed once one is chosen. `revisit-when` names the one thing
   that would change that: the tool seeing another branch's own claim before choosing.
+- `renumber()` refuses a number claimed by three or more files rather than resolving one
+  pair and leaving a real collision behind for the index regeneration to fail on; the
+  caller moves one of the three by hand first. It also refuses `NEW` equal to `OLD`, since
+  that would move a file onto itself.
+- **Known limitation, not fixed here:** `renumber OLD` cannot tell the caller's own file
+  from the sibling sharing `OLD` — it always moves whichever sorts first by filename. Check
+  that this is the file you meant before trusting the result; the tool has no way to ask.
 
 [ADR 029]: 029-report-number-integrity-faults-from-the-reverse-lookup-too.md
