@@ -4,6 +4,8 @@ description = "US-to-NZ spelling sweep for the nz-english skill"
 license = "MIT"
 name = "nz-english"
 requires-python = ">=3.12, <4"
+# No build backend below, so nothing reads this — uv requires the field for a
+# workspace member, not for it to be meaningful.
 version = "1.0.0"
 
 # No runtime dependencies on purpose: the tool is standard library only, so a consumer
@@ -18,23 +20,8 @@ pre-commit = [
     "autohooks.plugins.ruff",
 ]
 
-[tool.black]
-line-length = 96
-
-[tool.ruff]
-line-length = 96
-
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 
-[dependency-groups]
-dev = [
-    "autohooks>=26,<27",
-    "autohooks-plugin-black>=23,<24",
-    "autohooks-plugin-pytest>=23,<24",
-    "autohooks-plugin-ruff>=25,<26",
-    "black>=26,<27",
-    "pytest>=9,<10",
-    "ruff>=0,<1",
-]
+# Dev toolchain pins and black/ruff settings live once at the workspace root (ADR 031).
