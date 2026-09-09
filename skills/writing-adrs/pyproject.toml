@@ -1,10 +1,10 @@
 [project]
 authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
 description = "ADR scaffolding, index and scope checks for the writing-adrs skill"
+dynamic = ["version"]
 license = "MIT"
 name = "writing-adrs"
 requires-python = ">=3.12, <4"
-version = "1.0.0"
 
 # No runtime dependencies on purpose: the tool is standard library only, so a consumer
 # runs `python3 <skilldir>/adr.py` with no virtualenv to build. The build backend exists
@@ -18,6 +18,13 @@ phx-adr = "adr:cli"
 build-backend = "hatchling.build"
 requires = ["hatchling>=1.27,<2"]
 
+# The plugin version lives only in plugin.json (ADR 001); read it rather than keeping
+# a second copy here for the two to drift out of.
+[tool.hatch.version]
+source = "regex"
+path = "../../.claude-plugin/plugin.json"
+pattern = '"version":\s*"(?P<version>[^"]+)"'
+
 [tool.hatch.build.targets.wheel]
 only-include = ["adr.py", "frontmatter.py", "hook.py"]
 
@@ -29,25 +36,10 @@ pre-commit = [
     "autohooks.plugins.ruff",
 ]
 
-[tool.black]
-line-length = 96
-# Pinned so black stops warning that it formatted for a Python it cannot parse.
-target-version = ["py312"]
-
-[tool.ruff]
-line-length = 96
-
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 
-[dependency-groups]
-dev = [
-    "autohooks>=26,<27",
-    "autohooks-plugin-black>=23,<24",
-    "autohooks-plugin-pytest>=23,<24",
-    "autohooks-plugin-ruff>=25,<26",
-    "black>=26,<27",
-    "pytest>=9,<10",
-    "ruff>=0,<1",
-]
+# Dev toolchain pins and black/ruff settings (including the py312 target-version, pinned
+# so black stops warning that it formatted for a Python it cannot parse) live once at the
+# workspace root (ADR 031).

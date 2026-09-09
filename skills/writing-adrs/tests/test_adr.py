@@ -42,6 +42,7 @@ from adr import (
     relative_to_root,
     render_index,
     resolve_root,
+    resolve_subjects,
     scope_matches,
     scope_problems,
 )
@@ -889,6 +890,52 @@ class ReconcileTests(RepoTestCase):
         self.assertEqual(reconcile(self.repo_root, write=True), [])
 
 
+class ResolveSubjectsTests(RepoTestCase):
+    """Unit tests for ``resolve_subjects()``: repo-relative subjects, directories slashed.
+
+    Shared by `binding()` here and in `backlog.py`'s own — its catalogue of edge cases
+    lives here rather than in either `BindingTests`, which asserts only that one
+    representative case propagates.
+    """
+
+    def test_matches_a_directory_token_with_or_without_its_slash(self):
+        """A directory subject is returned trailing-slashed, with or without one on input."""
+        self.write_scoped("scripts/adr/x.py")
+        self.assertEqual(resolve_subjects(self.repo_root, ["scripts/adr"]), ["scripts/adr/"])
+        self.assertEqual(
+            resolve_subjects(self.repo_root, ["scripts/adr/x.py"]), ["scripts/adr/x.py"]
+        )
+
+    def test_an_absolute_path_inside_the_root_is_made_relative(self):
+        """An absolute path, as a hook receives it, is resolved to its repo-relative form."""
+        absolute = str(self.repo_root / SCOPED_FILE)
+        self.assertEqual(resolve_subjects(self.repo_root, [absolute]), [SCOPED_FILE])
+
+    def test_a_path_outside_the_root_is_dropped(self):
+        """A path under no managed root contributes no subject, rather than raising."""
+        self.assertEqual(resolve_subjects(self.repo_root, ["/nowhere/else.py"]), [])
+
+    def test_a_path_through_a_symlink_leaving_the_root_is_dropped(self):
+        """The link is inside the root and its target is not, and the answer follows the target.
+
+        Without resolving, the path reads as `linked/x.py` and stays a subject; resolved,
+        it is outside the root, where this corpus has no answer to give.
+        """
+        outside = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        (outside / "x.py").write_text("", encoding="utf-8")
+        (self.repo_root / "linked").symlink_to(outside, target_is_directory=True)
+        self.assertEqual(
+            resolve_subjects(self.repo_root, [str(self.repo_root / "linked" / "x.py")]), []
+        )
+
+    def test_matches_any_of_several_paths(self):
+        """Every resolvable path becomes its own subject, in order."""
+        self.assertEqual(
+            resolve_subjects(self.repo_root, ["docs/unrelated.md", SCOPED_FILE]),
+            ["docs/unrelated.md", SCOPED_FILE],
+        )
+
+
 class BindingTests(RepoTestCase):
     """Unit tests for ``binding()``: the reverse lookup, Archived included, directories slashed."""
 
@@ -911,12 +958,6 @@ class BindingTests(RepoTestCase):
             [r.status for r in binding(self.repo_root, [SCOPED_FILE])], ["Archived"]
         )
 
-    def test_an_absolute_path_inside_the_root_matches(self):
-        """An absolute path, as a hook receives it, is made repo-relative before matching."""
-        self.write("001-first.md", adr_text())
-        absolute = str(self.repo_root / SCOPED_FILE)
-        self.assertEqual([r.number for r in binding(self.repo_root, [absolute])], ["001"])
-
     def test_a_path_outside_the_root_binds_nothing(self):
         """A path under no managed root is the answer "nothing binds this", not an error."""
         self.write("001-first.md", adr_text())
@@ -929,18 +970,6 @@ class BindingTests(RepoTestCase):
         with contextlib.redirect_stderr(err):
             self.assertEqual(binding(self.repo_root, [SCOPED_FILE]), [])
         self.assertIn("001-bad.md could not be read, so it binds nothing here", err.getvalue())
-
-    def test_a_path_through_a_symlink_leaving_the_root_binds_nothing(self):
-        """The link is inside the root and its target is not, and the answer follows the target.
-
-        Without resolving, the path reads as `linked/x.py` and matches the entry; resolved,
-        it is outside the root, where this corpus has no answer to give.
-        """
-        outside = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
-        (outside / "x.py").write_text("", encoding="utf-8")
-        (self.repo_root / "linked").symlink_to(outside, target_is_directory=True)
-        self.write("001-first.md", adr_text(scope="[linked/]"))
-        self.assertEqual(binding(self.repo_root, [str(self.repo_root / "linked" / "x.py")]), [])
 
     def test_a_directory_named_like_an_adr_binds_nothing(self):
         """The lookup opens every ADR it sees, and a directory named like one would raise."""
@@ -971,6 +1000,51 @@ class BindingTests(RepoTestCase):
         self.write("001-first.md", adr_text())
         result = binding(self.repo_root, ["docs/unrelated.md", SCOPED_FILE])
         self.assertEqual([r.number for r in result], ["001"])
+
+    def test_warns_of_a_shared_number_and_binds_only_the_first_claimant(self):
+        """Two files sharing a number must not render as two decisions (ADR 029)."""
+        self.write("001-first.md", adr_text(title="1: Do the thing"))
+        self.write("1-second.md", adr_text(title="1: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual([r.filename for r in result], ["001-first.md"])
+        self.assertIn("1-second.md shares its number with 001-first.md", err.getvalue())
+
+    def test_warns_of_a_heading_that_disagrees_with_its_filename(self):
+        """A mismatch would otherwise name a decision from one file's number and another's title (ADR 029)."""
+        self.write("002-second.md", adr_text(title="1: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual(result, [])
+        self.assertIn(
+            "002-second.md is numbered 002 by its filename and 1 by its heading",
+            err.getvalue(),
+        )
+
+    def test_a_mismatched_first_claimant_still_hides_a_later_collision(self):
+        """A skipped mismatch must still claim its number, or a later file reads as first."""
+        self.write("002-first.md", adr_text(title="1: Do the thing"))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual(result, [])
+        self.assertIn("002-second.md shares its number with 002-first.md", err.getvalue())
+
+    def test_reports_a_mismatch_and_a_collision_on_the_same_file(self):
+        """Both faults are real, so neither may short-circuit the other's warning."""
+        self.write("005-a.md", adr_text(title="5: Do the thing"))
+        self.write("005-b.md", adr_text(title="9: Do another thing"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = binding(self.repo_root, [SCOPED_FILE])
+        self.assertEqual([r.filename for r in result], ["005-a.md"])
+        self.assertIn(
+            "005-b.md is numbered 005 by its filename and 9 by its heading", err.getvalue()
+        )
+        self.assertIn("005-b.md shares its number with 005-a.md", err.getvalue())
 
 
 class MainTests(RepoTestCase):

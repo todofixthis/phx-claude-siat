@@ -115,6 +115,14 @@ class IsNoiseTests(unittest.TestCase):
         """`behaviorist` is the second word the skill warns is a hit, not noise."""
         self.assertFalse(scan.is_noise("behaviorist"))
 
+    def test_treats_an_unenumerated_aging_word_as_noise(self):
+        """`triaging` is not on the hand-enumerated list, so only a suffix rule catches it."""
+        self.assertTrue(scan.is_noise("triaging"))
+
+    def test_leaves_the_bare_word_aging_reportable(self):
+        """`aging` itself is the real hit the row exists to report, not a suffix match."""
+        self.assertFalse(scan.is_noise("aging"))
+
 
 class UnderOwnSkillTests(unittest.TestCase):
     """Unit tests for ``under_own_skill()``."""
@@ -158,8 +166,8 @@ class DiscoverTests(TempTreeTestCase):
         git_init(self.root)
         write(self.root, "a.md", "color")
         write(self.root, "b.md", "color")
-        paths, used_git = scan.discover([self.root], OWN_DIR)
-        self.assertTrue(used_git)
+        paths, source = scan.discover([self.root], OWN_DIR)
+        self.assertEqual(source, scan.SOURCE_GIT)
         self.assertEqual([path.name for path in paths], ["a.md", "b.md"])
 
     def test_honours_gitignore(self):
@@ -175,8 +183,8 @@ class DiscoverTests(TempTreeTestCase):
         """A directory that is not a repository must still be swept."""
         write(self.root, "a.md", "color")
         write(self.root, "b.md", "color")
-        paths, used_git = scan.discover([self.root], OWN_DIR)
-        self.assertFalse(used_git)
+        paths, source = scan.discover([self.root], OWN_DIR)
+        self.assertEqual(source, scan.SOURCE_WALK)
         self.assertEqual([path.name for path in paths], ["a.md", "b.md"])
 
     def test_accepts_a_file_as_a_target(self):
@@ -185,6 +193,28 @@ class DiscoverTests(TempTreeTestCase):
         paths, _ = scan.discover([target], OWN_DIR)
         self.assertEqual(paths, [target.resolve()])
 
+    def test_an_explicit_file_list_reports_files_not_walk(self):
+        """A file-list invocation neither walked a directory nor asked git to filter one.
+
+        Inside a repository the old code reported `walk` here regardless — the defect the
+        pre-commit-safety backlog item names, since a hook always hands scan.py a file
+        list.
+        """
+        git_init(self.root)
+        first = write(self.root, "a.md", "color")
+        second = write(self.root, "b.md", "color")
+        _paths, source = scan.discover([first, second], OWN_DIR)
+        self.assertEqual(source, scan.SOURCE_FILES)
+
+    def test_a_directory_target_reports_git_even_beside_file_targets(self):
+        """One directory target is enough to ask git, so the header must say so."""
+        git_init(self.root)
+        file_target = write(self.root, "a.md", "color")
+        (self.root / "sub").mkdir()
+        write(self.root, "sub/b.md", "color")
+        _paths, source = scan.discover([file_target, self.root / "sub"], OWN_DIR)
+        self.assertEqual(source, scan.SOURCE_GIT)
+
     def test_skips_a_binary_file(self):
         """A NUL byte marks a file whose contents are not prose."""
         (self.root / "bin.dat").write_bytes(b"color\0color")
@@ -192,10 +222,38 @@ class DiscoverTests(TempTreeTestCase):
         paths, _ = scan.discover([self.root], OWN_DIR)
         self.assertEqual([path.name for path in paths], ["a.md"])
 
-    def test_reports_a_missing_path(self):
-        """A path that does not exist is an error, never an empty clean result."""
+    def test_a_missing_target_raises_by_default(self):
+        """An explicit/interactive invocation must fail loudly on a mistyped path.
+
+        Without `skip_missing`, a missing target is a typo until proven otherwise — the
+        pre-existing-target case below is `skip_missing=True`, which is the hook's opt-in,
+        not the default.
+        """
+        existing = write(self.root, "a.md", "color")
         with self.assertRaises(scan.ScanError):
-            scan.discover([self.root / "nope"], OWN_DIR)
+            scan.discover([self.root / "nope", existing], OWN_DIR)
+
+    def test_skips_a_missing_target_but_keeps_the_rest_when_asked(self):
+        """A staged deletion must not block the files that do still exist.
+
+        A hook handing scan.py `git diff --cached --name-only` without `--diff-filter`
+        includes deleted paths, which no longer exist on disk — the case `skip_missing`
+        exists for.
+        """
+        existing = write(self.root, "a.md", "color")
+        paths, source = scan.discover(
+            [self.root / "nope", existing], OWN_DIR, skip_missing=True
+        )
+        self.assertEqual(paths, [existing.resolve()])
+        self.assertEqual(source, scan.SOURCE_FILES)
+
+    def test_a_wholly_missing_selection_is_nothing_to_check_when_skipping(self):
+        """Every target missing must read as nothing to check, never a clean empty result.
+
+        Only under `skip_missing=True`: the default instead raises, per the test above.
+        """
+        with self.assertRaises(scan.NothingToCheck):
+            scan.discover([self.root / "nope"], OWN_DIR, skip_missing=True)
 
 
 class ScanFunctionTests(TempTreeTestCase):
@@ -244,6 +302,23 @@ class ScanFunctionTests(TempTreeTestCase):
         results = scan.scan([path], self.root)
         row = next(row for row in ROWS if row.us == "-og endings")
         self.assertEqual([hit["token"] for hit in results[row]["hits"]], ["cataloged"])
+
+    def test_treats_an_unenumerated_aging_word_as_noise_not_a_hit(self):
+        """`triaging` must be suppressed by the suffix rule, not reported as a hit."""
+        path = write(self.root, "a.md", "triaging the queue")
+        results = scan.scan([path], self.root)
+        row = next(row for row in ROWS if row.us == "aluminum / artifact / aging")
+        self.assertEqual(
+            (results[row]["hits"], dict(results[row]["noise"])), ([], {"triaging": 1})
+        )
+
+    def test_still_reports_aging_as_a_whole_word_in_a_compound(self):
+        """A hyphen breaks the letter run, so `anti-aging` is `aging` itself, not a longer
+        word, and must still report."""
+        path = write(self.root, "a.md", "an anti-aging cream")
+        results = scan.scan([path], self.root)
+        row = next(row for row in ROWS if row.us == "aluminum / artifact / aging")
+        self.assertEqual([hit["token"] for hit in results[row]["hits"]], ["aging"])
 
     def test_scans_two_files(self):
         """A subject that read only the first path would pass every other test here."""
@@ -316,7 +391,9 @@ class RenderTests(TempTreeTestCase):
     def test_prints_every_row(self):
         """All seventeen rows print, so the footer is never the only evidence one ran."""
         path = write(self.root, "a.md", "nothing")
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, False)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False
+        )
         for row in ROWS:
             with self.subTest(row=row.us):
                 self.assertIn(f"{row.us} → {row.nz}", report)
@@ -329,7 +406,9 @@ class RenderTests(TempTreeTestCase):
         itself and a wrong per-row count passes.
         """
         path = write(self.root, "a.md", "colorize and a literal gray")
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, False)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False
+        )
         counted = re.findall(r"\[(\d+) to triage, (\d+) noise\]", report)
         self.assertTrue(counted, "no row headers found to sum")
         hits = sum(int(pair[0]) for pair in counted)
@@ -339,26 +418,34 @@ class RenderTests(TempTreeTestCase):
     def test_marks_a_whole_judgement_row(self):
         """`license` needs reading whichever pattern matched, so the mark carries no span."""
         path = write(self.root, "a.md", "the license")
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, False)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False
+        )
         header = next(line for line in report.splitlines() if line.startswith("license (noun)"))
         self.assertTrue(header.endswith("*judgement"), header)
 
     def test_names_the_span_on_a_mixed_row(self):
         """Only `meter` needs reading on the `-er` row, so the mark must name it."""
         path = write(self.root, "a.md", "a kilometer")
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, False)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False
+        )
         self.assertIn("*judgement: meter", report)
 
     def test_collapses_noise_by_default(self):
         """The default report names the noise words and their counts on one line."""
         path = write(self.root, "a.md", "a literal literal thing")
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, False)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False
+        )
         self.assertIn("noise (2): literal ×2", report)
 
     def test_expands_noise_on_request(self):
         """`--show-noise` lists each suppressed word so a suspected hit can be checked."""
         path = write(self.root, "a.md", "a literal thing")
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, True)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, True
+        )
         self.assertIn("noise: literal ×1", report)
 
     def test_names_the_agent_instructions_it_found(self):
@@ -370,31 +457,59 @@ class RenderTests(TempTreeTestCase):
         first = write(self.root, "AGENTS.md", "nothing")
         second = write(self.root, "sub/CLAUDE.md", "nothing")
         paths = [first, second]
-        report = scan.render(scan.scan(paths, self.root), paths, self.root, False, False)
+        report = scan.render(
+            scan.scan(paths, self.root), paths, self.root, scan.SOURCE_WALK, False
+        )
         self.assertIn("agent instructions: AGENTS.md, sub/CLAUDE.md", report)
 
     def test_caps_the_hits_it_lists(self):
         """An uncapped report is ruinous to read, so the listing is cut past the limit."""
         path = write(self.root, "a.md", "\n".join(["gray"] * 5))
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, False, 2)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False, 2
+        )
         self.assertIn("… 3 more not shown", report)
 
     def test_the_capped_row_still_counts_every_hit(self):
         """Only the listing is cut; a reader must be able to trust the number."""
         path = write(self.root, "a.md", "\n".join(["gray"] * 5))
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, False, 2)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False, 2
+        )
         self.assertIn("[5 to triage, 0 noise]", report)
 
     def test_reports_how_many_files_it_read_and_how(self):
         """The file count is the only signal separating a clean tree from an unread one."""
         path = write(self.root, "a.md", "nothing")
-        report = scan.render(scan.scan([path], self.root), [path], self.root, True, False)
-        self.assertIn(f"swept: {self.root} (1 files, git)", report)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_GIT, False
+        )
+        self.assertIn(f"swept: {self.root} (1 file, git)", report)
+
+    def test_singular_file_count_reads_file_not_files(self):
+        """`1 files` disagrees in number; a single hit must read `1 file`."""
+        path = write(self.root, "a.md", "nothing")
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_FILES, False
+        )
+        self.assertIn(f"swept: {self.root} (1 file, files)", report)
+
+    def test_plural_file_count_reads_files(self):
+        """More than one file must keep the plural."""
+        first = write(self.root, "a.md", "nothing")
+        second = write(self.root, "b.md", "nothing")
+        paths = [first, second]
+        report = scan.render(
+            scan.scan(paths, self.root), paths, self.root, scan.SOURCE_WALK, False
+        )
+        self.assertIn(f"swept: {self.root} (2 files, walk)", report)
 
     def test_says_so_when_no_agent_instructions_exist(self):
         """Absence must be stated, not left as a blank a reader reads as an error."""
         path = write(self.root, "a.md", "nothing")
-        report = scan.render(scan.scan([path], self.root), [path], self.root, False, False)
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False
+        )
         self.assertIn("agent instructions: none found", report)
 
 
@@ -529,9 +644,19 @@ class JudgementMarkTests(unittest.TestCase):
 class CommonBaseTests(TempTreeTestCase):
     """Unit tests for ``common_base()``."""
 
-    def test_a_single_target_is_its_own_base(self):
-        """One target means every path is shown relative to it."""
+    def test_a_single_directory_target_is_its_own_base(self):
+        """One directory target means every path is shown relative to it."""
         self.assertEqual(scan.common_base([self.root]), self.root)
+
+    def test_a_single_file_target_uses_its_parent(self):
+        """A lone file is not a directory hits can be shown relative to — its parent is.
+
+        The old behaviour returned the file itself, which broke the header's "agent
+        instructions" line: `relative_to()` computed against a file raises, so it fell
+        back to printing `.` regardless of the file's real location.
+        """
+        target = write(self.root, "a.md", "color")
+        self.assertEqual(scan.common_base([target]), self.root)
 
     def test_two_targets_use_their_common_ancestor(self):
         """The header must name somewhere the swept files live, not the working directory."""
@@ -589,9 +714,39 @@ class MainTests(TempTreeTestCase):
         write(self.root, "a.md", "the license")
         self.assertEqual(scan.main([str(self.root)], OWN_DIR), scan.EXIT_HITS)
 
-    def test_a_missing_path_exits_two(self):
-        """A failed run is exit 2, which the skill escalates rather than believes."""
-        self.assertEqual(scan.main([str(self.root / "nope")], OWN_DIR), scan.EXIT_ERROR)
+    def test_a_missing_path_exits_error_by_default(self):
+        """An interactive/explicit invocation must fail loudly on a mistyped path.
+
+        This is the regression this test replaces a stale expectation for: a bare
+        invocation used to raise `ScanError` on a missing path, then this skill's own
+        pre-commit-hook change made `discover()` skip it unconditionally, so a typo
+        among explicit arguments silently reported a shorter sweep as clean instead of
+        failing. `--hook` (below) is how a hook opts back into skipping.
+        """
+        code = scan.main([str(self.root / "nope")], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_ERROR)
+
+    def test_a_missing_target_beside_a_real_one_still_fails_by_default(self):
+        """A mistyped path beside a real one must not be silently dropped from the sweep.
+
+        Concretely: `scan.py mistyped_path.md real.md` after fixing spellings in two
+        files but typing one filename wrong must fail rather than quietly checking only
+        `real.md` and reporting it clean.
+        """
+        existing = write(self.root, "a.md", "gray")
+        code = scan.main([str(self.root / "nope"), str(existing)], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_ERROR)
+
+    def test_hook_flag_makes_a_wholly_missing_selection_nothing_to_check(self):
+        """A hook's staged deletion with nothing else given must not read as a broken tool."""
+        code = scan.main(["--hook", str(self.root / "nope")], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_NOTHING_TO_CHECK)
+
+    def test_hook_flag_skips_a_missing_target_beside_a_real_one(self):
+        """Under `--hook`, a staged deletion among other staged files must not block the rest."""
+        existing = write(self.root, "a.md", "gray")
+        code = scan.main(["--hook", str(self.root / "nope"), str(existing)], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_HITS)
 
     def test_an_unknown_verify_name_exits_three(self):
         """A mistyped name is the caller's error, not a broken tool."""
@@ -626,10 +781,48 @@ class MainTests(TempTreeTestCase):
         code = scan.main(["--self-check", "--show-noise"], OWN_DIR)
         self.assertEqual(code, scan.EXIT_USAGE)
 
-    def test_a_tree_with_nothing_readable_exits_two(self):
-        """Zero files searched is a failed run, not a clean one — the whole point of this tool."""
+    def test_a_selection_of_only_excluded_files_is_nothing_to_check(self):
+        """A commit staging only a lock file or the changelog is healthy, not broken.
+
+        Zero files searched must still never read as a clean pass — the whole point of
+        this tool — but for a hook it is the correct outcome rather than a failed run, so
+        it gets its own code rather than sharing EXIT_ERROR.
+        """
         write(self.root, "CHANGELOG.md", "gray")
-        self.assertEqual(scan.main([str(self.root / "CHANGELOG.md")], OWN_DIR), scan.EXIT_ERROR)
+        code = scan.main([str(self.root / "CHANGELOG.md")], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_NOTHING_TO_CHECK)
+
+    def test_empty_paths_with_hook_is_nothing_to_check(self):
+        """A hook's empty file list must not silently fall back to sweeping the whole tree.
+
+        The working directory is switched to one holding a real hit first, so a mutation
+        that disables the flag's guard is caught by finding it (EXIT_HITS) rather than by
+        coincidentally landing on EXIT_NOTHING_TO_CHECK some other way.
+        """
+        import os
+
+        write(self.root, "a.md", "gray")
+        here = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, here)
+        code = scan.main(["--hook"], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_NOTHING_TO_CHECK)
+
+    def test_hook_does_not_change_a_real_invocation(self):
+        """The flag only changes behaviour when the path list is actually empty."""
+        write(self.root, "a.md", "gray")
+        code = scan.main(["--hook", str(self.root)], OWN_DIR)
+        self.assertEqual(code, scan.EXIT_HITS)
+
+    def test_no_paths_with_hook_absent_still_sweeps_cwd(self):
+        """Without the flag, an interactive no-args run keeps sweeping the working directory."""
+        import os
+
+        write(self.root, "a.md", "gray")
+        here = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, here)
+        self.assertEqual(scan.main([], OWN_DIR), scan.EXIT_HITS)
 
     def test_a_broken_bundle_exits_two_not_one(self):
         """A missing table.py must escalate, not arrive wearing the shape of a hit count.

@@ -1,17 +1,22 @@
 """Report US spellings for a person to triage. Never edits anything.
 
 Standard library only, so it runs wherever `python3` does and needs no virtualenv.
+The skill runs it as `python3 ${CLAUDE_SKILL_DIR}/scan.py`:
 
-Run it from the skill's own directory:
-
-    python3 <skilldir>/scan.py [PATH ...]
-    python3 <skilldir>/scan.py --verify NAME ...
-    python3 <skilldir>/scan.py --self-check
-    python3 <skilldir>/scan.py --show-noise
+    python3 ${CLAUDE_SKILL_DIR}/scan.py [PATH ...]
+    python3 ${CLAUDE_SKILL_DIR}/scan.py --verify NAME ...
+    python3 ${CLAUDE_SKILL_DIR}/scan.py --self-check
+    python3 ${CLAUDE_SKILL_DIR}/scan.py --show-noise
 
 Exit codes follow ripgrep's, which the skill already teaches: 0 nothing to triage, 1
 hits needing triage, 2 the run failed. 3 is a usage error, kept separate from 2 because
-the skill escalates a 2 as a broken tool and a mistyped argument is not that.
+the skill escalates a 2 as a broken tool and a mistyped argument is not that. 4 is
+nothing to check — every given path was excluded, or missing under --hook, or an empty
+selection was given with --hook — which a pre-commit hook needs told apart from 2: a
+healthy commit routinely selects nothing for this tool to do. Without --hook a missing
+path is instead a fail-fast ScanError (exit 2): outside a hook it is more likely a typo
+than a routine staged deletion, and a silently-shorter sweep is the failure this tool
+exists to end.
 
 Paths are anchored to this file's own directory so the tool finds its fixtures wherever
 the plugin is installed; that anchor is read on the `__main__` line only, and every
@@ -33,6 +38,7 @@ EXIT_CLEAN = 0
 EXIT_HITS = 1
 EXIT_ERROR = 2
 EXIT_USAGE = 3
+EXIT_NOTHING_TO_CHECK = 4
 
 # The floor the syntax here actually needs (`list | None` in an evaluated annotation).
 # Checked rather than assumed: a consumer runs this on whatever `python3` they have, not
@@ -50,7 +56,12 @@ try:
     # Guarded because a missing or broken bundle is a broken tool, and an unguarded
     # ImportError exits 1 — which this tool's own contract reads as "hits to triage".
     # A broken install must never be mistaken for a result.
-    from table import CLASS_LABELS, NOISE, ROWS  # noqa: F401  (re-exported for tests)
+    from table import (  # noqa: F401  (CLASS_LABELS and ROWS are re-exported for tests)
+        CLASS_LABELS,
+        NOISE,
+        NOISE_SUFFIXES,
+        ROWS,
+    )
 except ImportError as exc:  # pragma: no cover - exercised by a subprocess test
     sys.stderr.write(f"error: cannot load the substitution table beside this script: {exc}\n")
     raise SystemExit(EXIT_ERROR) from exc
@@ -71,6 +82,14 @@ BINARY_SNIFF_BYTES = 8192
 
 AGENT_INSTRUCTION_NAMES = ("AGENTS.md", "CLAUDE.md")
 
+# The header's provenance label. `files` means every target was a file, so nothing
+# needed discovering; `git` and `walk` mean a directory target was swept, filtered or
+# not. Distinct from a plain bool so a file-list invocation cannot be reported as
+# `walk`, which it neither did nor needed.
+SOURCE_FILES = "files"
+SOURCE_GIT = "git"
+SOURCE_WALK = "walk"
+
 # Hits printed per row before the rest are counted instead. A sweep of a large tree can
 # produce hundreds of thousands of hits, and an uncapped report is unusable to a person
 # and ruinous to an agent's context. The count is always exact; only the listing is cut,
@@ -80,6 +99,14 @@ DEFAULT_ROW_LIMIT = 50
 
 class ScanError(Exception):
     """The run could not be completed, so no result should be believed."""
+
+
+class NothingToCheck(Exception):
+    """Every path given was missing or excluded — a hook's healthy no-op, not a failure.
+
+    Distinct from ScanError: a hook needs to tell "there was nothing here to check" apart
+    from "the tool is broken" by exit code, and the two must never share one.
+    """
 
 
 def compiled_patterns() -> list:
@@ -181,42 +208,74 @@ def walk_files(root: Path) -> list:
 def common_base(targets: list) -> Path:
     """Return the directory every reported path is shown relative to.
 
-    With one target that is the target itself. With several it is their common ancestor,
-    so the header names somewhere the swept files actually live — taking the working
-    directory instead would print a path that was never a target and that none of the
-    hits sit under. Targets on different roots have no common ancestor, and then paths
-    are reported absolute.
+    With one directory target that is the target itself. With one file target it is the
+    file's parent — a file is not a directory hits can be shown relative to, and the
+    former behaviour of returning the file broke the header's "agent instructions" line,
+    which computes `relative_to(base)` and needs a directory to compute it against. With
+    several targets it is their common ancestor, so the header names somewhere the swept
+    files actually live — taking the working directory instead would print a path that
+    was never a target and that none of the hits sit under. Targets on different roots
+    have no common ancestor, and then paths are reported absolute.
     """
     resolved = [target.resolve() for target in targets]
     if len(resolved) == 1:
-        return resolved[0]
+        target = resolved[0]
+        return target.parent if target.is_file() else target
     try:
         return Path(os.path.commonpath([str(path) for path in resolved]))
     except ValueError:
         return Path(resolved[0].anchor)
 
 
-def discover(targets: list, own_dir: Path) -> tuple:
-    """Return the files to search and whether git supplied them.
+def discover(targets: list, own_dir: Path, *, skip_missing: bool = False) -> tuple:
+    """Return the files to search and the header's provenance label for how.
 
     Each target is discovered separately, so two paths in different repositories both
     work. A target that is a file is taken as given rather than walked.
+
+    `skip_missing` decides what a missing target means. Default false: a missing target
+    fails the whole run, because for an explicit or interactive call — someone naming
+    paths by hand — a path that does not exist is very likely a typo, and silently
+    reading fewer files than asked is exactly the "reported clean for a search that never
+    ran" failure this tool exists to end. True skips it and keeps checking the rest: the
+    routine shape of a staged deletion reaching this tool from a hook that ran `git diff
+    --cached --name-only` without `--diff-filter`, where a missing path is healthy rather
+    than a mistake. `main` sets it from `--hook`, so a hook invocation opts in and a bare
+    one keeps failing fast.
+
+    The provenance is `files` where every target was a file, so no directory was ever
+    walked or asked of git; `git` where at least one target was a directory inside a
+    repository, so git's `--exclude-standard` filtered it; `walk` where at least one
+    target was a directory outside a repository, so nothing was filtered. A target that
+    is a file needs neither, so it does not affect which of `git` or `walk` a directory
+    target beside it reports.
     """
     found = []
+    saw_directory = False
     used_git = False
     for target in targets:
         resolved = target.resolve()
         if not resolved.exists():
+            if skip_missing:
+                continue
             raise ScanError(f"no such path: {target}")
         if resolved.is_file():
             found.append(resolved)
             continue
+        saw_directory = True
         from_git = git_files(resolved)
         if from_git is None:
             found.extend(walk_files(resolved))
         else:
             used_git = True
             found.extend(from_git)
+
+    if not saw_directory:
+        source = SOURCE_FILES
+    elif used_git:
+        source = SOURCE_GIT
+    else:
+        source = SOURCE_WALK
 
     keep = []
     seen = set()
@@ -233,19 +292,26 @@ def discover(targets: list, own_dir: Path) -> tuple:
         keep.append(path)
 
     # Nothing to search is not a tree with nothing to convert. Point the tool at a lock
-    # file, a CHANGELOG, or its own directory and every one is excluded, leaving a clean
-    # report over zero files — which is the "reported clean for a search that never ran"
-    # failure this tool exists to end, reproduced inside it. Fail instead.
+    # file, a CHANGELOG, a path deleted under --hook, or its own directory and every one
+    # is skipped or excluded, leaving nothing read — which used to report as a clean
+    # sweep over zero files. It is instead a distinct outcome from either a clean sweep
+    # or a broken run: for a hook, a commit touching only excluded or deleted paths is
+    # healthy, not a misconfiguration, so this is NothingToCheck rather than ScanError.
     if not keep:
-        raise ScanError(
-            "no files to search: every path was excluded, empty, or not text. "
-            "Nothing was read, so a clean result would mean nothing."
+        raise NothingToCheck(
+            "no files to search: every path was missing, excluded, empty, or not text."
         )
-    return sorted(keep), used_git
+    return sorted(keep), source
 
 
 def is_noise(token: str) -> bool:
-    """Report whether a token is a word the noise list already accounts for.
+    """Report whether a token is a word the noise mechanism already accounts for.
+
+    Two mechanisms. `NOISE` names an exact word by hand, right for a drop list that is
+    closed and irregular. `NOISE_SUFFIXES` names a suffix instead: any word strictly
+    longer than the suffix that ends with it is noise, right for a row like `aging`
+    whose false positives are unbounded but all share one shape — the suffix word
+    itself is excluded by being equal to it rather than longer.
 
     A trailing `s` is stripped so a plural matches the singular the list carries —
     `parameters` against `parameter`. Nothing else is normalised: `-ies` and `-es` would
@@ -256,7 +322,9 @@ def is_noise(token: str) -> bool:
     folded = token.casefold()
     if folded in NOISE:
         return True
-    return folded.endswith("s") and folded[:-1] in NOISE
+    if folded.endswith("s") and folded[:-1] in NOISE:
+        return True
+    return any(folded != suffix and folded.endswith(suffix) for suffix in NOISE_SUFFIXES)
 
 
 def word_at(line: str, start: int, end: int) -> str:
@@ -426,15 +494,16 @@ def render(
     results: dict,
     paths: list,
     base: Path,
-    used_git: bool,
+    source: str,
     show_noise: bool,
     limit: int = DEFAULT_ROW_LIMIT,
 ) -> str:
     """Return the whole sweep report."""
-    source = "git" if used_git else "walk"
     instructions = agent_instructions(paths, base)
+    file_count = len(paths)
+    file_noun = "file" if file_count == 1 else "files"
     lines = [
-        f"swept: {base} ({len(paths)} files, {source})",
+        f"swept: {base} ({file_count} {file_noun}, {source})",
         "agent instructions: " + (", ".join(instructions) if instructions else "none found"),
         "excluded: *.lock, CHANGELOG.md, own skill directory",
         "",
@@ -626,6 +695,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "paths", nargs="*", help="paths to sweep (default: the working directory)"
     )
+    parser.add_argument(
+        "--hook",
+        action="store_true",
+        help=(
+            "treat this as a pre-commit hook's invocation: an empty path list is "
+            "nothing to check (exit 4) rather than the default working-directory sweep, "
+            "and a missing path among those given is skipped rather than failing the "
+            "run — both routine for a hook's staged-file list, where either an empty "
+            "selection or a staged deletion is healthy, not a typo"
+        ),
+    )
     # One name per flag, repeated, rather than `nargs="+"`: a greedy list swallows the
     # trailing path and then reports it as a name carrying no table word, which reads as
     # the tool rejecting a correct invocation.
@@ -662,9 +742,14 @@ def main(argv: list, own_dir: Path) -> int:
             print(report)
             return code
 
+        if args.hook and not args.paths:
+            raise NothingToCheck(
+                "no paths given, and --hook disables the default working-directory sweep"
+            )
+
         targets = [Path(path) for path in args.paths] or [Path.cwd()]
         base = common_base(targets)
-        paths, used_git = discover(targets, own_dir)
+        paths, source = discover(targets, own_dir, skip_missing=args.hook)
 
         if args.verify:
             if args.show_noise:
@@ -677,12 +762,15 @@ def main(argv: list, own_dir: Path) -> int:
             return code
 
         results = scan(paths, base)
-        print(render(results, paths, base, used_git, args.show_noise, args.limit))
+        print(render(results, paths, base, source, args.show_noise, args.limit))
         return EXIT_HITS if any(results[row]["hits"] for row in ROWS) else EXIT_CLEAN
 
     except Usage as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
+    except NothingToCheck as exc:
+        print(f"nothing to check: {exc}")
+        return EXIT_NOTHING_TO_CHECK
     except ScanError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR

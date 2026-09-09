@@ -57,20 +57,23 @@ will tell you if you forget.
 
 ## Search
 
-Run the tool from the root of the tree you mean to sweep, substituting the base
-directory this skill reported when it loaded for `<skilldir>`:
+Run the tool from the root of the tree you mean to sweep. `${CLAUDE_SKILL_DIR}` is
+substituted before you see this text:
 
 ```
-python3 <skilldir>/scan.py .
+python3 ${CLAUDE_SKILL_DIR}/scan.py .
 ```
 
-`<skilldir>` is where the tool lives; the trailing `.` is the tree being swept. They are
-rarely the same place. Name paths instead of `.` to sweep less — any number of them, and
-individual files as well as directories.
+`${CLAUDE_SKILL_DIR}` is where the tool lives; the trailing `.` is the tree being swept.
+They are rarely the same place. Name paths instead of `.` to sweep less — any number of
+them, and individual files as well as directories.
 
 Read the exit code, not the output — a shell pipeline throws that distinction away.
-**0** nothing to triage, **1** hits to triage, **2** the run failed, **3** a bad argument
-(yours to fix, not a breakage to escalate).
+**0** nothing to triage, **1** hits to triage, **2** the run failed — including a missing
+path, which here is more likely a typo than a routine deletion (see the [README] for the
+`--hook` opt-in that changes that) — **3** a bad argument (yours to fix, not a
+breakage to escalate), **4** nothing to check — every path given was excluded, distinct
+from a broken run.
 
 A sweep reads tens of thousands of lines a second — faster on code than on prose — so it
 takes seconds on an ordinary repository and minutes on a very large monorepo. It always
@@ -97,21 +100,24 @@ searches to replace it: the patterns carry a guard and a noise list a typed comm
 not, and a search that covers less than it appears to is the failure this tool exists to
 end.
 
-Exit 2 also covers a sweep that read **nothing** — every path excluded, or a tree wholly
-gitignored. Nothing was searched, so nothing was proved.
+A sweep that read **nothing** — every path excluded, or a tree wholly gitignored — exits
+4, not 2: nothing was searched, so nothing was proved, but that is a different state from
+a broken run. A *missing* path is exit 2 here, not 4 — `--hook` treats both as a skip
+instead, for a hook's routine staged-file shapes (see `--help`, and the
+[`todofixthis/phx-claude-siat` README][README] for wiring it into a pre-commit hook).
 
 **A low file count is the failure this cannot catch.** The header reads
-`swept: <path> (N files, git|walk)`, and both halves are diagnostic:
+`swept: <path> (N files, files|git|walk)`, and both halves are diagnostic:
 
-- Inside a repository the tool asks `git ls-files -co --exclude-standard`, so whatever
-  `.gitignore` covers is invisible. That keeps `node_modules` out, and it also hides a
-  generated subtree you *did* want swept. Ten files in a tree of seven thousand is not an
-  error, and only `N` will tell you.
-- `git` means at least one target was a directory inside a repository. `walk` means none
-  was — either you named files yourself, which is fine and filters nothing because there
-  is nothing to filter, or the tree is outside a repository, where nothing was filtered
-  and you may be sweeping build output. Which one you are looking at is not in the header;
-  you know which arguments you passed.
+- Inside a repository the tool asks `git ls-files -co --exclude-standard` for a directory
+  target, so whatever `.gitignore` covers is invisible. That keeps `node_modules` out, and
+  it also hides a generated subtree you *did* want swept. Ten files in a tree of seven
+  thousand is not an error, and only `N` will tell you.
+- `files` means every target you named was a file, so nothing was walked or asked of git
+  — nothing to filter, because there was nothing to discover. `git` means at least one
+  target was a directory inside a repository, so that target was filtered. `walk` means
+  at least one target was a directory outside a repository, where nothing was filtered
+  and you may be sweeping build output.
 
 Compare `N` against what you expected before believing a clean result. Where it is short,
 name the paths explicitly — the tool takes several.
@@ -119,7 +125,7 @@ name the paths explicitly — the tool takes several.
 To prove the patterns still fire before you trust a clean result:
 
 ```
-python3 <skilldir>/scan.py --self-check
+python3 ${CLAUDE_SKILL_DIR}/scan.py --self-check
 ```
 
 That runs them over two bundled controls — one US-spelled, one NZ-spelled — and fails
@@ -146,7 +152,7 @@ For each hit: **is this name the repo's to change?**
 - Fixed outside it — an imported symbol, a CSS property, a URL, a manifest key, an external tool's flag, or the same name as `param=value` where the callee is external → **skip**.
 - Defined here but copied outside — a stored field name, this repo's own CLI flag or environment variable, a public API identifier → **skip, and list it** in what you report, so the migration it needs is somebody's decision rather than nobody's.
 - Written by this repo and held nowhere else — a docstring, comment, error message, a string literal nothing outside matches, or an internal identifier → **convert**, and where it is an identifier, rename every reference in the same change.
-- Undecidable from the line alone: sweep the narrower path (`python3 <skilldir>/scan.py path/to/dir`) and read the surrounding lines. What that settles is each **occurrence**, not the word: one that resolves to a dependency is skipped, one that resolves to a definition here is converted, and a term doing both — a locally defined `dialog_window` beside the library's `dialog` — gets that judgement line by line rather than a single verdict for the file.
+- Undecidable from the line alone: sweep the narrower path (`python3 ${CLAUDE_SKILL_DIR}/scan.py path/to/dir`) and read the surrounding lines. What that settles is each **occurrence**, not the word: one that resolves to a dependency is skipped, one that resolves to a definition here is converted, and a term doing both — a locally defined `dialog_window` beside the library's `dialog` — gets that judgement line by line rather than a single verdict for the file.
 
 ### Rows needing judgement
 
@@ -185,7 +191,7 @@ Four checks, all of them, in order:
 2. **Check every name you renamed**, one flag per name:
 
    ```
-   python3 <skilldir>/scan.py --verify show_dialog --verify old_name .
+   python3 ${CLAUDE_SKILL_DIR}/scan.py --verify show_dialog --verify old_name .
    ```
 
    Pass the **old** spelling. The tool finds the table row, works out the character the
@@ -201,3 +207,5 @@ Four checks, all of them, in order:
    running a search that would find nothing.
 3. **Read `git diff` word by word.** What the diff shows and the other checks do not is a conversion that should never have happened — a name from the copied-outside list, or a US spelling sitting inside an external identifier. The half a rename is *missing* is by definition not in the diff, which is check 2's job.
 4. **Run the test suite.** Where you renamed anything this is load-bearing rather than a formality, so run it even where the pass looked like prose only. Two blind spots to state rather than trust it through: a golden fixture holding a name you renamed must move with the rename, where one asserting on a US spelling as its subject must not — read which kind you have rather than letting red or green decide; and a round trip through your own renamed serialiser passes green while stored data written under the old name no longer matches, which is why those names are skipped above. Where the suite does not cover what you edited — a docs-wide pass in a repo whose tests cover one package — say so rather than reporting the suite green, because it verified none of it.
+
+[README]: https://github.com/todofixthis/phx-claude-siat/blob/main/README.md

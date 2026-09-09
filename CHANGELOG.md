@@ -1,5 +1,67 @@
 # Changelog
 
+## 7.0.0 - 2026-09-09
+
+### For phx plugin users
+
+#### Added
+
+- `nz-english` can now run safely from a pre-commit hook: a new `--hook` flag treats a
+  missing or empty path selection as nothing to check rather than an error, and a new
+  exit code (4) tells a hook apart from a genuine failure (2) or a clean sweep with no
+  hits (0). The README documents the exact hook script to add.
+  ([#63](https://github.com/todofixthis/phx-claude-siat/commit/4261b4b7b53ae0f68f4456427f1ff933ebb24fb9))
+- `writing-adrs`: a project's ambient instructions (its `AGENTS.md`, or an agent's own
+  system prompt) can now defend an `Archived` ADR, alongside a code comment, a
+  path-scoped rule, and a breach large enough to need its own ADR. The skill documents
+  the two gates this defence must clear.
+  ([#60](https://github.com/todofixthis/phx-claude-siat/commit/ab2b5da994b2773c6a86f03ab80b9b5f58da7e48))
+
+#### Fixed
+
+- `nz-english` no longer flags `triaging`, `engaging`, and other `-aging` words outside
+  its old, fixed list of exceptions — a suffix rule now covers the whole class instead
+  of one word at a time.
+  ([#59](https://github.com/todofixthis/phx-claude-siat/commit/90da5bd2228745b31ae189329891e7780262bd53))
+- `writing-adrs`'s `for` lookup (which reports the decisions binding a path) now also
+  warns about a shared ADR number or a heading that disagrees with its filename — the
+  same integrity checks `check` already ran, previously missing from this second path.
+  ([#62](https://github.com/todofixthis/phx-claude-siat/commit/65f6ef4111cd29e8418c69534cfe9bdabe85132a))
+
+### For contributors
+
+#### Breaking changes
+
+- **The repository is now a single [uv](https://docs.astral.sh/uv/) workspace**, rooted
+  at a new top-level `pyproject.toml` and `uv.lock`. Each skill's own `pyproject.toml`
+  lost its `dev` dependency group and its own lock file — those moved to the root,
+  shared across `scripts/` and every skill that ships one.
+  **Migrate:** run `uv sync --locked` once from the repository root. `uv`, `black`, and
+  `ruff` all resolve their configuration by walking up to the workspace root, so the
+  old per-skill invocation (`cd skills/<name> && uv run pytest`) still works — but the
+  recommended form is `uv run --directory skills/<name> pytest`, `ruff check .`, and
+  `black --check .` from the repository root, which is what CI now runs.
+  ([#65](https://github.com/todofixthis/phx-claude-siat/commit/1b643b1db363de86e4de7a3e4590f7191bf44ac1))
+
+#### Added
+
+- CI now validates `hooks/hooks.json` against the shape the plugin's hooks require, so
+  a malformed entry fails a pull request instead of reaching every consumer on their
+  next update.
+  ([#61](https://github.com/todofixthis/phx-claude-siat/commit/784ac9ed15905d9b3fd52e56dccc582cc4287f94))
+- A deferred-work item under `docs/backlog/` now has the same backwards reach an ADR
+  already had: the pre-commit hook reports which backlog items concern a staged path,
+  derived from the item's own links rather than a second frontmatter convention.
+  ([#64](https://github.com/todofixthis/phx-claude-siat/commit/8aa876919db34b5087c90d2a513324bffbd186ae))
+
+#### Changed
+
+- `.agents/rules/testing.md` now states explicitly, for the first time, that every
+  skill's test suite must use `unittest.TestCase` classes rather than bare pytest
+  functions — previously implicit. `creative-commits`'s own suite, the one that didn't
+  yet follow it, was converted to match.
+  ([#58](https://github.com/todofixthis/phx-claude-siat/commit/6c8040d2ca3a61c74e89141d06ee7119dfa104df))
+
 ## 6.0.1 - 2026-09-04
 
 ### For phx plugin users
