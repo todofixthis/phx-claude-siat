@@ -161,7 +161,6 @@ wheels = [
 
 [[package]]
 name = "creative-commits"
-version = "1.0.0"
 source = { editable = "skills/creative-commits" }
 dependencies = [
     { name = "emoji" },
@@ -735,5 +734,4 @@ wheels = [
 
 [[package]]
 name = "writing-adrs"
-version = "1.0.0"
 source = { editable = "skills/writing-adrs" }

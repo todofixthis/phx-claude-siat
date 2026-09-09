@@ -5,10 +5,10 @@ requires = ["hatchling"]
 [project]
 authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
 description = "Emoji seed generator for creative-commits"
+dynamic = ["version"]
 license = "MIT"
 name = "creative-commits"
 requires-python = ">=3.12, <4"
-version = "1.0.0"
 dependencies = [
     "emoji>=2,<3",
     "regex>=2026,<2027",
@@ -16,6 +16,13 @@ dependencies = [
 
 [project.scripts]
 emoji-seed = "seed:main"
+
+# The plugin version lives only in plugin.json (ADR 001); read it rather than keeping
+# a second copy here for the two to drift out of.
+[tool.hatch.version]
+source = "regex"
+path = "../../.claude-plugin/plugin.json"
+pattern = '"version":\s*"(?P<version>[^"]+)"'
 
 [tool.hatch.build.targets.wheel]
 packages = ["seed.py"]

@@ -1,10 +1,10 @@
 [project]
 authors = [{ name = "Phoenix Zerin", email = "phx@phx.nz" }]
 description = "ADR scaffolding, index and scope checks for the writing-adrs skill"
+dynamic = ["version"]
 license = "MIT"
 name = "writing-adrs"
 requires-python = ">=3.12, <4"
-version = "1.0.0"
 
 # No runtime dependencies on purpose: the tool is standard library only, so a consumer
 # runs `python3 <skilldir>/adr.py` with no virtualenv to build. The build backend exists
@@ -17,6 +17,13 @@ phx-adr = "adr:cli"
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling>=1.27,<2"]
+
+# The plugin version lives only in plugin.json (ADR 001); read it rather than keeping
+# a second copy here for the two to drift out of.
+[tool.hatch.version]
+source = "regex"
+path = "../../.claude-plugin/plugin.json"
+pattern = '"version":\s*"(?P<version>[^"]+)"'
 
 [tool.hatch.build.targets.wheel]
 only-include = ["adr.py", "frontmatter.py", "hook.py"]

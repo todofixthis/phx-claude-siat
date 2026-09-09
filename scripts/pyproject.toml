@@ -5,6 +5,8 @@
 
 [project]
 name = "scripts"
+# No build backend below, so nothing reads this — uv requires the field for a
+# workspace member, not for it to be meaningful.
 version = "0.1.0"
 description = "Repository automation: ADR index generation, manifest validation, release notes"
 requires-python = ">=3.12, <4"
