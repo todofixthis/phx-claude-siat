@@ -1,7 +1,7 @@
 ---
 status: Accepted
 date: 2026-09-08
-scope: [skills/writing-adrs/adr.py]
+scope: [skills/writing-adrs/adr.py, skills/writing-adrs/SKILL.md]
 summary: adr.py check fails on a gap in the numbering the same way it fails on a collision, and renumber's target number is the tool's own choice by default, matching new.
 revisit-when: adr.py gains a way to see another branch's own unmerged claim before choosing a number.
 ---
@@ -114,6 +114,24 @@ adjacently, say — with no other way left to do it.
 harm the explicit path could do. Removing it trades a working, already-guarded feature for
 the appearance of stricter ownership, not the substance of it.
 
+### Option 5: Add a `--force` flag that disables every check
+
+Give every command an escape hatch that skips `refuse_on_findings` and the move-time gap
+check alike, for whoever judges a refusal wrong in the moment.
+
+**Pros:** Never blocks on a refusal its own author believes is a false alarm — this PR's
+own rebase, correctly refused while it waited on a sibling's gap to close, could have
+pushed through immediately instead of waiting for that sibling to merge.
+**Cons:** This repository's own precedent argues against it: [ADR 017][] replaced typed
+prose commands with shipped code specifically to make a class of mistakes — mistyping, a
+wrong exit code, a quoting error — impossible rather than merely documented, and a flag
+disabling every check is exactly the "trust the prose" bet that decision moved away from.
+It also risks a worse failure than the one it works around: forcing a renumber through can
+silently leave a second gap or a new collision that nothing is left running to catch.
+**Risks:** A bypass built for "the repo is genuinely broken" is available for "I am in a
+hurry" too, and the tool cannot tell those apart from the flag alone — the exact shape of
+risk `check`'s own refusal exists to remove.
+
 ## Decision
 
 Option 2. Option 1 is the status quo this ADR's own Context shows failing in practice, once
@@ -121,7 +139,11 @@ already. Option 3 trades away the one property this decision is actually for —
 no guessing in it — for keeping `renumber` unchanged, which Option 4's Cons shows was never
 `renumber`'s only working shape to begin with. Option 4's cost buys nothing Option 2's gap
 check does not already guarantee — an explicit `NEW` that would open a hole is refused
-either way — so its extra restriction has a cost with no matching benefit.
+either way — so its extra restriction has a cost with no matching benefit. Option 5 answers
+a real frustration — a refusal that is correct but inconvenient — with a bypass broader than
+the frustration: it cannot distinguish the one caller who has actually confirmed the repo is
+broken from the one who has merely run out of patience, so it removes the guard for both
+alike.
 
 The Cons Option 2 accepts are deliberate, not overlooked. Merge order between two
 ADR-bearing branches can never be guaranteed, and the same is true of whether either merges
@@ -163,4 +185,5 @@ either.
   from the sibling sharing `OLD` — it always moves whichever sorts first by filename. Check
   that this is the file you meant before trusting the result; the tool has no way to ask.
 
+[ADR 017]: 017-move-a-skills-deterministic-steps-into-shipped-code.md
 [ADR 029]: 029-report-number-integrity-faults-from-the-reverse-lookup-too.md
