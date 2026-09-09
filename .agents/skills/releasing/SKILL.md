@@ -231,8 +231,18 @@ only way it is current:
 
   A failing leg is not always a failing test: `uv run pytest` installs the whole dev
   group first, so a corrupt cache entry or an unpackable wheel reds the leg over a tool
-  the tests never call. Read the output before stopping the release — a test failure
-  stops it, a toolchain failure is yours to clear and re-run.
+  the tests never call. One concrete shape: a globally `uv tool install`-ed `pytest`
+  shadows the workspace's own `.venv/bin/pytest` if `uv sync --locked` hasn't run at the
+  repo root yet this session — the symptom is `ModuleNotFoundError` for a skill's own
+  declared dependency (e.g. `emoji` for `creative-commits`; any skill's own dependency
+  shows the same symptom) on a skill with nothing wrong, while a stdlib-only skill passes
+  right alongside it, by accident, since it needed no workspace interpreter to begin
+  with. Confirm with `which pytest`: a hit outside the repo's `.venv` is the shadow.
+  **Run `uv sync --locked` at the repo root and re-run the loop before concluding
+  anything else.** If the same error survives that, the dependency really is missing or
+  misdeclared — fix that skill's `pyproject.toml` rather than re-running the sync again.
+  Read the output before stopping the release — a test failure stops it, a toolchain
+  failure is yours to clear and re-run.
 
   This covers tests only, and CI is no substitute for them: its `python` job is
   path-filtered, so a release touching nothing under a skill skips that leg and `gate`
