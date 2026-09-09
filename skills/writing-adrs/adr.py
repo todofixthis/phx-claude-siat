@@ -10,7 +10,7 @@ reach it through hook.py, and a consumer's CI as `phx-adr`.
     adr.py [--repo-root DIR] for PATH ...
     adr.py [--repo-root DIR] supersede OLD --by NEW
     adr.py [--repo-root DIR] discharge OLD --by NEW [--leaving CONDITION]
-    adr.py [--repo-root DIR] renumber OLD NEW
+    adr.py [--repo-root DIR] renumber OLD [NEW]
     adr.py [--repo-root DIR] reconcile [--write]
 
 The tool acts on the caller's tree, never the one it ships in. Every command resolves a
@@ -323,6 +323,18 @@ def claim_number(claimed: dict[int, str], filename: str, number: str) -> str | N
     return None if claimant == filename else claimant
 
 
+def find_gaps(numbers: set[int]) -> list[int]:
+    """Every integer strictly between the lowest and highest of `numbers` that it lacks.
+
+    Shared by `inspect()` and `renumber()` (ADR 033): both ask the same question of a set
+    of claimed numbers, one after a hand-authored file, the other before a write it could
+    still not make.
+    """
+    if not numbers:
+        return []
+    return [n for n in range(min(numbers), max(numbers)) if n not in numbers]
+
+
 def cell(value: str | list[str]) -> str:
     """Render a frontmatter value for a Markdown table cell, escaping pipes."""
     if isinstance(value, list):
@@ -466,6 +478,19 @@ def inspect(root: Path) -> tuple[list[Row], list[Finding]]:
                 revisit=fields.get(REVISIT_WHEN_FIELD, ""),
             )
         )
+    # A number never reused (ADR "Conventions"), so a hole between two real files is
+    # never the healthy shape a deleted, superseded, or archived decision leaves — every
+    # one of those keeps its file. Checked here rather than only where a renumber last
+    # opened one, since a hand-written file can open one too (ADR 033).
+    findings.extend(
+        Finding(
+            "gap",
+            str(missing),
+            None,
+            f"no ADR claims number {missing}, between {min(claimed)} and {max(claimed)}",
+        )
+        for missing in find_gaps(set(claimed))
+    )
     return rows, findings
 
 
@@ -699,10 +724,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="the conditions still live, where NEW spent only some of them",
     )
     renumber = commands.add_parser(
-        "renumber", help="move OLD to NEW and every citation in docs/adr"
+        "renumber", help="move OLD to NEW (or the tool's own choice) and every citation"
     )
     renumber.add_argument("old", type=int)
-    renumber.add_argument("new", type=int)
+    renumber.add_argument(
+        "new", type=int, nargs="?", default=None, help="omit to let the tool pick"
+    )
     rec = commands.add_parser(
         "reconcile", help="findings as JSON; --write regenerates a valid index"
     )
@@ -771,7 +798,12 @@ def slugify(title: str) -> str:
 
 
 def next_number(adr_dir: Path) -> int:
-    """One past the highest number on disk, or 1 for an empty corpus."""
+    """One past the highest number on disk, or 1 for an empty corpus.
+
+    `new`'s own target, and `renumber`'s default (ADR 033): computed on the corpus as it
+    stands, `old`'s own file included, so renumbering the newest ADR out of a collision
+    lands it one past itself — the slot a fresh `new` would have given it anyway.
+    """
     numbers = (
         [
             int(RE_FILE_NUMBER.match(p.name).group(1))
@@ -983,34 +1015,89 @@ def discharge(root: Path, old: int, new: int, leaving: str | None = None) -> Non
     regenerate_or_raise(root)
 
 
-def renumber(root: Path, old: int, new: int) -> list[str]:
-    """Move `old` to `new` across docs/adr; return citations elsewhere for the agent.
+def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[str]]:
+    """Move `old` to `new` across docs/adr; return the number used and citations to move
+    by hand.
 
-    Rewrites the filename, the heading number, every `ADR <old>` citation and `<old>-slug`
-    link target in the corpus, and the peer fields naming the number. Files outside
-    docs/adr are searched, not edited: a code comment is the agent's to move.
+    `new` omitted is the tool's own choice (ADR 033): `next_number()`, computed with
+    `old`'s own file still on disk. Given explicitly, `new` is still the caller's — but
+    either way, the move is refused before any write if it would repeat `old` back or
+    open a gap between whatever is left on disk: only `old` sitting at the corpus's
+    current top edge can move without opening one, since nothing else shifts to close the
+    gap it vacates. That closes the move this ADR was written against — skip ahead of a
+    number a sibling branch has not yet merged, leaving a hole for it. Two branches
+    landing on the same number is resolved by both keeping it and whichever merges second
+    renumbering afterward, not by one guessing ahead of the other.
+
+    A pre-existing collision naming `old` itself does not block this call — resolving
+    exactly that collision is what it is for — but only where `old` names exactly two
+    files: a third would need a second call, since one move can close one collision. Any
+    other existing fault still blocks, the same as every other command here.
+
+    Rewrites the filename and the heading number outright, and a peer's `<old>-slug` link
+    target wherever it appears — that slug belongs to no file but this one, collision or
+    not. A peer's bare `ADR <old>` citation or field naming `old` (`superseded-by`,
+    `revisit-discharged-by`) is safe to rewrite the same way only while `old` names one
+    file; the moment it names two, nothing left in that text says which of them a bare
+    mention meant, so every one is left as `old` and reported instead of guessed — same as
+    a citation outside docs/adr, which this never edits either.
     """
     path = find_adr(root, old)
-    refuse_on_findings(root)
+    _, findings = inspect(root)
+    collisions_on_old = [f for f in findings if f.kind == "collision" and f.value == str(old)]
+    if len(collisions_on_old) > 1:
+        # A number claimed by three or more files collides pairwise more than once;
+        # resolving one pair still leaves a real collision for `regenerate_or_raise` to
+        # catch after writing, which is a fault left half-fixed rather than reported.
+        raise AdrError(
+            f"ADR {old} is claimed by more than two files; move one by hand first, since "
+            "this resolves one collision at a time"
+        )
+    has_collision = bool(collisions_on_old)
+    blocking = [f for f in findings if (f.kind, f.value) != ("collision", str(old))]
+    if blocking:
+        raise AdrError("; ".join(f.message for f in blocking))
     adr_dir = root / ADR_DIR
-    claimed = any(
-        RE_ADR_FILENAME.match(p.name) and int(RE_FILE_NUMBER.match(p.name).group(1)) == new
+    others = {
+        int(RE_FILE_NUMBER.match(p.name).group(1))
         for p in adr_dir.iterdir()
-    )
-    if claimed:
+        if RE_ADR_FILENAME.match(p.name) and p != path
+    }
+    if new is None:
+        new = next_number(adr_dir)
+    elif new == old:
+        raise AdrError(f"ADR {old} is already numbered {old}; give a different NEW")
+    elif new in others:
         raise AdrError(f"ADR {new} already exists; pick a number nothing claims")
+    opened = find_gaps(others | {new})
+    if opened:
+        raise AdrError(
+            f"ADR {new} would leave {', '.join(str(n) for n in opened)} unclaimed; "
+            "pick a number that opens no gap"
+        )
     new_padded = f"{new:0{NUMBER_WIDTH}d}"
     slug = path.name[len(RE_FILE_NUMBER.match(path.name).group(1)) :]
     re_citation = re.compile(rf"\bADR 0*{old}\b")
     re_link = re.compile(rf"\b0*{old}({re.escape(slug)})")
     re_heading = re.compile(rf"^# 0*{old}:", re.MULTILINE)
 
+    ambiguous = []
     for peer in sorted(adr_dir.iterdir()):
         if not RE_ADR_FILENAME.match(peer.name) or peer == path:
             continue
         text = read_document(peer)
-        text = re_citation.sub(f"ADR {new_padded}", text)
+        relative = peer.relative_to(root).as_posix()
+        # The slug-anchored target names path uniquely, collision or not, so it always
+        # moves first — everything reported below reflects what is left on disk after.
         text = re_link.sub(rf"{new_padded}\1", text)
+        if has_collision:
+            ambiguous.extend(
+                f"{relative}:{index}: {line}"
+                for index, line in enumerate(text.split("\n"), start=1)
+                if re_citation.search(line)
+            )
+        else:
+            text = re_citation.sub(f"ADR {new_padded}", text)
         peer_updates = {}
         peer_fields = parse_adr(text)[0]
         for field in (SUPERSEDED_BY_FIELD, REVISIT_DISCHARGED_BY_FIELD):
@@ -1018,6 +1105,10 @@ def renumber(root: Path, old: int, new: int) -> list[str]:
             value = peer_fields.get(field)
             entries = value if isinstance(value, list) else [value]
             if any(names_number(entry, old) for entry in entries):
+                rendered = f"[{', '.join(entries)}]" if isinstance(value, list) else value
+                if has_collision:
+                    ambiguous.append(f"{relative}: `{field}: {rendered}`")
+                    continue
                 moved = [str(new) if names_number(entry, old) else entry for entry in entries]
                 peer_updates[field] = (
                     f"[{', '.join(moved)}]" if isinstance(value, list) else moved[0]
@@ -1032,7 +1123,7 @@ def renumber(root: Path, old: int, new: int) -> list[str]:
     target.write_text(text, encoding="utf-8")
     path.unlink()
     regenerate_or_raise(root)
-    return citations_outside_corpus(root, old, slug)
+    return new, ambiguous + citations_outside_corpus(root, old, slug)
 
 
 def citations_outside_corpus(root: Path, old: int, slug: str) -> list[str]:
@@ -1090,15 +1181,18 @@ def command_edit(
     return 0
 
 
-def command_renumber(root: Path, old: int, new: int) -> int:
-    """`renumber`: move, then list what the agent still has to move by hand."""
+def command_renumber(root: Path, old: int, new: int | None) -> int:
+    """`renumber`: move, report the number used when the caller left it to the tool, then
+    list what the agent still has to move by hand."""
     try:
-        remaining = renumber(root, old, new)
+        resolved, remaining = renumber(root, old, new)
     except AdrError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+    if new is None:
+        print(f"ADR {old} is now {resolved}")
     if remaining:
-        print("Citations outside docs/adr still name the old number; move each by hand:")
+        print("Citations still name the old number; move each by hand:")
         for line in remaining:
             print(f"  {line}")
     return 0

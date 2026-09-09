@@ -22,7 +22,7 @@ inside the repository. `${CLAUDE_SKILL_DIR}` is substituted before you see this 
 | Validate without writing; exits 1 on any finding — what a CI job would run | `python3 ${CLAUDE_SKILL_DIR}/adr.py check` |
 | Mark an ADR superseded | `python3 ${CLAUDE_SKILL_DIR}/adr.py supersede OLD --by NEW` |
 | Record a discharged revisit trigger | `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW --leaving "Conditions still live."` — `--leaving` is for a trigger NEW spent only part of; omit it where NEW spent the whole |
-| Renumber an ADR nothing outside your work cites | `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD NEW` |
+| Renumber an ADR to resolve a real collision | `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD [NEW]` — omit `NEW` to let the tool pick |
 
 `new` writes the frontmatter complete and the body as the Format template below, for you
 to fill. The tool refuses a `scope` entry naming nothing on disk, so name paths that exist.
@@ -32,8 +32,9 @@ hand; `scope`, `summary` and `revisit-when` stay yours to edit. A refusal is not
 prints `Error:` on stderr and exits 1, naming an ADR and what is wrong with it. Fix that ADR
 and rerun. `new`, `index`, `supersede`, `discharge` and `renumber` each refuse while any
 fault stands and write nothing, so an unrelated ADR's dangling `scope` entry blocks `new` and
-`renumber` alike. `for` is the exception: an ADR it cannot read draws a warning naming it,
-and the lookup still exits 0.
+`renumber` alike — `renumber` alone tolerates the one fault it exists to fix: a collision on
+the number it is moving away from (ADR 033). `for` is the exception: an ADR it cannot read
+draws a warning naming it, and the lookup still exits 0.
 
 Adopting a corpus somebody wrote by hand takes one pass. Those commands refuse while any ADR
 under `docs/adr/` fails its rules — a lowercase `status: accepted`, a `tags` field where
@@ -464,33 +465,41 @@ None of the edits these five workflows make to an older ADR — marking it super
 
 ## Renumbering an ADR
 
-Expect to need this. Numbers are allocated by reading the directory, so any two branches open
-at once take the same one. Nothing surfaces that while the branches are apart; the tool reports
-a collision once both numbers are in one tree. Read the directory as you allocate, and read it
-again after any rebase or merge from the trunk, before you publish: a collision usually
-arrives when someone else's number lands beside yours, which is after you chose one, so the
-allocation-time read alone would miss it.
+Expect to need this. Numbers are allocated by reading the directory, so two branches open at
+once often take the same one. Nothing surfaces that while the branches are apart; the tool
+reports a collision once both land in one tree — after a rebase or a merge from the trunk
+brings a sibling's now-merged ADR in beside yours.
 
-The question is not whether the ADR has merged but **whether its number is cited anywhere
-outside the work you are about to publish**. Merged is the usual shorthand, a merged number
-being reachable from peer ADRs, code comments and the index — but a branch open long enough
-to collide has usually cited its own ADR already, so ask the question directly rather than
-reading the shorthand. Where you cannot tell, treat the number as cited.
+**Do not renumber ahead of that moment to dodge a collision you have only heard about** — from
+a sibling PR's diff, a teammate, wherever. Skipping to a number nothing claims yet leaves the
+one you vacated unclaimed too, and `check` now refuses that (ADR 033) the same way it refuses
+two files sharing a number. Keep your own number until a real collision exists in your own
+tree; two branches landing on the same number is resolved once, by whichever merges second,
+not by one guessing ahead of the other.
 
-Run `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD NEW` on the ADR whose number is not
-cited outside your own work. It moves the file, the heading, every peer ADR's fields and
-links naming the number, and the index, and refuses a number already claimed. It then lists
-every citation outside `docs/adr/` — a code comment, `AGENTS.md`, a plan, a skill — which
-are yours to move, in the same change. That search covers the `ADR NNN` and `NNN-<slug>`
-forms alone: a path form such as `docs/adr/NNN` matches neither, and the renumbered ADR's own
-`summary`, `revisit-when` or body naming its number is yours too. Miss one and it still
-resolves — to whichever decision kept the number — which is the silent failure the numbering
-rule exists to prevent.
-
-Where both numbers are cited outside your work, each branch having landed before anyone
-noticed, there is no silent fix. Renumber the later one, move every citation you can reach,
-and say in its Context that it was renumbered and from what, so a citation you could not
+Once a real collision exists — your rebase brought a sibling's ADR in under the same number as
+your own — run `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD` on your own file, `OLD` being
+the number you now share; leave `NEW` for the tool to pick (one past everything now in the
+tree). It picks whichever of the two `OLD`-numbered files sorts first by filename — check
+that this is the one you meant to move before trusting the result, since the tool has no
+other way to tell your file from the sibling's, and refuses outright rather than guess if a
+third file also claims `OLD`. It moves the file, the heading, and the index outright, and a
+peer's link target naming the moved file's own slug follows too, since that slug belongs to
+no other file. Everything else a peer says about `OLD` — a bare `ADR OLD` citation,
+`superseded-by: OLD`, `revisit-discharged-by: [OLD]` — is safe to rewrite the same way only
+while `OLD` names one file; the moment it names two, nothing left in that text says which one
+was meant, so every one of those is left naming `OLD` and reported for you to move by hand —
+alongside every citation outside `docs/adr/` (a code comment, `AGENTS.md`, a plan, a skill),
+which this never edits either. The search covers the `ADR NNN` and `NNN-<slug>` forms alone: a
+path form such as `docs/adr/NNN` matches neither, and the renumbered ADR's own `summary`,
+`revisit-when` or body naming its number is yours too. Miss one and it still resolves — to
+whichever decision kept the number — which is the silent failure the numbering rule exists to
+prevent. Say in its Context that it was renumbered and from what, so a citation you could not
 reach — a review comment, a link from outside the repository — still leads somewhere.
+
+Give `NEW` yourself only to land on a specific, already-gap-free number for a reason unrelated
+to the collision — grouping related decisions adjacently, say. The tool refuses either way, an
+omitted or a given `NEW` alike, if the move would leave a hole behind.
 
 A renumber is a mechanical edit, like the five workflow edits above, so it does not re-owe the
 Review passes: the decision itself is untouched.
