@@ -3,8 +3,7 @@
 # [project] table of its own — the root is a virtual aggregator, never installed or built.
 
 [tool.uv.workspace]
-# Explicit, not a glob: uv refuses a `skills/*` member with no pyproject.toml of its own,
-# and six of the nine skill directories have none.
+# Explicit, not a glob: uv refuses a `skills/*` member with no pyproject.toml of its own.
 members = [
     "scripts",
     "skills/creative-commits",
