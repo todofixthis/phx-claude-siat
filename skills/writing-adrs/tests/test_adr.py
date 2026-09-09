@@ -1590,7 +1590,8 @@ class RenumberTests(RepoTestCase):
         self.write("001-second.md", adr_text(title="1: Do the thing, again"))
         self.write(
             "003-third.md",
-            adr_text(title="3: Third") + "\nSee [ADR 1][] for context.\n\n[ADR 1]: 001-second.md\n",
+            adr_text(title="3: Third")
+            + "\nSee [ADR 1][] for context.\n\n[ADR 1]: 001-second.md\n",
         )
         _, remaining = adr.renumber(self.repo_root, 1, None)
         peer = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
@@ -1618,7 +1619,9 @@ class RenumberTests(RepoTestCase):
         _, remaining = adr.renumber(self.repo_root, 1, None)
         content = (self.adr_dir / "003-third.md").read_text(encoding="utf-8")
         self.assertIn("\nsuperseded-by: 1\n", content)
-        self.assertTrue(any("003-third.md" in line and "superseded-by" in line for line in remaining))
+        self.assertTrue(
+            any("003-third.md" in line and "superseded-by" in line for line in remaining)
+        )
 
 
 class MainEditTests(RepoTestCase):
