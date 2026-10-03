@@ -56,7 +56,7 @@ ADR's path in brackets: the row is the summary, and that file holds the reasonin
 
 ## Format
 
-File: `docs/adr/NNN-<slug>.md` (zero-padded, kebab-case)
+File: `docs/adr/NNN-<slug>.md` (zero-padded to at least three digits, kebab-case; the thousandth is `1000-<slug>.md`, and the tool orders by number, not filename)
 
 ```markdown
 ---

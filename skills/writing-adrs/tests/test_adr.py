@@ -677,6 +677,13 @@ class RenderIndexTests(RepoTestCase):
         rows = [line for line in self.rendered().splitlines() if line.startswith("| [")]
         self.assertEqual([row.split("]")[0] for row in rows], ["| [009", "| [010"])
 
+    def test_orders_a_four_digit_number_after_every_three_digit_one(self):
+        """Past 999 the width grows, so `1000` must follow `101` rather than sort between `100` and `101`."""
+        for number in (100, 101, 1000):
+            self.write(f"{number:03d}-n{number}.md", adr_text(title=f"{number}: Do the thing"))
+        rows, _ = inspect(self.repo_root)
+        self.assertEqual([row.number for row in rows], ["100", "101", "1000"])
+
     def test_ignores_the_index_and_dot_files(self):
         """The index must not list itself, and tooling debris is not a misfiled document."""
         self.write_adrs("001-first.md")
@@ -960,6 +967,14 @@ class BindingTests(RepoTestCase):
         self.assertEqual([r.number for r in binding(self.repo_root, ["scripts/adr"])], ["001"])
         self.assertEqual(
             [r.number for r in binding(self.repo_root, ["scripts/adr/x.py"])], ["001"]
+        )
+
+    def test_orders_a_four_digit_number_after_every_three_digit_one(self):
+        """The lookup lists decisions by number, so `1000` comes last rather than after `100`."""
+        for number in (100, 101, 1000):
+            self.write(f"{number:03d}-n{number}.md", adr_text(title=f"{number}: Do the thing"))
+        self.assertEqual(
+            [r.number for r in binding(self.repo_root, [SCOPED_FILE])], ["100", "101", "1000"]
         )
 
     def test_reports_an_archived_decision(self):
