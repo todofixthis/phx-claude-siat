@@ -149,7 +149,24 @@ _OUR_SUFFIXES = frozenset(
 _OUR_EXTRAS = {
     "behavior": frozenset({"al", "ally", "ist", "ists"}),
     "color": frozenset(
-        {"ise", "ised", "ises", "ising", "ist", "ists", "ize", "ized", "izes", "izing"}
+        {
+            "isation",
+            "ise",
+            "ised",
+            "iser",
+            "isers",
+            "ises",
+            "ising",
+            "ist",
+            "ists",
+            "ization",
+            "ize",
+            "ized",
+            "izer",
+            "izers",
+            "izes",
+            "izing",
+        }
     ),
 }
 
