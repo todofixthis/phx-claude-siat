@@ -344,19 +344,89 @@ def word_at(line: str, start: int, end: int) -> str:
     return line[left:right]
 
 
+def token_start(line: str, start: int) -> int:
+    """Return where the identifier holding `line[start]` begins, as `token_at` finds it."""
+    while start > 0 and (line[start - 1].isalnum() or line[start - 1] == "_"):
+        start -= 1
+    return start
+
+
 def token_at(line: str, start: int, end: int) -> str:
     """Return the whole identifier or word the matched span sits inside.
 
     The span says which row claimed the hit; the token is what a reader triages, and the
     two differ whenever the match is part of a longer name.
     """
-    left = start
-    while left > 0 and (line[left - 1].isalnum() or line[left - 1] == "_"):
-        left -= 1
+    left = token_start(line, start)
     right = end
     while right < len(line) and (line[right].isalnum() or line[right] == "_"):
         right += 1
     return line[left:right]
+
+
+# One word inside an identifier: an all-caps run not starting a Titlecase word, or an
+# optionally capitalised lowercase run. Digits and underscores separate.
+RE_SEGMENT = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+")
+
+
+def recase(word: str, model: str) -> str:
+    """Return lowercase `word` in the case of `model`: all caps, Titlecase, or lower."""
+    if len(model) > 1 and model.isupper():
+        return word.upper()
+    if model[:1].isupper():
+        return word[:1].upper() + word[1:]
+    return word
+
+
+def opens_in_noise(token: str, offset: int) -> bool:
+    """Whether the camel/snake segment holding `token[offset]` is a noise word."""
+    for segment in RE_SEGMENT.finditer(token):
+        if segment.start() <= offset < segment.end():
+            return is_noise(segment.group(0))
+    return False
+
+
+def suggest(token: str) -> str | None:
+    """Return the NZ spelling of a whole token, or None where it cannot be trusted.
+
+    Computed once per token across every pattern that claims it, never per row: a
+    `colorize` rewritten by one row alone is `colourize` or `colorise`, each wrong. Each
+    segment is rewritten by every non-judgement pattern matching it, in table order. A
+    judgement pattern leaves its word as found, so `programColor` suggests
+    `programColour`. None where any rule declines its segment, or where a pattern
+    matched only across a segment boundary, since a part-converted token reads as
+    finished.
+    """
+    segments = list(RE_SEGMENT.finditer(token))
+    claimed = set()
+    for _row, pattern, regex in compiled_patterns():
+        for match in regex.finditer(token):
+            # Noise judged on the segment the match opens in, as the rewrite below judges
+            # it, so `literalColor` is `literal` plus `Color` rather than one unknown word.
+            if not pattern.judgement and not opens_in_noise(token, match.start()):
+                claimed.add(id(pattern))
+    handled = set()
+    pieces = []
+    last = 0
+    for segment in segments:
+        word = segment.group(0)
+        current = word.casefold()
+        if not is_noise(word):
+            for _row, pattern, regex in compiled_patterns():
+                if pattern.judgement or not regex.search(word):
+                    continue
+                current = pattern.suggest(current)
+                # A pattern still matching its own output met a second occurrence the
+                # rule left alone: `minimizemaximize` would come back half-converted.
+                if current is None or regex.search(current):
+                    return None
+                handled.add(id(pattern))
+        pieces.append(token[last : segment.start()] + recase(current, word))
+        last = segment.end()
+    pieces.append(token[last:])
+    if not handled or claimed - handled:
+        return None
+    return "".join(pieces)
 
 
 def scan(paths: list, base: Path) -> dict:
@@ -368,6 +438,7 @@ def scan(paths: list, base: Path) -> dict:
     patterns = compiled_patterns()
     sieve = prefilter()
     results = {row: {"hits": [], "noise": Counter()} for row in ROWS}
+    suggestions: dict[str, str | None] = {}
 
     for path in paths:
         try:
@@ -389,6 +460,7 @@ def scan(paths: list, base: Path) -> dict:
                 for match in regex.finditer(line):
                     span = match.group(0)
                     token = token_at(line, match.start(), match.end())
+                    offset = match.start() - token_start(line, match.start())
                     word = word_at(line, match.start(), match.end())
                     # Classified on the letter run, not the whole token: every noise
                     # entry is pure letters, so testing the token as well would be a
@@ -396,6 +468,8 @@ def scan(paths: list, base: Path) -> dict:
                     if is_noise(word):
                         results[row]["noise"][word] += 1
                         continue
+                    if token not in suggestions:
+                        suggestions[token] = suggest(token)
                     results[row]["hits"].append(
                         {
                             "path": str(shown),
@@ -404,6 +478,14 @@ def scan(paths: list, base: Path) -> dict:
                             "token": token,
                             "judgement": pattern.judgement,
                             "label": pattern.span_label,
+                            # Never beside a judgement hit, whose answer is the reader's,
+                            # nor a hit inside a noise segment (`liter` in `literalColor`),
+                            # which the suggestion leaves as found.
+                            "suggestion": (
+                                None
+                                if pattern.judgement or opens_in_noise(token, offset)
+                                else suggestions[token]
+                            ),
                         }
                     )
     return results
@@ -477,7 +559,10 @@ def format_row_block(row, result: dict, show_noise: bool, limit: int) -> list:
     width_span = max((len(h["span"]) for h in shown), default=0)
     for hit in shown:
         where = f"{hit['path']}:{hit['line']}"
-        lines.append(f"  {where:<{width_path}}  {hit['span']:<{width_span}}  {hit['token']}")
+        suggestion = f"  → {hit['suggestion']}" if hit["suggestion"] else ""
+        lines.append(
+            f"  {where:<{width_path}}  {hit['span']:<{width_span}}  {hit['token']}{suggestion}"
+        )
     if len(hits) > limit:
         lines.append(f"  … {len(hits) - limit} more not shown (--limit to raise)")
 

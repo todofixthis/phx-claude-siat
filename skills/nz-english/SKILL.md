@@ -88,6 +88,14 @@ span** (which row claimed it), and the **whole token** (what you would rename). 
 matching two rows appears under both, because it needs both conversions: `colorize`
 becomes `colourise`, not one or the other.
 
+Where the tool knows the inflection, a hit ends `→ suggestion`: the whole token in NZ
+spelling, composed across every row that claimed it, in the token's own case. A
+suggestion answers **spelling only** — whether to convert is still the Triage question
+below. A hit with no arrow is one the tool declined to guess at — an inflection it does
+not list, a word that is already correct, or a judgement hit — so work it out yourself.
+Where a token also hits a judgement row, suggestions on its other rows leave the
+judgement word unconverted, so read that row before applying them.
+
 Rows marked `*judgement` need reading rather than applying — see below. Where the mark
 names a span (`*judgement: meter`), only the hits with that span need it; the rest of
 the row converts normally.
