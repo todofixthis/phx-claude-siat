@@ -56,7 +56,7 @@ ADR's path in brackets: the row is the summary, and that file holds the reasonin
 
 ## Format
 
-File: `docs/adr/NNN-<slug>.md` (zero-padded to at least three digits, kebab-case; the thousandth is `1000-<slug>.md`, and the tool orders by number, not filename)
+File: `docs/adr/NNN-<slug>.md` (zero-padded to at least three digits, kebab-case; the thousandth is `1000-<slug>.md`). The heading's `NNN` takes the same padding, and the tool lists ADRs by number, so `1000` follows `101`.
 
 ```markdown
 ---
@@ -492,7 +492,7 @@ was meant, so every one of those is left naming `OLD` and reported for you to mo
 alongside every citation outside `docs/adr/` (a code comment, `AGENTS.md`, a plan, a skill),
 which this never edits either. The search covers the `ADR NNN` and `NNN-<slug>` forms alone: a
 path form such as `docs/adr/NNN` matches neither, and the renumbered ADR's own `summary`,
-`revisit-when` or body naming its number is yours too. Miss one and it still resolves — to
+`revisit-when` or body naming its number is yours too. Searching by hand, anchor the number at both ends and allow any padding (`rg '\bADR 0*100\b'`): a bare `ADR 100` also matches `ADR 1000`. Miss one and it still resolves — to
 whichever decision kept the number — which is the silent failure the numbering rule exists to
 prevent. Say in its Context that it was renumbered and from what, so a citation you could not
 reach — a review comment, a link from outside the repository — still leads somewhere.
