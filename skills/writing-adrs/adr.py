@@ -76,6 +76,7 @@ SUPERSEDED_BY_FIELD = "superseded-by"
 # Replaced by `scope`. Named so a stale field fails rather than being ignored.
 TAGS_FIELD = "tags"
 
+# A minimum width: numbers past 999 take four digits, and every listing sorts by number.
 NUMBER_WIDTH = 3
 
 RE_ADR_FILENAME = re.compile(r"^\d+-.*\.md$")
@@ -323,6 +324,20 @@ def claim_number(claimed: dict[int, str], filename: str, number: str) -> str | N
     return None if claimant == filename else claimant
 
 
+def by_number(adr_dir: Path) -> list[Path]:
+    """Every entry in `adr_dir`, numbered files by number and then by name, the rest after.
+
+    `NUMBER_WIDTH` is a minimum: past 999 a filename takes four digits, and a lexical sort
+    would put `1000-…` between `100-…` and `101-…`.
+    """
+
+    def key(path: Path) -> tuple[float, str]:
+        match = RE_FILE_NUMBER.match(path.name)
+        return (int(match.group(1)) if match else float("inf"), path.name)
+
+    return sorted(adr_dir.iterdir(), key=key)
+
+
 def find_gaps(numbers: set[int]) -> list[int]:
     """Every integer strictly between the lowest and highest of `numbers` that it lacks.
 
@@ -405,7 +420,7 @@ def inspect(root: Path) -> tuple[list[Row], list[Finding]]:
     # The first file seen to claim each number, so a second can name it. Keyed by value:
     # `ADR 1` names one decision however many zeros pad its filename.
     claimed: dict[int, str] = {}
-    for path in sorted(adr_dir.iterdir()):
+    for path in by_number(adr_dir):
         if path.name.startswith(".") or path.name == INDEX_FILENAME:
             continue
         # Reported before the filename rule rather than after it: a directory named like
@@ -577,7 +592,7 @@ def binding(root: Path, paths: list[str]) -> list[Row]:
     matches = []
     # By value, as `inspect()` claims numbers (ADR 029): `001` and `1` name one ADR.
     claimed: dict[int, str] = {}
-    for path in sorted(adr_dir.iterdir()):
+    for path in by_number(adr_dir):
         if path.name.startswith(".") or not RE_ADR_FILENAME.match(path.name):
             continue
         # A directory named like an ADR binds nothing; `inspect` is where it is reported.
@@ -923,7 +938,7 @@ def set_fields(content: str, updates: dict[str, str | None]) -> str:
 def find_adr(root: Path, number: int) -> Path:
     """The file carrying `number`, however its filename pads it."""
     adr_dir = root / ADR_DIR
-    for path in sorted(adr_dir.iterdir()) if adr_dir.is_dir() else []:
+    for path in by_number(adr_dir) if adr_dir.is_dir() else []:
         match = RE_FILE_NUMBER.match(path.name)
         if RE_ADR_FILENAME.match(path.name) and int(match.group(1)) == number:
             return path
@@ -1082,7 +1097,7 @@ def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[st
     re_heading = re.compile(rf"^# 0*{old}:", re.MULTILINE)
 
     ambiguous = []
-    for peer in sorted(adr_dir.iterdir()):
+    for peer in by_number(adr_dir):
         if not RE_ADR_FILENAME.match(peer.name) or peer == path:
             continue
         text = read_document(peer)
