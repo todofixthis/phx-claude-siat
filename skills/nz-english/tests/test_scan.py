@@ -385,6 +385,92 @@ class ScanFunctionTests(TempTreeTestCase):
         self.assertEqual([hit["token"] for hit in results[row]["hits"]], ["color"])
 
 
+class SuggestTests(unittest.TestCase):
+    """Unit tests for ``suggest()`` — one suggestion per token, composed across patterns."""
+
+    def test_composes_every_pattern_on_one_segment(self):
+        """`colorize` needs the `-or` and `-ize` rows both, not either alone."""
+        self.assertEqual(scan.suggest("colorize"), "colourise")
+
+    def test_composes_across_segments(self):
+        """Each segment of a camel-case token converts under its own pattern."""
+        self.assertEqual(scan.suggest("colorOrganizer"), "colourOrganiser")
+
+    def test_preserves_case(self):
+        """Titlecase, all caps and a camel-case boundary each come back as found."""
+        cases = {"Centered": "Centred", "GRAY": "GREY", "dialogUrl": "dialogueUrl"}
+        for token, expected in cases.items():
+            with self.subTest(token=token):
+                self.assertEqual(scan.suggest(token), expected)
+
+    def test_keeps_separators_in_place(self):
+        """Underscores and digits between segments survive the rewrite."""
+        self.assertEqual(scan.suggest("user_labeled2"), "user_labelled2")
+
+    def test_gives_nothing_for_an_already_correct_screaming_case_form(self):
+        """The `-og` guard over-reports `DIALOGUE`; suggesting `DIALOGUEUE` would corrupt it."""
+        self.assertIsNone(scan.suggest("DIALOGUE"))
+
+    def test_gives_nothing_for_a_judgement_word_alone(self):
+        """`judgment` needs reading per occurrence, so no rule rewrites it."""
+        self.assertIsNone(scan.suggest("judgment"))
+
+    def test_leaves_a_judgement_word_as_found_beside_a_conversion(self):
+        """`program` stays for the reader; `Color` still converts."""
+        self.assertEqual(scan.suggest("programColor"), "programColour")
+
+    def test_gives_nothing_where_one_segment_declines(self):
+        """A part-converted token reads as finished, so one declined segment voids it."""
+        self.assertIsNone(scan.suggest("armorialColor"))
+
+    def test_gives_nothing_for_a_match_across_a_segment_boundary(self):
+        """`color_abc_izer` would come back half-converted: `-ize` matches only across an underscore."""
+        self.assertIsNone(scan.suggest("color_abc_izer"))
+
+    def test_gives_nothing_where_a_pattern_recurs_in_one_segment(self):
+        """Each rule rewrites one occurrence, so a second would be left half-converted."""
+        for token in ("minimizemaximize", "colorcolor"):
+            with self.subTest(token=token):
+                self.assertIsNone(scan.suggest(token))
+
+    def test_splits_an_acronym_and_a_digit_from_the_word_beside_it(self):
+        """`HTML` and `3D` are segments of their own and come back as found."""
+        cases = {"HTMLColor": "HTMLColour", "color3D": "colour3D"}
+        for token, expected in cases.items():
+            with self.subTest(token=token):
+                self.assertEqual(scan.suggest(token), expected)
+
+    def test_skips_a_plural_noise_segment(self):
+        """`literals` is noise as `literal` is, so `literalsColor` converts its `Color` alone."""
+        self.assertEqual(scan.suggest("literalsColor"), "literalsColour")
+
+    def test_skips_a_noise_segment(self):
+        """`literal` is noise, so `literalColor` converts its `Color` alone."""
+        self.assertEqual(scan.suggest("literalColor"), "literalColour")
+
+
+class ScanSuggestionTests(TempTreeTestCase):
+    """Unit tests for the suggestion ``scan()`` attaches to each hit."""
+
+    def test_attaches_the_token_suggestion_to_every_row_claiming_it(self):
+        """Both rows `colorize` appears under carry the one composed suggestion."""
+        path = write(self.root, "a.md", "colorize")
+        results = scan.scan([path], self.root)
+        suggestions = [hit["suggestion"] for row in ROWS for hit in results[row]["hits"]]
+        self.assertEqual(suggestions, ["colourise", "colourise"])
+
+    def test_attaches_none_to_a_judgement_hit(self):
+        """The `program` hit carries nothing though its token converts under `-or`."""
+        path = write(self.root, "a.md", "programColor")
+        results = scan.scan([path], self.root)
+        by_row = {
+            row.us: results[row]["hits"][0]["suggestion"]
+            for row in ROWS
+            if results[row]["hits"]
+        }
+        self.assertEqual(by_row, {"-or endings": "programColour", "program": None})
+
+
 class RenderTests(TempTreeTestCase):
     """Unit tests for ``render()`` — the text a maintainer actually reads."""
 
@@ -414,6 +500,22 @@ class RenderTests(TempTreeTestCase):
         hits = sum(int(pair[0]) for pair in counted)
         noise = sum(int(pair[1]) for pair in counted)
         self.assertIn(f"{hits} to triage, {noise} noise suppressed", report)
+
+    def test_prints_the_suggestion_after_the_token(self):
+        """A reader sees the correction beside the hit rather than deriving it."""
+        path = write(self.root, "a.md", "centering")
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False
+        )
+        self.assertIn("a.md:1  center  centering  → centring\n", report)
+
+    def test_prints_no_arrow_where_there_is_no_suggestion(self):
+        """A judgement hit's line ends at the token."""
+        path = write(self.root, "a.md", "license")
+        report = scan.render(
+            scan.scan([path], self.root), [path], self.root, scan.SOURCE_WALK, False
+        )
+        self.assertIn("a.md:1  license  license\n", report)
 
     def test_marks_a_whole_judgement_row(self):
         """`license` needs reading whichever pattern matched, so the mark carries no span."""
