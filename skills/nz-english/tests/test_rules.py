@@ -149,7 +149,9 @@ class OurRuleTests(RuleTestCase):
             rule("-or endings"),
             {
                 "behavioral": "behavioural",
+                "colorization": "colourization",
                 "colorize": "colourize",
+                "colorizer": "colourizer",
                 "glamorize": None,
                 "humoral": None,
             },

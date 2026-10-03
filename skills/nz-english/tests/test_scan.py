@@ -459,6 +459,19 @@ class ScanSuggestionTests(TempTreeTestCase):
         suggestions = [hit["suggestion"] for row in ROWS for hit in results[row]["hits"]]
         self.assertEqual(suggestions, ["colourise", "colourise"])
 
+    def test_attaches_none_to_a_hit_inside_a_noise_segment(self):
+        """The `Liter` hit in `colorLiteral` is noise the suggestion leaves alone, so no arrow."""
+        path = write(self.root, "a.md", "see colorLiteral")
+        results = scan.scan([path], self.root)
+        by_row = {
+            row.us: results[row]["hits"][0]["suggestion"]
+            for row in ROWS
+            if results[row]["hits"]
+        }
+        self.assertEqual(
+            by_row, {"-er endings (root words)": None, "-or endings": "colourLiteral"}
+        )
+
     def test_attaches_none_to_a_judgement_hit(self):
         """The `program` hit carries nothing though its token converts under `-or`."""
         path = write(self.root, "a.md", "programColor")
