@@ -94,7 +94,9 @@ records creates `docs/adr/` and a generated `INDEX.md`; from then on the plugin'
 regenerate the index after the agent edits an ADR (an edit made through the shell is
 reported, not fixed), inject the decisions binding a file the first time a session touches
 it, and report a `scope` entry left dangling by a move or delete. The hooks are inert in a
-repository whose `docs/adr/INDEX.md` the tool did not generate.
+repository whose `docs/adr/INDEX.md` the tool did not generate. [How the writing-adrs
+hooks shape a session](docs/writing-adrs-hooks.md) walks through each hook with what the
+agent sees at every step.
 
 To gate a consumer's CI on the corpus, pinned to a release tag (`<tag>`):
 
