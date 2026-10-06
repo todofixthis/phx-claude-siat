@@ -217,9 +217,13 @@ class OgRuleTests(RuleTestCase):
             },
         )
 
-    def test_declines_prolog(self):
-        """In code `Prolog` is the language, whose name takes no `ue`."""
-        self.assertIsNone(rule("-og endings")("prolog"))
+    def test_declines_prolog_and_analog(self):
+        """`Prolog` is the language, and `analog` usually names a pin or an API the repo does not own."""
+        self.assert_rule(rule("-og endings"), {"analog": None, "analogs": None, "prolog": None})
+
+    def test_still_converts_dialog(self):
+        """Only the two listed roots are left out of the rule."""
+        self.assertEqual(rule("-og endings")("dialogs"), "dialogues")
 
     def test_declines_the_already_correct_form(self):
         """A substring rewrite of `dialogue` would produce `dialogueue`."""
