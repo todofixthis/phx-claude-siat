@@ -291,6 +291,58 @@ class PreToolUseTests(HookTestCase):
         for n in range(1, 14):
             self.assertIn(f"{n:03d}", text)
 
+    def overflow_corpus(self) -> None:
+        """Thirteen rows binding the scoped file, the last also binding `other.py`."""
+        self.write_scoped("other.py")
+        for n in range(2, 13):
+            self.write(f"{n:03d}-n{n}.md", adr_text(title=f"{n}: Decision {n}"))
+        self.write(
+            "013-n13.md", adr_text(title="13: Decision 13", scope=f"[{SCOPED_FILE}, other.py]")
+        )
+        self.manage()
+
+    def read(self, name: str) -> str:
+        """The context a Read of `name` delivers to the main thread."""
+        return self.context(
+            self.handle(
+                "PreToolUse",
+                tool_name="Read",
+                tool_input={"file_path": str(self.repo_root / name)},
+            )
+        )
+
+    def test_a_row_past_the_row_cap_arrives_in_full_on_a_later_touch(self):
+        """A row named only by number is not recorded as delivered, so its next binding path shows it."""
+        self.overflow_corpus()
+        first = self.read(SCOPED_FILE)
+        self.assertNotIn("013 (Accepted)", first)
+        self.assertIn("013 [", first)
+        self.assertIn("013 (Accepted): Decision 13 — A summary.", self.read("other.py"))
+
+    def test_a_row_past_the_character_cap_arrives_in_full_on_a_later_touch(self):
+        """A row the cap moved to the number-only line is delivered in full on the next touch."""
+        long_summary = "x" * 3_000
+        self.write("001-first.md", adr_text(summary=long_summary))
+        for n in range(2, 5):
+            self.write(
+                f"{n:03d}-n{n}.md", adr_text(title=f"{n}: Decision {n}", summary=long_summary)
+            )
+        self.manage()
+        first = self.read(SCOPED_FILE)
+        self.assertNotIn("003 (Accepted)", first)
+        self.assertIn("003 [", first)
+        second = self.read(SCOPED_FILE)
+        self.assertIn("003 (Accepted)", second)
+        self.assertIn("004 (Accepted)", second)
+        self.assertNotIn("001 (Accepted)", second)
+
+    def test_no_row_arrives_in_full_twice(self):
+        """Across repeated touches of overlapping paths, each row is delivered in full at most once."""
+        self.overflow_corpus()
+        delivered = "".join(self.read(name) for name in (SCOPED_FILE, SCOPED_FILE, "other.py"))
+        for n in range(1, 14):
+            self.assertLessEqual(delivered.count(f"{n:03d} (Accepted)"), 1, n)
+
     def test_concurrent_calls_lose_no_update(self):
         """Parallel first touches on different files both land in state.
 
