@@ -238,12 +238,15 @@ def overflow_line(rows: list[adr.Row]) -> str:
     )
 
 
-def fit_bound_rows(label: str, shown: list[adr.Row], rest: list[adr.Row]) -> str:
+def fit_bound_rows(
+    label: str, shown: list[adr.Row], rest: list[adr.Row]
+) -> tuple[str, list[adr.Row]]:
     """Render `shown` in full and `rest` by number, trimming `shown` into `rest` to fit `MAX_CHARS`.
 
     Every injected number stays named even where its full row will not fit: the row the
     cap would otherwise cut is moved to the named-only line instead of being dropped
-    silently mid-truncation.
+    silently mid-truncation. Returns the text with the rows it rendered in full, which are
+    the only ones delivered.
     """
     shown, rest = list(shown), list(rest)
 
@@ -264,7 +267,7 @@ def fit_bound_rows(label: str, shown: list[adr.Row], rest: list[adr.Row]) -> str
         tail = overflow_line(rest)
         budget = max(MAX_CHARS - len(tail) - 1, 0)
         text = label[:budget] + "\n" + tail
-    return text
+    return text, shown
 
 
 def snapshot_baseline(state: State, root: Path) -> list[adr.Finding]:
@@ -361,7 +364,11 @@ def on_subagent_start(event: dict, state: State) -> dict | None:
 
 
 def on_pre_tool_use(event: dict, state: State) -> dict | None:
-    """Rows binding the touched paths, once per agent, fitted under the context cap."""
+    """Rows binding the touched paths, once per agent, fitted under the context cap.
+
+    A row is recorded as injected only once rendered in full. One named on the "also
+    binding" line has delivered its number alone, so it stays a candidate for a later touch.
+    """
     by_root: dict[Path, list[str]] = {}
     for path in touched_paths(event):
         root = managed_root_for(path)
@@ -371,6 +378,7 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
         return None
     injected = state.data["injected"].setdefault(agent_key(event), [])
     rows: list[adr.Row] = []
+    keys: list[str] = []
     named: list[str] = []
     for root, paths in by_root.items():
         before = len(rows)
@@ -381,7 +389,7 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
             key = f"{root}:{row.number}"
             if key in injected:
                 continue
-            injected.append(key)
+            keys.append(key)
             rows.append(row)
         # Once per root that contributed a row: the label names the paths looked up, and
         # binding() matched any of them rather than each row to one path.
@@ -390,7 +398,9 @@ def on_pre_tool_use(event: dict, state: State) -> dict | None:
     if not rows:
         return None
     label = LABEL.format(paths=", ".join(sorted(set(named))))
-    text = fit_bound_rows(label, rows[:MAX_ROWS], rows[MAX_ROWS:])
+    text, shown = fit_bound_rows(label, rows[:MAX_ROWS], rows[MAX_ROWS:])
+    # `fit_bound_rows` trims from the end, so the rows shown are a prefix of `rows`.
+    injected.extend(keys[: len(shown)])
     return output("PreToolUse", text, cap=False)
 
 

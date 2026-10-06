@@ -1,5 +1,53 @@
 # Changelog
 
+## 8.1.0 - 2026-10-06
+
+### For phx plugin users
+
+#### Added
+
+- `nz-english` now suggests the NZ spelling beside each hit (`colorize  → colourise`):
+  the whole token, converted by every spelling rule that matched it, in the token's own
+  case. A suggestion settles spelling only — whether to convert is still your agent's
+  triage call. The tool prints no arrow where it won't guess: an inflection it doesn't
+  list, a judgement hit, `analog` or `prolog`, a name inside a URL, or a name on a
+  non-relative import line, which is defined wherever it's imported from. Exit codes are
+  unchanged; a script parsing hit lines and expecting the token to end the line should
+  re-check it.
+  ([#80](https://github.com/todofixthis/phx-claude-siat/commit/1ada3c7545df36a429184e8451a95c2e9b7fcfa9),
+  [#82](https://github.com/todofixthis/phx-claude-siat/commit/a980bc8aff6a21977d46f8de75799bb0fdc5438b))
+- [How the writing-adrs hooks shape a session](https://github.com/todofixthis/phx-claude-siat/blob/b06306c25bd098881632ec2ce4819267f094c532/docs/writing-adrs-hooks.md)
+  walks through each hook `writing-adrs` installs, with what the agent sees at every step.
+
+#### Fixed
+
+- `writing-adrs` listed ADRs in filename order, so past 999 decisions `1000-…` sorted
+  between `100-…` and `101-…` in `INDEX.md` and in the decisions the hook injects. They
+  now sort by number; an `INDEX.md` written by an earlier release then fails
+  `adr.py check` as stale until you run `adr.py index` once. The skill also says how to
+  search for citations by hand without `ADR 100` matching `ADR 1000`.
+  ([#78](https://github.com/todofixthis/phx-claude-siat/commit/ffcb65f84ac0b40d5d57bfacabd366ffa126f0f0))
+- When the decisions binding a file overflowed the hook's context cap, those named only
+  by number on the "also binding" line were still recorded as delivered, so the agent
+  never received their full rows on a later touch. Only rows shown in full are now
+  recorded, and the rest arrive in full next time.
+  ([#79](https://github.com/todofixthis/phx-claude-siat/commit/b06306c25bd098881632ec2ce4819267f094c532))
+
+### For contributors
+
+#### Changed
+
+- The `releasing` skill's validation gate now names one cause of a skill's test leg
+  failing with nothing wrong in the skill: `ModuleNotFoundError` for the skill's own
+  dependency, because a globally installed `pytest` (check `which pytest`) shadows the
+  workspace's own. Run `uv sync --locked` at the repo root and re-run; if the error
+  survives that, the dependency really is missing from the skill's `pyproject.toml`.
+  ([7f99f72](https://github.com/todofixthis/phx-claude-siat/commit/7f99f7267dbdda3dcc379e23995cb7d1771a26c3))
+- Dev tooling refreshed: `black` 26.10.0, `ruff` 0.16.10, `autohooks` 26.9.0, and
+  `astral-sh/setup-uv` v10.2.0 in CI, with no workflow change needed. Run
+  `uv sync --locked` at the repo root to match.
+  ([e014015](https://github.com/todofixthis/phx-claude-siat/commit/e01401597c60a9c6bfd267127213ff909d354713))
+
 ## 8.0.0 - 2026-09-09
 
 ### For phx plugin users

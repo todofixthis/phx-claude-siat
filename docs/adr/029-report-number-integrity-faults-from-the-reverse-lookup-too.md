@@ -104,6 +104,18 @@ so these two more cases fit a contract ADR 025 already accepted rather than open
 - A later change to either check updates the shared comparison once, not `inspect()` and
   `binding()` separately — the reason this bug existed in the first place.
 
+## Revisit watch
+
+- 2026-10-03: the second clause, "hook.py's per-touch warnings from binding() are measured
+  as noise worth deduping", **not fired**. Three `hook.py` runs on one path, in a corpus
+  holding two files numbered 003, printed the warning to stderr each time and put none of
+  it in stdout. The hooks reference says stderr from a hook that exits 0 goes to the debug
+  log only, so the Consequences' "prints on every touched path" costs the agent no context
+  and shows it nothing either. The fault is still reported through the findings route
+  (`SessionStart`, `PostToolBatch`, `Stop`); only the per-path "binds nothing here" line is
+  lost. See
+  [`hook-warnings-from-binding-reach-nobody.md`](../backlog/hook-warnings-from-binding-reach-nobody.md).
+
 [ADR 009]: 009-keep-a-standing-develop-bypass.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 021]: 021-validate-adr-scope-on-every-pull-request.md
