@@ -72,7 +72,11 @@ already holds useful context, and ADR 025 promises each row lands once.
   not carry.
 - If it is not, this item is deleted, and ADR 026 gets a `## Revisit watch` entry if the
   session id turned out to be shared.
+- The **Forking** sentence under Edge cases in
+  [`docs/writing-adrs-hooks.md`][writing-adrs-hooks], which links to this item, is removed
+  on the branch that closes it.
 
 [`hook.py`]: ../../skills/writing-adrs/hook.py
 [`hooks/hooks.json`]: ../../hooks/hooks.json
 [ADR 026]: ../adr/026-report-findings-by-delta-from-a-session-baseline.md
+[writing-adrs-hooks]: ../writing-adrs-hooks.md
