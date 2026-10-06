@@ -268,9 +268,11 @@ def _el(segment: str) -> str | None:
 
 _OUR = {word: word[:-1] + "ur" for word in _OUR_WORDS.split("|")}
 _RE = {word: word[:-2] + "re" for word in _RE_WORDS.split("|")}
-# `prolog` is left out: in a code repository it is nearly always the language, whose name
-# takes no `ue`, so a suggestion would be wrong far more often than right.
-_OG = {word: word + "ue" for word in _OG_WORDS.split("|") if word != "prolog"}
+# Left out: `prolog`, in a code repository nearly always the language, whose name takes
+# no `ue`; and `analog`, which in code more often names something fixed outside the
+# repository (an ADC's `analog` pin, a library's API) than a word it owns. An arrow would
+# read as settling a question only the reader can answer; the row still converts both.
+_OG = {word: word + "ue" for word in _OG_WORDS.split("|") if word not in {"analog", "prolog"}}
 
 # Any prefix: `monologue`, `travelogue`. The suffix list still bounds it.
 _ANY = frozenset({"[a-z]*"})

@@ -484,6 +484,72 @@ class ScanSuggestionTests(TempTreeTestCase):
         self.assertEqual(by_row, {"-or endings": "programColour", "program": None})
 
 
+class ScanOverlapTests(TempTreeTestCase):
+    """Unit tests for how ``scan()`` reports a judgement match a sibling pattern covers."""
+
+    def practice_hits(self, text: str) -> list:
+        """The (span, suggestion) of each hit on the `practice` row for `text`."""
+        path = write(self.root, "a.md", text)
+        row = next(row for row in ROWS if row.us == "practice (verb)")
+        return [(h["span"], h["suggestion"]) for h in scan.scan([path], self.root)[row]["hits"]]
+
+    def test_lists_a_covered_judgement_match_once_with_its_suggestion(self):
+        """`practiced` is always a verb, so it lists once, under its own span, with an arrow."""
+        self.assertEqual(self.practice_hits("practiced"), [("practiced", "practised")])
+
+    def test_keeps_an_uncovered_judgement_match(self):
+        """A bare `practice` beside `practiced` still needs reading, so it still lists."""
+        self.assertEqual(
+            self.practice_hits("practice practiced"),
+            [("practice", None), ("practiced", "practised")],
+        )
+
+
+class ScanExternalNameTests(TempTreeTestCase):
+    """Unit tests for the names ``scan()`` treats as fixed outside the repository."""
+
+    def suggestions(self, text: str) -> list:
+        """Every hit's suggestion on the `-or` row for `text`, one line per entry."""
+        path = write(self.root, "a.md", text)
+        row = next(row for row in ROWS if row.us == "-or endings")
+        return [h["suggestion"] for h in scan.scan([path], self.root)[row]["hits"]]
+
+    def test_prints_no_suggestion_on_an_import_line(self):
+        """An imported name is fixed where it is defined, so its hit carries no arrow."""
+        lines = [
+            "from colorama import colorize",
+            "import colorize",
+            "import { colorize } from 'colors';",
+            "export { colorize } from 'colors';",
+            "const colorize = require('colorize');",
+        ]
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertEqual(set(self.suggestions(line)), {None})
+
+    def test_still_suggests_on_a_relative_import(self):
+        """A relative import names this repository's own module, whose names are in scope."""
+        lines = [
+            "from .colors import colorize",
+            "import { colorize } from './colors';",
+            "export { colorize } from '../colors';",
+            "const colorize = require('./colorize');",
+        ]
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertIn("colourise", self.suggestions(line))
+
+    def test_prints_no_suggestion_inside_a_url(self):
+        """A name inside a URL is fixed by the server; one outside it on the line still converts."""
+        self.assertEqual(
+            self.suggestions("colorize via https://example.org/colorize"), ["colourise", None]
+        )
+
+    def test_still_suggests_on_an_ordinary_line(self):
+        """A line merely mentioning `import` mid-sentence is not an import line."""
+        self.assertEqual(self.suggestions("we import the colorize step"), ["colourise"])
+
+
 class RenderTests(TempTreeTestCase):
     """Unit tests for ``render()`` — the text a maintainer actually reads."""
 

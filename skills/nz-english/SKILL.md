@@ -92,7 +92,11 @@ Where the tool knows the inflection, a hit ends `→ suggestion`: the whole toke
 spelling, composed across every row that claimed it, in the token's own case. A
 suggestion answers **spelling only** — whether to convert is still the Triage question
 below. A hit with no arrow is one the tool declined to guess at — an inflection it does
-not list, a word that is already correct, or a judgement hit — so work it out yourself.
+not list, a word that is already correct, a judgement hit, `analog` or `prolog` (see
+below), a name inside a URL, or a name on a non-relative import line, which is defined
+wherever it is imported from — so work it out yourself, starting from where the name is
+defined. An arrow beside a name the repository does not own is still a skip: the tool
+cannot tell a dependency's name, a surname or a unit from a word in prose.
 Where a token also hits a judgement row, suggestions on its other rows leave the
 judgement word unconverted, so read that row before applying them.
 
@@ -175,7 +179,7 @@ The `-our` belongs to the base word, not to every word built from it, and which 
 
 So **`colorist` and `behaviorist` are hits, not noise**, and the tool reports them as such. The easy error is reading the drop list as covering every `-or` word with a suffix and leaving them in the tree — a miss, and the direction this skill treats as the serious one, where inventing a `u` at least reads wrong to the next person. Check anything off the drop list in both directions.
 
-`Prolog` is a language, and `dialog`/`analog` are common API identifiers (HTML `<dialog>`, ADC `analog` pins) — Scope exempts those *occurrences* as names fixed outside the repo, not the words, so the tool reports them and you decide. A `show_dialog` this repo defines is still in scope; the library's `dialog` it calls is not, and the two sit on adjacent lines. These are the terms most likely to be mass-converted wrongly in either direction.
+`Prolog` is a language, and `dialog`/`analog` are common API identifiers (HTML `<dialog>`, ADC `analog` pins) — Scope exempts those *occurrences* as names fixed outside the repo, not the words, so the tool reports them and you decide. A `show_dialog` this repo defines is still in scope; the library's `dialog` it calls is not, and the two sit on adjacent lines. These are the terms most likely to be mass-converted wrongly in either direction. The tool prints no arrow for `prolog`, nearly always the language, or `analog`, which in code more often names a pin or an API than anything the repo owns; neither changes the table. An `analog` this repo defines still becomes `analogue`. `dialog` still gets an arrow, so check it against the library before applying it.
 
 ## What to report
 

@@ -364,6 +364,17 @@ def token_at(line: str, start: int, end: int) -> str:
     return line[left:right]
 
 
+# A line importing names from another module: Python `import`/`from … import`, an ES
+# module `import`/`export … from`, a CommonJS `require(`. Such a name is defined where
+# it is imported from, often outside the repository, so no suggestion is printed on it.
+# A relative import (`from .colors`, `'./colors'`) names the repository's own module, so
+# it is not one of these lines.
+RE_IMPORT_LINE = re.compile(
+    r"^\s*(?:from\s+\w[\w.]*\s+import\b|import\b(?!.*['\"]\.{1,2}/)"
+    r"|export\b.*\bfrom\s+['\"](?!\.{1,2}/))|\brequire\s*\(\s*['\"](?!\.{1,2}/)"
+)
+RE_URL = re.compile(r"\b[a-z][a-z0-9+.-]*://\S+", re.IGNORECASE)
+
 # One word inside an identifier: an all-caps run not starting a Titlecase word, or an
 # optionally capitalised lowercase run. Digits and underscores separate.
 RE_SEGMENT = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+")
@@ -456,38 +467,60 @@ def scan(paths: list, base: Path) -> dict:
             # per-pattern loop runs at all.
             if not sieve.search(line):
                 continue
-            for row, pattern, regex in patterns:
-                for match in regex.finditer(line):
-                    span = match.group(0)
-                    token = token_at(line, match.start(), match.end())
-                    offset = match.start() - token_start(line, match.start())
-                    word = word_at(line, match.start(), match.end())
-                    # Classified on the letter run, not the whole token: every noise
-                    # entry is pure letters, so testing the token as well would be a
-                    # second guard that can never fire on its own.
-                    if is_noise(word):
-                        results[row]["noise"][word] += 1
-                        continue
-                    if token not in suggestions:
-                        suggestions[token] = suggest(token)
-                    results[row]["hits"].append(
-                        {
-                            "path": str(shown),
-                            "line": number,
-                            "span": span,
-                            "token": token,
-                            "judgement": pattern.judgement,
-                            "label": pattern.span_label,
-                            # Never beside a judgement hit, whose answer is the reader's,
-                            # nor a hit inside a noise segment (`liter` in `literalColor`),
-                            # which the suggestion leaves as found.
-                            "suggestion": (
-                                None
-                                if pattern.judgement or opens_in_noise(token, offset)
-                                else suggestions[token]
-                            ),
-                        }
-                    )
+            external = bool(RE_IMPORT_LINE.search(line))
+            urls = [url.span() for url in RE_URL.finditer(line)]
+            matches = [
+                (row, pattern, match)
+                for row, pattern, regex in patterns
+                for match in regex.finditer(line)
+            ]
+            # Spans a non-judgement pattern claims, per row. A judgement match inside
+            # one is the same word read twice — `practice` inside `practiced`, which is
+            # always a verb — so it is dropped rather than listed without an arrow.
+            covered = {}
+            for row, pattern, match in matches:
+                if not pattern.judgement:
+                    covered.setdefault(id(row), []).append(match.span())
+            for row, pattern, match in matches:
+                if pattern.judgement and any(
+                    start <= match.start() and match.end() <= end
+                    for start, end in covered.get(id(row), [])
+                ):
+                    continue
+                span = match.group(0)
+                token = token_at(line, match.start(), match.end())
+                offset = match.start() - token_start(line, match.start())
+                word = word_at(line, match.start(), match.end())
+                # Classified on the letter run, not the whole token: every noise
+                # entry is pure letters, so testing the token as well would be a
+                # second guard that can never fire on its own.
+                if is_noise(word):
+                    results[row]["noise"][word] += 1
+                    continue
+                if token not in suggestions:
+                    suggestions[token] = suggest(token)
+                results[row]["hits"].append(
+                    {
+                        "path": str(shown),
+                        "line": number,
+                        "span": span,
+                        "token": token,
+                        "judgement": pattern.judgement,
+                        "label": pattern.span_label,
+                        # Never beside a judgement hit, whose answer is the reader's;
+                        # a hit inside a noise segment (`liter` in `literalColor`),
+                        # which the suggestion leaves as found; or a name an import
+                        # line or a URL fixes outside the repository.
+                        "suggestion": (
+                            None
+                            if pattern.judgement
+                            or opens_in_noise(token, offset)
+                            or external
+                            or any(a <= match.start() < b for a, b in urls)
+                            else suggestions[token]
+                        ),
+                    }
+                )
     return results
 
 
