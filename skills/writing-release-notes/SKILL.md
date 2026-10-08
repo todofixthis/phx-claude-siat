@@ -234,6 +234,20 @@ prefix.) A single-audience release omits the other block entirely rather than em
 it empty. Entries are high-level and grouped — never a per-commit dump. The caller adds
 any version heading.
 
+**A pre-release leads with this block, verbatim, above the audience blocks** — a
+pre-release being any `0.y.z` version, or one with a pre-release segment (`4.0.0a1`,
+`2.0.0-rc.1`):
+
+```markdown
+> [!CAUTION]
+> **Alpha software — here be dragons**
+> This is an early release. APIs, configuration formats, and CLI flags may change without notice in future versions. Bugs and crashes are possible.
+```
+
+Omit it from every other release. You don't choose the version, so where the caller
+hasn't named it, ask whether this is a pre-release rather than inferring it from the
+recommended level.
+
 ## Edge cases
 
 - **First release (no `base`):** review the full history; initial-release framing; no
