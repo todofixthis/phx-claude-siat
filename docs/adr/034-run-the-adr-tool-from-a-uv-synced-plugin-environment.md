@@ -136,13 +136,15 @@ startup, resume, clear, compact or fork — would strip what the other added.
 Copy PyYAML's pure-Python package (6.0.3, MIT-licensed, 252 KB) into the skill, keeping
 bare `python3`.
 
-**Pros:** No install step and no new requirement on consumers; a corpus of plain values
-never imports PyYAML.
-**Cons:** The pure-Python loader takes 20 ms for the corpus, so staying in budget means
-deferring to PyYAML only values a hand-written allowlist cannot prove plain, guarded by a
-test over generated cases. Third-party code sits in the tree, out of this repository's
+**Pros:** No install step and no new requirement on consumers.
+**Cons:** The pure-Python import and loader add 28–38 ms an event, a median of about 102–112 ms:
+inside the bounds the Decision sets, but at or over the 100 ms aspiration. Getting under it
+means deferring to PyYAML only values a hand-written allowlist cannot prove plain, guarded by a
+test over generated cases; a corpus of plain values then never imports PyYAML and stays near ADR
+022's 74 ms, as fast as Option 1. Third-party code sits in the tree, out of this repository's
 lint, format and spelling checks, with a CI check tying it to a pinned release.
-**Risks:** The allowlist wrong in the permissive direction is the original bug back.
+**Risks:** A vendored copy goes stale between re-vendorings, security fixes included, and an
+allowlist wrong in the permissive direction is the original bug back.
 
 ### Option 4: Import PyYAML when installed, else fall back
 
@@ -159,11 +161,12 @@ Option 2. The value grammar is YAML's, so YAML's parser should decide every valu
 Option 1 keeps refusing valid YAML, a consumer at a time, and Option 4 keeps the bug for
 exactly the consumers who would hit it.
 
-With `uv` accepted, Option 3's advantage is the requirement it avoids, and what it costs is
-the allowlist. The pure-Python loader is too slow to read every value, so Option 3 can only
-afford PyYAML behind a hand-written plain-value rule: a grammar approximated in-house,
-which is what this decision exists to remove. libyaml reads the whole corpus in 1.5 ms, so
-Option 2 needs no such rule.
+With `uv` accepted, Option 3's advantage is the requirement it avoids. Both options fit the
+bounds, so the aspiration and upkeep decide between them. Option 2 sits under the aspiration and
+Option 3 without the allowlist at or over it. With the allowlist Option 3 matches Option 1's
+speed, and is rejected anyway: its speed comes from a grammar approximated in-house, which is
+what this decision exists to remove, and either form keeps third-party code in step by hand.
+libyaml reads the whole corpus in 1.5 ms, and Renovate keeps a declared dependency current.
 
 [ADR 017][]'s no-install clause holds in its own terms. It asks that a skill work on first
 invocation with no per-repository setup, and treats `python3` as a machine prerequisite.
@@ -212,8 +215,8 @@ hooks remain POSIX-only, Windows without Git Bash out of scope.
 - `SessionStart` prunes a version's venv only once that version's directory has left the
   plugin cache, so no session still running it can lose it.
 - `frontmatter.py` imports PyYAML and parses with `CBaseLoader`, falling back to the
-  pure-Python `BaseLoader` where a platform's wheel lacks libyaml; that fallback is slow
-  enough to breach the budget, and the carried trigger is how it would surface.
+  pure-Python `BaseLoader` where a platform's wheel lacks libyaml; that fallback misses the
+  aspiration on those platforms, still inside both bounds.
   `yaml_hazard()`'s character class goes, and a value PyYAML refuses is reported as any
   other malformed field. A regression test covers the templated-path case above.
 - The skill passes the substituted `${CLAUDE_PLUGIN_DATA}` to its launcher rather than
