@@ -36,7 +36,11 @@ are blocked from `check` and `index` until this lands and is released.
   `writing-adrs`, which declares it.
 - From a real session in a repository with no `docs/adr/`, the skill's `adr.py new`
   bootstraps the venv through its launcher and succeeds.
-- A hook event's median cost on this repository's corpus is measured within 100 ms.
+- A `pr.yml` check times at least 20 hook events on this repository's corpus and fails
+  above a 1 s p95, `SessionStart` with its no-op sync included, and a fixture slowing the
+  hook makes it fail. The mean hook cost per turn — events a turn from main and subagent
+  transcripts, times mean cost an event — is recorded against ADR 034's session budget in
+  a `## Revisit watch` section of ADR 034, beside a fresh measurement of the median turn.
 - `pr.yml`, `release.yml`, the pre-commit hook and the `releasing` skill run `scripts/` and
   `adr.py` under `uv run`, and every existing `frontmatter.py`, `adr.py` and `scripts/`
   test passes.

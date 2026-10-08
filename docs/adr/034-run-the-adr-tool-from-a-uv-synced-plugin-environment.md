@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-10-08
 scope: [.claude-plugin/, .githooks/pre-commit, .github/workflows/pr.yml, hooks/, pyproject.toml, uv.lock, scripts/frontmatter.py, skills/writing-adrs/]
 summary: Ship the ADR tool beside the writing-adrs skill with PyYAML as a declared dependency parsing all frontmatter through its C loader; a SessionStart hook syncs it with uv into a per-plugin-version venv under CLAUDE_PLUGIN_DATA, and every other hook and the skill's own commands run that venv's python directly — not uv run per event, not a vendored or hand-written parser, not an optional import, and not a standalone plugin or skill-frontmatter hooks.
-revisit-when: A consumer needs the skills without the hooks and Claude Code offers no per-hook opt-out, or a hook event's median cost is measured above 100 ms on this repository's corpus, or a consumer is found running the plugin without uv, or Claude Code installs a plugin's Python dependencies itself.
+revisit-when: A consumer needs the skills without the hooks and Claude Code offers no per-hook opt-out, or the mean hook cost a tool-calling turn incurs exceeds 5% of the median turn, or a hook event's p95 exceeds 1 s, or a consumer is found running the plugin without uv, or Claude Code installs a plugin's Python dependencies itself.
 ---
 
 # 034: Run the ADR tool from a uv-synced plugin environment
@@ -37,8 +37,22 @@ hook installing dependencies into it. Claude Code installs a plugin's Node depen
 itself, but not its Python ones. `${CLAUDE_PLUGIN_ROOT}` is a directory per plugin version,
 and an old version's stays for 14 days so a session already running it keeps working.
 
-Cost bounds every option. ADR 022 measured a hook event's median at 74 ms against a 100 ms
-budget. Measured on this container on 2026-10-08:
+Cost bounds every option. ADR 022 measured a hook event's median at 74 ms against a budget
+it stated as "100 ms on this repository's corpus", per event, with no rationale. A research
+note the maintainer commissioned traced the figure: 100 ms is the "feels
+instantaneous" limit in [Nielsen's response-time limits][Nielsen] and the input-response
+goal in [RAIL][], both timing a user's action to visible feedback, where a `PreToolUse` hook
+answers a model's tool call and no user action at all. Nielsen treats a delay of 0.1–1 s as
+noticed but tolerable and 1 s as the limit for an uninterrupted flow of thought. Per-event
+cost also compounds over a session, and one tool-calling turn fires several events: a
+`PreToolUse` per matched call and a `PostToolBatch` for the batch. A turn — model response
+plus tools, from one tool-calling message to the next in a transcript, parallel calls
+counted once — was measured over 53 consecutive turns in the subagent transcripts of one
+working session in this repository on 2026-10-08: median 7.0 s, mean 10.2 s, 25th
+percentile 2.1 s. Over 71 such turns those subagents fired a mean of 1.69 hook events a
+turn; none issued parallel calls, which would raise it. One model, one container.
+
+Measured on this container on 2026-10-08:
 
 | Per hook event | Cost |
 |---|---|
@@ -93,20 +107,20 @@ Renovate's `pep621` manager tracks PyYAML, and no third-party code enters the tr
 provides an interpreter matching the skill's `requires-python`, so `python3` on `PATH`
 stops being required.
 **Cons:** Every consumer needs `uv`. Every hook event pays the venv's slower start and the
-import, about 21 ms over ADR 022's figures: a median near 95 ms on every corpus, about 5 ms
-inside the budget, where ADR 022's worst case already exceeded it. The first session after
-each plugin update waits on a resolve, about 2 s here; longer on a slow network, and far
-longer where `uv` must first download an interpreter matching the skill's
+import, about 21 ms over ADR 022's figures: a median near 95 ms on every corpus. The first
+session after each plugin update waits on a resolve, about 2 s here; longer on a slow
+network, and far longer where `uv` must first download an interpreter matching the skill's
 `requires-python`.
 **Risks:** An offline first session gets no venv, and its hooks stay off for that session.
 
 #### Sub-question: how a hook reaches the venv
 
 `uv run` per event costs 36–38 ms to start where the venv's own `python` costs 21 ms,
-which with the import puts a median near 107 ms. So per-event hooks never call `uv`, and
-build the venv's path by shell parameter expansion from the plugin version, the last
-component of `${CLAUDE_PLUGIN_ROOT}` under the plugin cache, since even hashing `uv.lock`
-to name it would spend the margin. A plugin loaded in place from a checkout, as this
+which with the import puts a median near 107 ms. Both sit inside the bounds the Decision
+sets, so the 100 ms aspiration ranks them: per-event hooks never call `uv`, and build the
+venv's path by shell parameter expansion from the plugin version, the last component of
+`${CLAUDE_PLUGIN_ROOT}` under the plugin cache, rather than spend 6 ms hashing `uv.lock`
+to name it. A plugin loaded in place from a checkout, as this
 repository dogfoods itself, has no version in its path. There the hooks, the `SessionStart`
 sync and the launcher all use the checkout's own workspace venv instead, telling the two
 cases apart by whether the tool sits under the plugin cache. The sync into it adds the
@@ -157,9 +171,31 @@ The hooks build the venv themselves, once per plugin version on each machine, an
 machine prerequisite — a less common one than `python3`, which is the cost accepted here.
 The trigger naming a consumer without `uv` is how that cost would surface.
 
-The 5 ms margin is thin. Should the carried trigger fire, the first lever is to cache the
-parsed corpus by file modification time, so most events skip the import; that is decided
-then, not here.
+#### Sub-question: the hook budget
+
+ADR 022's per-event 100 ms answers the wrong question, so it becomes an aspiration: a median
+worth aiming at by analogy with Nielsen and RAIL, which ranks options that both fit the
+bounds below. Two bounds replace it, neither counting the first sync after an update.
+
+- **The session budget, which the trigger watches:** the mean hook cost a tool-calling turn
+  incurs — events a turn times mean cost an event — stays within 5% of the median turn,
+  about 350 ms against today's 7.0 s. The literature gives no aggregate figure, so 5% is a
+  judgement, and these are its terms. At 1.69 events a turn today's hooks cost about 1.8%
+  and this decision's about 2.3%, medians standing in for the means until implementation
+  measures them, so 2% would fire on the status quo. 5% leaves this
+  decision about twice its cost in headroom, and fires on a model about twice as fast, or
+  at about 3.7 events a turn. Higher would let hook cost grow unwatched into the turn's
+  own spread. The median turn is the denominator, stricter than the 10.2 s mean, so a
+  skewed tail of long turns cannot hide hook cost; and the share is relative, so faster
+  models raise it and fire the trigger without anyone re-deriving a number.
+- **The per-event ceiling:** p95 within 1 s, Nielsen's flow-of-thought limit, enforced by a
+  `pr.yml` check timing at least 20 `hook.py` events over this repository's corpus. It
+  holds `SessionStart` too, no-op sync included, the one hook a person waits on. It
+  catches only a gross regression, which is its job: the turn cannot be measured in CI, so
+  the ceiling is the one bound a build can hold.
+
+Should the trigger fire, the first lever is to cache the parsed corpus by file modification
+time, so most events skip the import; that is decided then, not here.
 
 Everything else ADR 022 decided stands, for the reasons it gives: the tool sits beside the
 skill, the plugin's `hooks/hooks.json` declares the hooks, neither a standalone plugin
@@ -189,7 +225,12 @@ hooks remain POSIX-only, Windows without Git Bash out of scope.
   `uv` before that step.
 - `scripts/frontmatter.py` reaches the same parser through the symlink, so `scripts/` gains
   a dependency; [ADR 035][] restates how `scripts/` runs.
-- The hook-event median is measured at implementation on this repository's corpus.
+- The hook's mean cost per turn and p95 per event are measured at implementation on this
+  repository's corpus, and the turn and events a turn are re-measured, over more than one
+  session and from main and subagent transcripts alike, whenever the trigger is checked;
+  each finding goes in a `## Revisit watch` section here.
+- [ADR 025][]'s cost condition cited ADR 022's 100 ms per event and now cites these bounds,
+  which loosen it.
 - The skill's frontmatter rules and command forms, the standard-library claims in
   `adr.py`'s and `frontmatter.py`'s docstrings and the skill's `pyproject.toml`, and the
   README are corrected in the implementing change, which the [backlog item][] tracks.
@@ -199,9 +240,12 @@ hooks remain POSIX-only, Windows without Git Bash out of scope.
 [ADR 017]: 017-move-a-skills-deterministic-steps-into-shipped-code.md
 [ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
 [ADR 023]: 023-let-a-shipped-tool-write-what-it-wholly-owns.md
+[ADR 025]: 025-deliver-binding-decisions-by-hook-at-first-touch.md
 [ADR 035]: 035-run-repo-scripts-under-uv-with-declared-dependencies.md
 [`adr.py`]: ../../skills/writing-adrs/adr.py
 [backlog item]: ../backlog/scripts-frontmatter-parser-should-use-pyyaml.md
 [`frontmatter.py`]: ../../skills/writing-adrs/frontmatter.py
+[Nielsen]: https://www.nngroup.com/articles/response-times-3-important-limits/
 [PyYAML]: https://pypi.org/project/PyYAML/
+[RAIL]: https://web.dev/articles/rail
 [`validate_manifests.py`]: ../../scripts/ci/validate_manifests.py
