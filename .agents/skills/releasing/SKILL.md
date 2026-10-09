@@ -56,8 +56,9 @@ broken.
 ## Phase 1 — prepare (on `develop`)
 
 1. **Run the validation gate (below). Stop on any failure** — before anything mutates.
-2. Run `phx:writing-release-notes` with `base = origin/main` (pass `model` through) → the
-   notes and an advisory semver level.
+2. Run `phx:writing-release-notes` with `base = origin/main` and `prerelease = false`
+   (pass `model` through) → the notes and an advisory semver level. `prerelease` is
+   always false: this plugin releases only `X.Y.Z` versions (ADR 008).
 3. **Compute the new version and confirm.** Read the version in `.claude-plugin/plugin.json`
    and apply the
    level: patch bumps Z; minor bumps Y and resets Z to 0; major bumps X and resets Y and
