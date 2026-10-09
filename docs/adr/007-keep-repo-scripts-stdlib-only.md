@@ -1,10 +1,11 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-07-28
 scope: [scripts/]
 summary: Keep every import under scripts/ stdlib-only, reaching for a root project rather than per-script PEP 723 metadata once a real dependency is needed — the root project ADR 031 later built, without scripts/ importing anything new.
 revisit-when: The workflow substring-match already under the constraint causes a miss in practice.
 revisit-discharged-by: [31]
+superseded-by: 35
 ---
 
 # 007: Keep repo scripts stdlib-only
