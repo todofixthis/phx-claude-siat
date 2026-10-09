@@ -22,6 +22,8 @@ All optional:
 - **`model`** — model for the gather subagents; default the cheapest capable model
   (e.g. Haiku).
 - **`path`** — restrict the range, diff, and PR discovery to a subtree (monorepos).
+- **`version`** — the version being released, where the caller has chosen it. It only
+  decides whether the notes carry the pre-release alert (see Template).
 
 ## Procedure
 
@@ -233,6 +235,20 @@ block is a deliberate, opinionated deviation from Keep-a-Changelog's `**breaking
 prefix.) A single-audience release omits the other block entirely rather than emitting
 it empty. Entries are high-level and grouped — never a per-commit dump. The caller adds
 any version heading.
+
+**A pre-release leads with this block, verbatim, above the audience blocks** — a
+pre-release being any `0.y.z` version, or one with a pre-release segment (`4.0.0a1`,
+`2.0.0-rc.1`):
+
+```markdown
+> [!CAUTION]
+> **Alpha software — here be dragons**
+> This is an early release. APIs, configuration formats, and CLI flags may change without notice in future versions. Bugs and crashes are possible.
+```
+
+Omit it from every other release. You don't choose the version, so without a `version`
+argument, ask whether this is a pre-release rather than inferring it from the
+recommended level.
 
 ## Edge cases
 
