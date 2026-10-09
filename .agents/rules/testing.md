@@ -130,7 +130,7 @@ After adding a check to the code under test, disable it in place, confirm a test
 fails, and restore it before committing:
 
 ```
-python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
+uv run python -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
     --anchor 'if not target.exists():' --with 'if False:' \
     -- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .
 ```
@@ -161,7 +161,7 @@ not a general property of environment variables or resource limits: a module els
 setting one of its own is caught normally. So MISSED means what it says everywhere except
 there, and the question to ask is "does the runner set this too?", not "is it
 inheritable?". Where it does apply, verify by hand — mutate the check, run its module
-directly (`python3 -m unittest scripts.dev.test_mutate`), confirm the named case fails,
+directly (`uv run python -m unittest scripts.dev.test_mutate`), confirm the named case fails,
 then `git restore` — and say so in the pull request, or the next reader takes MISSED for
 untested.
 

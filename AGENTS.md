@@ -22,14 +22,18 @@ preceding the code they document, not as trailing comments.
   resolve `scripts/` and every skill that ships its own `pyproject.toml`. Toolchain pins
   and `black`/`ruff` settings live once at the root; a skill's own `pyproject.toml` keeps
   only what makes it independently buildable — `[project]`, `[build-system]`, its entry
-  point, `[tool.autohooks]`. `scripts/` stays stdlib-only (ADR 007) — the workspace gives
-  it a dependency path, not a dependency.
-- `scripts/` is a package (ADR 011), so run a script as `python3 -m scripts.<area>.<name>`
-  from the repo root — a path invocation fails to import, and this is unchanged by the
-  workspace, since `scripts/` still declares nothing to install. The `scripts/` suite is
-  `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`. After `uv sync --locked`
-  at the repo root, each skill's checks run as `uv run --directory skills/<name> pytest`,
-  `ruff check .` and `black --check .`, all three gated by `pr.yml`.
+  point, `[tool.autohooks]`. `scripts/` imports only what `scripts/pyproject.toml`
+  declares (ADR 035) — never per-script PEP 723 metadata. Add one with
+  `uv add --package scripts <dep>`. A root `uv sync` installs every workspace member, so
+  an import `scripts/pyproject.toml` lacks still resolves and its tests still pass: check
+  the declaration, not the run.
+- `scripts/` is a package, so run a script as `uv run python -m scripts.<area>.<name>`
+  from the repo root (ADR 035) — a path invocation fails to import, and bare `python3`
+  cannot resolve the declared dependencies. The `scripts/` suite is
+  `uv run python -m unittest discover -s scripts -t . -p 'test_*.py'`. After
+  `uv sync --locked` at the repo root, each skill's checks run as
+  `uv run --directory skills/<name> pytest`, `ruff check .` and `black --check .`, all
+  three gated by `pr.yml`.
 - `scripts/frontmatter.py` is a symlink into `skills/writing-adrs/`; edit the parser there.
 - Every function annotates its return type and its named parameters, `-> None`
   included; `*args` and `**kwargs` are left bare. Test functions are exempt from
@@ -138,7 +142,7 @@ a prefix binds everything beneath it** — so `scripts/` covers `scripts/ci/vers
 Read them as literal paths and you will miss most of what binds a file, with nothing to
 tell you. `Archived` decisions are in force but kept out of `INDEX.md`, so check for them
 with `rg -l 'status: Archived' docs/adr/` before recording a new decision.
-`python3 skills/writing-adrs/adr.py for <path>` answers which decisions bind a path,
+`uv run python skills/writing-adrs/adr.py for <path>` answers which decisions bind a path,
 `Archived` ones included; the plugin's hooks inject them the first time a session touches
 one.
 
