@@ -1,15 +1,19 @@
 """Unit tests for ``parse_frontmatter()``.
 
-Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
-(ADR 007). The module under test is reached through the `scripts/frontmatter.py`
+`unittest` rather than pytest, so the suite needs no dependency beyond the declared ones
+(ADR 035). The module under test is reached through the `scripts/frontmatter.py`
 symlink to `skills/writing-adrs/frontmatter.py`, which ships the same tests as its
 own `uv run pytest` suite. Run from the repo root:
 
-    python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+    uv run python -m unittest discover -s scripts -t . -p 'test_*.py'
 """
 
 import unittest
+from unittest import mock
 
+import yaml
+
+from scripts import frontmatter
 from scripts.frontmatter import parse_frontmatter
 
 
@@ -22,11 +26,12 @@ class ScalarTests(unittest.TestCase):
         self.assertEqual(fields, {"status": "Accepted", "date": "2026-08-01"})
         self.assertEqual(problems, [])
 
-    def test_keeps_everything_after_the_first_colon(self):
-        """A value containing a colon survives intact, since summaries routinely have one."""
+    def test_a_colon_space_in_a_plain_value_is_a_problem(self):
+        """`: ` inside a plain value is a YAML error, so the value must be quoted."""
         fields, problems = parse_frontmatter("summary: Use mypy, not ty: prefer it")
-        self.assertEqual(fields, {"summary": "Use mypy, not ty: prefer it"})
-        self.assertEqual(problems, [])
+        self.assertEqual(fields, {})
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith("field summary is not valid YAML"), problems)
 
     def test_strips_whitespace_around_key_and_value(self):
         """Surrounding whitespace belongs to the formatting, not to the value."""
@@ -154,9 +159,9 @@ class BlockScalarTests(unittest.TestCase):
                     problems, ["field summary uses a block scalar; put it on one line"]
                 )
 
-    def test_allows_a_value_merely_starting_with_an_indicator(self):
-        """`summary: > 25 ADRs` is prose, not a block scalar — the pattern is anchored."""
-        fields, problems = parse_frontmatter("summary: > 25 ADRs and counting")
+    def test_quoting_a_value_starting_with_an_indicator_reads_it(self):
+        """A quoted `> 25 ADRs` is prose, not a block scalar — the pattern is anchored."""
+        fields, problems = parse_frontmatter('summary: "> 25 ADRs and counting"')
         self.assertEqual(fields, {"summary": "> 25 ADRs and counting"})
         self.assertEqual(problems, [])
 
@@ -169,6 +174,78 @@ class DuplicateKeyTests(unittest.TestCase):
         fields, problems = parse_frontmatter("status: Accepted\nstatus: Archived")
         self.assertEqual(fields, {"status": "Accepted"})
         self.assertEqual(problems, ["sets field status twice; the first value stands"])
+
+
+class YamlValueTests(unittest.TestCase):
+    """Values PyYAML decides, which the line rules leave alone."""
+
+    def test_unquotes_a_quoted_flow_sequence_entry(self):
+        """A templated path must be quoted in YAML; the parsed entry carries no quotes."""
+        fields, problems = parse_frontmatter(
+            "scope: ['{{ cookiecutter.github_project_name }}/', docs/]"
+        )
+        self.assertEqual(
+            fields, {"scope": ["{{ cookiecutter.github_project_name }}/", "docs/"]}
+        )
+        self.assertEqual(problems, [])
+
+    def test_keeps_a_comma_inside_a_quoted_entry(self):
+        """A quoted entry holding a comma stays one entry rather than splitting in two."""
+        fields, _ = parse_frontmatter('scope: ["a, b/", c/]')
+        self.assertEqual(fields, {"scope": ["a, b/", "c/"]})
+
+    def test_resolves_no_types(self):
+        """BaseLoader: numbers, booleans and dates stay strings."""
+        fields, _ = parse_frontmatter("a: 34\nb: yes\nc: 2026-10-08\nd: [12, 3]")
+        self.assertEqual(
+            fields, {"a": "34", "b": "yes", "c": "2026-10-08", "d": ["12", "3"]}
+        )
+
+    def test_reports_invalid_yaml_against_its_field(self):
+        """`: ` inside a plain value is a YAML error; only that field is lost."""
+        fields, problems = parse_frontmatter("status: Accepted\nsummary: Use X: not Y")
+        self.assertEqual(fields, {"status": "Accepted"})
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith("field summary is not valid YAML"), problems)
+
+    def test_reports_a_mapping_value(self):
+        """An unquoted `{` opens a mapping, which no field here takes."""
+        fields, problems = parse_frontmatter("scope: [{{ x }}/]")
+        self.assertEqual(fields, {})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("field scope", problems[0])
+
+    def test_reports_an_inline_comment(self):
+        """YAML drops ` #…` without a word, the silent truncation this module exists to catch."""
+        for loader in (frontmatter.LOADER, yaml.BaseLoader):
+            for line in ("summary: Issue #12 closes.", "scope: [a/, b/] # note"):
+                with self.subTest(loader=loader.__name__, line=line):
+                    with mock.patch.object(frontmatter, "LOADER", loader):
+                        fields, problems = parse_frontmatter(line)
+                    self.assertEqual(fields, {})
+                    self.assertEqual(len(problems), 1)
+                    self.assertIn("comment", problems[0])
+
+    def test_reports_a_tag_anchor_or_alias(self):
+        """`!x y` and `&x y` both load as `y`, dropping what was written."""
+        for loader in (frontmatter.LOADER, yaml.BaseLoader):
+            for line in ("summary: !x y", "summary: &x y", "scope: [&a b/, *a]"):
+                with self.subTest(loader=loader.__name__, line=line):
+                    with mock.patch.object(frontmatter, "LOADER", loader):
+                        fields, problems = parse_frontmatter(line)
+                    self.assertEqual(fields, {})
+                    self.assertEqual(len(problems), 1)
+
+    def test_a_quoted_hash_is_text(self):
+        """A `#` inside quotes is text, so quoting is the way out of the comment problem."""
+        fields, problems = parse_frontmatter('summary: "Issue #12 closes."')
+        self.assertEqual((fields, problems), ({"summary": "Issue #12 closes."}, []))
+
+    def test_loads_with_libyaml_where_available(self):
+        """The fast loader is used when libyaml is built in, the pure-Python one otherwise."""
+        self.assertIs(
+            frontmatter.LOADER, yaml.CBaseLoader if yaml.__with_libyaml__ else yaml.BaseLoader
+        )
 
 
 if __name__ == "__main__":
