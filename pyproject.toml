@@ -23,6 +23,14 @@ line-length = 96
 # directory (the repository root), missing each skill's own top-level modules; the
 # glob keeps this covering a future skill with no matching edit here (ADR 031).
 src = ["scripts", "skills/*"]
+# With no [project] here, ruff would otherwise assume Python 3.10 rather than read a
+# member's requires-python, and class tomllib as third-party; matches black above.
+target-version = "py312"
+
+[tool.ruff.lint]
+# Ruff's default rule set shifts between minor releases (0.17 dropped the naive-datetime
+# DTZ rules) and the lockfile floats with Renovate, so select DTZ here explicitly.
+extend-select = ["DTZ"]
 
 # The three members' dev groups were identical ranges kept in three separate files
 # (ADR 031's drift finding); one copy here is what a workspace-wide `uv sync` installs

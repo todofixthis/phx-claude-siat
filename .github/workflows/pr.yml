@@ -20,6 +20,7 @@ jobs:
     outputs:
       manifests: ${{ steps.filter.outputs.manifests }}
       python: ${{ steps.filter.outputs.python }}
+      scripts: ${{ steps.filter.outputs.scripts }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,6 +33,7 @@ jobs:
         run: |
           manifests=false
           python=false
+          scripts=false
 
           changed=$(git diff --name-only "$(git merge-base "$BASE_SHA" "$HEAD_SHA")" "$HEAD_SHA")
           echo "Changed files:"
@@ -58,17 +60,23 @@ jobs:
                   skills/*|.agents/skills/*)
                       manifests=true ;;
               esac
+              # The root workspace files carry the ruff/black settings and pins.
+              case "$path" in
+                  pyproject.toml|uv.lock|scripts/*)
+                      scripts=true ;;
+              esac
               # A change to the workflow itself re-runs everything it gates. The `adr`
               # job runs unconditionally (ADR 021), so it needs no arm here.
               case "$path" in
                   .github/workflows/*)
-                      manifests=true; python=true ;;
+                      manifests=true; python=true; scripts=true ;;
               esac
           done
 
           echo "manifests=$manifests" >> "$GITHUB_OUTPUT"
           echo "python=$python" >> "$GITHUB_OUTPUT"
-          echo "Selected checks: manifests=$manifests python=$python"
+          echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
+          echo "Selected checks: manifests=$manifests python=$python scripts=$scripts"
 
   # The pre-commit hook runs these checks, but hooks are not installed on clone —
   # this is the backstop for a contributor who never set core.hooksPath. The tool now
@@ -163,11 +171,36 @@ jobs:
       - name: Test
         run: uv run --directory ${{ matrix.skill }} pytest
 
+  # scripts/ declares no tooling, so the `python` matrix's mirror (ADR 005) never
+  # reaches it. Lint and format only: nothing type-checks scripts/, and its tests run
+  # in the `manifests` job.
+  scripts:
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          cache-dependency-glob: uv.lock
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run --directory scripts ruff check .
+
+      - name: Check formatting
+        run: uv run --directory scripts black --check .
+
   # The single required status check. Path-filtered jobs report as "skipped"
   # rather than "success", which would deadlock branch protection if each were
   # required directly; depending on them here collapses that into one result.
   gate:
-    needs: [adr, changes, manifests, python]
+    needs: [adr, changes, manifests, python, scripts]
     if: always()
     runs-on: ubuntu-latest
     steps:
