@@ -1,8 +1,8 @@
 """Disable one check in place, run the suite, and report whether a test caught it.
 
-Run from the repo root (ADR 011):
+Run from the repo root (ADR 035):
 
-    python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
+    uv run python -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
         --anchor 'if not target.exists():' --with 'if False:' \
         -- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .
 
@@ -17,7 +17,7 @@ next, and that is usually a commit. A hard kill — SIGKILL, a segfault — cann
 from inside the process; recovery is `git restore <file>`, and since the mutation is one
 anchor replaced once, `git diff` shows exactly what to undo.
 
-Stdlib-only, like everything under scripts/ (ADR 007).
+Imports nothing beyond the standard library; the suite it launches runs under uv (ADR 035).
 """
 
 import argparse
@@ -42,7 +42,9 @@ MEMORY_LIMIT_BYTES = 2 * 1024 * 1024 * 1024
 RECURSION_FLAG = "MUTATE_IN_PROGRESS"
 
 DEFAULT_TEST_COMMAND = (
-    "python3",
+    "uv",
+    "run",
+    "python",
     "-m",
     "unittest",
     "discover",

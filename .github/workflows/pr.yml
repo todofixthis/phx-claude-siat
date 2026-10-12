@@ -82,10 +82,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Check the ADR corpus and index
-        run: python3 skills/writing-adrs/adr.py check
-
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Check the ADR corpus and index
+        run: uv run python skills/writing-adrs/adr.py check
 
       # The recipe consumers' CI runs, against this checkout, so it cannot rot unnoticed.
       - name: Check the consumer recipe still resolves
@@ -98,11 +98,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
       - name: Validate the manifests and skill frontmatter
-        run: python3 -m scripts.ci.validate_manifests
+        run: uv run python -m scripts.ci.validate_manifests
 
       - name: Unit-test the repo scripts
-        run: python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+        run: uv run python -m unittest discover -s scripts -t . -p 'test_*.py'
 
       # Against the real CHANGELOG, not fixtures: this is what makes an
       # unreleasable version or a CHANGELOG/plugin.json mismatch fail on the pull
@@ -111,7 +113,7 @@ jobs:
       # extracted notes land in the log — worth having on the rare run where what
       # the script read is the question.
       - name: Check the release notes resolve
-        run: python3 -m scripts.ci.release_notes
+        run: uv run python -m scripts.ci.release_notes
 
   # Mirrors the tooling each skill's pyproject.toml already declares. The matrix values
   # are full paths on purpose: validate_manifests.py looks for each skill directory as a

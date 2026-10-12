@@ -2,7 +2,7 @@
 
 This repository's own tool, not part of the `writing-adrs` skill a consumer invokes:
 `.githooks/pre-commit` runs it directly, as a sibling to `adr.py`'s own `for`, over every
-staged path. Standard library only. `adr.py` and `frontmatter.py`, whose helpers this
+staged path. It imports only what `scripts/pyproject.toml` declares (ADR 035). `adr.py` and `frontmatter.py`, whose helpers this
 module and `adr.py` each need, reach `scripts/` the way `frontmatter.py` itself already
 does — a symlink to `skills/writing-adrs/`, the canonical source both are edited in — so
 this module inserts its own directory onto `sys.path` before importing either, making the

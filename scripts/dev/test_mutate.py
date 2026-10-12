@@ -1,9 +1,9 @@
 """Tests for mutate.py.
 
-Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
-(ADR 007). Run from the repo root:
+`unittest` rather than pytest, so the suite needs no dependency beyond the declared ones
+(ADR 035). Run from the repo root:
 
-    python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+    uv run python -m unittest discover -s scripts -t . -p 'test_*.py'
 
 `mutate()` takes the file to mutate as an argument and the suite to run as another, so
 these tests never chdir and never let it reach the real command: an argumentless run

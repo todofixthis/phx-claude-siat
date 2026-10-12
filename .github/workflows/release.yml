@@ -64,10 +64,12 @@ jobs:
       # version, so an empty one has to stop the run here rather than surface as
       # an empty tag name. Cheap and safe to run even when nothing needs
       # releasing — a consistent repo always has CHANGELOG top == plugin.json.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
       - name: Read the version and build the release notes
         id: release
         run: |
-          version=$(python3 -m scripts.ci.release_notes --out notes.md)
+          version=$(uv run python -m scripts.ci.release_notes --out notes.md)
           if [ -z "$version" ]; then
             echo "❌ no version resolved from the CHANGELOG and plugin manifest"
             exit 1
