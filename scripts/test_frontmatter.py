@@ -208,12 +208,43 @@ class YamlValueTests(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith("field summary is not valid YAML"), problems)
 
-    def test_reports_a_mapping_value(self):
-        """An unquoted `{` opens a mapping, which no field here takes."""
+    def test_reports_an_unquoted_template_as_invalid_yaml(self):
+        """An unquoted `{{` inside a flow sequence is a YAML error, reported against its field."""
         fields, problems = parse_frontmatter("scope: [{{ x }}/]")
         self.assertEqual(fields, {})
         self.assertEqual(len(problems), 1)
-        self.assertIn("field scope", problems[0])
+        self.assertTrue(problems[0].startswith("field scope is not valid YAML"), problems)
+
+    def test_reports_a_mapping_value(self):
+        """A mapping loads cleanly but is not text, so the message names it."""
+        fields, problems = parse_frontmatter("scope: {a: b}")
+        self.assertEqual(fields, {})
+        self.assertEqual(
+            problems, ["field scope holds a mapping, not text or a list of text; quote it"]
+        )
+
+    def test_reports_a_non_text_list_item(self):
+        """A nested list is not text, so the message names the item rather than the list."""
+        fields, problems = parse_frontmatter("scope: [[a]]")
+        self.assertEqual(fields, {})
+        self.assertEqual(
+            problems,
+            [
+                (
+                    "field scope holds a list holding a non-text item, "
+                    "not text or a list of text; quote it"
+                )
+            ],
+        )
+
+    def test_reports_a_quoted_key_rather_than_raising(self):
+        """YAML strips a key's quotes, so the field is dropped with a problem, never a KeyError."""
+        for line, key in (("'status': Accepted", "'status'"), ('"a": b', '"a"')):
+            with self.subTest(line=line):
+                self.assertEqual(
+                    parse_frontmatter(line),
+                    ({}, [f"field {key} has a quoted key; write the key unquoted"]),
+                )
 
     def test_reports_an_inline_comment(self):
         """YAML drops ` #…` without a word, the silent truncation this module exists to catch."""

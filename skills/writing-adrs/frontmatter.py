@@ -66,11 +66,15 @@ def _load_field(key: str, lines: list[str]) -> tuple[str | list[str] | None, str
     """Load one field's raw lines, returning its value or the problem with it."""
     text = "\n".join(lines)
     try:
-        value = yaml.load(text, Loader=LOADER)[key]
+        document = yaml.load(text, Loader=LOADER)
         decorated = _undecorated_problem(text)
     except yaml.YAMLError as exc:
         reason = getattr(exc, "problem", None) or str(exc)
         return None, f"field {key} is not valid YAML; quote the value: {reason}"
+    # YAML strips quotes from a key, so a quoted key loads under a different name.
+    if not isinstance(document, dict) or list(document) != [key]:
+        return None, f"field {key} has a quoted key; write the key unquoted"
+    value = document[key]
     if decorated:
         return None, f"field {key} holds a {decorated}, which YAML drops; quote the value"
     if isinstance(value, str) or (
