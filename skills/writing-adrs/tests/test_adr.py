@@ -268,49 +268,21 @@ class ParseAdrTests(unittest.TestCase):
             self.problems(adr_text(**{REVISIT_DISCHARGED_BY_FIELD: "[ADR 12, 14]"})),
         )
 
-    def test_rejects_a_value_a_yaml_reader_takes_as_a_mapping(self):
-        """`: ` inside a value fails GitHub's rendering of the whole file, so it is refused."""
-        self.assertIn(
-            "declares `summary` holding `: `, which a YAML reader such as GitHub's takes as a "
-            "nested mapping; rephrase the value",
-            self.problems(adr_text(summary="Do this: that.")),
-        )
-
-    def test_rejects_a_value_ending_in_a_colon(self):
-        """A trailing colon opens a mapping the same way, and a substring check misses it."""
-        self.assertIn(
-            "declares `revisit-when` holding `: `, which a YAML reader such as GitHub's takes "
-            "as a nested mapping; rephrase the value",
-            self.problems(adr_text(**{REVISIT_WHEN_FIELD: "The rule is this:"})),
-        )
-
-    def test_rejects_a_value_opening_with_a_yaml_indicator(self):
-        """A leading backtick, quote or bracket cannot start a plain value, and prose starts with one easily."""
-        for opening in (
-            "`x.py` is anchored.",
-            '"Do nothing" wins.',
-            "[a] is first.",
-            "- Dash.",
-        ):
-            with self.subTest(opening=opening):
-                self.assertIn(
-                    f"declares `summary` holding an opening `{opening[0]}`, which a YAML "
-                    "reader such as GitHub's takes as syntax; start the value with a word",
-                    self.problems(adr_text(summary=opening)),
-                )
+    def test_reports_a_value_yaml_cannot_read(self):
+        """A value YAML takes as a nested mapping, or drops after a comment, is reported."""
+        with self.subTest(case="mapping"):
+            problems = self.problems(adr_text(summary="Use X: not Y"))
+            self.assertEqual(len(problems), 1)
+            self.assertIn("field summary is not valid YAML", problems[0])
+        with self.subTest(case="comment"):
+            problems = self.problems(adr_text(summary="Issue #12 closes."))
+            self.assertEqual(len(problems), 1)
+            self.assertIn("comment", problems[0])
 
     def test_accepts_prose_with_yaml_indicators_mid_value(self):
         """Backticks, quotes, brackets and lone colons mid-value are ordinary prose and pass."""
         summary = 'Run `pr.yml` on every PR, said "no" to [globs], at 1:2 and foo@bar.'
         self.assertEqual(self.problems(adr_text(summary=summary)), [])
-
-    def test_rejects_a_value_a_yaml_reader_takes_as_a_comment(self):
-        """` #` inside a value silently truncates it on GitHub, so it is refused."""
-        self.assertIn(
-            "declares `revisit-when` holding ` #`, which a YAML reader such as GitHub's takes "
-            "as a comment; rephrase the value",
-            self.problems(adr_text(**{REVISIT_WHEN_FIELD: "Issue #12 closes."})),
-        )
 
     def test_rejects_the_field_scope_replaced(self):
         """A stale `tags` must fail, or a half-finished migration passes unnoticed."""
@@ -960,6 +932,17 @@ class ResolveSubjectsTests(RepoTestCase):
 class BindingTests(RepoTestCase):
     """Unit tests for ``binding()``: the reverse lookup, Archived included, directories slashed."""
 
+    def test_parses_a_hand_quoted_templated_scope_entry(self):
+        """A hand-written quoted `{{ ... }}/` entry parses clean and binds a path under it."""
+        entry = "{{ cookiecutter.github_project_name }}/"
+        self.write_scoped(f"{entry}README.md")
+        text = adr_text(scope=f'["{entry}"]')
+        self.assertEqual(parse_adr(text)[3], [])
+        self.write("001-first.md", text)
+        self.assertEqual(
+            [r.number for r in binding(self.repo_root, [f"{entry}README.md"])], ["001"]
+        )
+
     def test_matches_a_directory_token_with_or_without_its_slash(self):
         """`scripts/adr` finds an entry `scripts/adr/`, since a directory token is slashed."""
         self.write_scoped("scripts/adr/x.py")
@@ -1220,22 +1203,6 @@ class NewAdrTests(RepoTestCase):
             "summary holds a line break; frontmatter carries a value on one line",
         )
 
-    def test_refuses_a_summary_a_yaml_reader_would_misread(self):
-        """Written, the file would render nowhere on GitHub, and the reconcile after would refuse it."""
-        self.assertEqual(
-            self.refuse("W", "Do this: that.", [SCOPED_FILE]),
-            "summary holds `: `, which a YAML reader such as GitHub's takes as a nested "
-            "mapping; rephrase the value",
-        )
-
-    def test_refuses_a_scope_entry_a_yaml_reader_would_misread(self):
-        """A scope entry is checked up front too, not left for the reconcile after the write."""
-        self.assertEqual(
-            self.refuse("W", "A summary.", ["a: b.py"]),
-            "scope holds `: `, which a YAML reader such as GitHub's takes as a nested "
-            "mapping; rephrase the value",
-        )
-
     def test_refuses_a_revisit_trigger_holding_a_line_break(self):
         """The trigger is written as a field like the summary, and breaks the same way."""
         self.assertEqual(
@@ -1243,21 +1210,43 @@ class NewAdrTests(RepoTestCase):
             "revisit-when holds a line break; frontmatter carries a value on one line",
         )
 
-    def test_refuses_a_scope_entry_holding_a_comma(self):
-        """The inline list splits on commas, so one entry would land as two naming nothing."""
-        self.assertEqual(
-            self.refuse("W", "A summary.", ["a,b.py"]),
-            "scope entry 'a,b.py' holds a comma or a line break, and the inline list would "
-            "split it into entries naming nothing",
-        )
-
     def test_refuses_a_scope_entry_holding_a_line_break(self):
         """A break inside the list ends the field early, leaving the rest as stray frontmatter."""
         self.assertEqual(
             self.refuse("W", "A summary.", ["a\nb.py"]),
-            "scope entry 'a\\nb.py' holds a comma or a line break, and the inline list would "
+            "scope entry 'a\\nb.py' holds a line break, and the inline list would "
             "split it into entries naming nothing",
         )
+
+    def test_new_quotes_a_summary_yaml_would_misread(self):
+        """A summary YAML would misread is written quoted and reads back verbatim."""
+        summary = "Use X: not Y #1"
+        path = adr.new_adr(self.repo_root, "W", summary, [SCOPED_FILE], None, date(2026, 9, 2))
+        content = path.read_text(encoding="utf-8")
+        self.assertIn('\nsummary: "Use X: not Y #1"\n', content)
+        fields, _, _, problems = parse_adr(content)
+        self.assertEqual(fields["summary"], summary)
+        self.assertEqual(problems, [])
+
+    def test_new_writes_a_templated_scope_entry_for_reads_back(self):
+        """A scope entry opening with `{{` is quoted, so `check` and `binding` still read it."""
+        entry = "{{ cookiecutter.github_project_name }}/"
+        self.write_scoped(f"{entry}README.md")
+        adr.new_adr(self.repo_root, "W", "S.", [entry], None, date(2026, 9, 2))
+        _, findings = inspect(self.repo_root)
+        self.assertEqual(findings, [])
+        bound = binding(self.repo_root, [f"{entry}README.md"])
+        self.assertEqual([row.number for row in bound], ["001"])
+
+    def test_new_accepts_a_comma_in_a_scope_entry(self):
+        """A comma no longer splits the inline list, because the entry is written quoted."""
+        self.write_scoped("a, b/README.md")
+        path = adr.new_adr(self.repo_root, "W", "S.", ["a, b/"], None, date(2026, 9, 2))
+        content = path.read_text(encoding="utf-8")
+        self.assertIn('\nscope: ["a, b/"]\n', content)
+        fields, _, _, problems = parse_adr(content)
+        self.assertEqual(fields[SCOPE_FIELD], ["a, b/"])
+        self.assertEqual(problems, [])
 
     def test_refuses_to_scaffold_beside_a_malformed_sibling(self):
         """An existing fault is caught before writing, so no new file lands beside it index-less."""
@@ -1296,6 +1285,25 @@ class MainNewTests(RepoTestCase):
         self.assertEqual(caught.exception.code, 2)
 
 
+class YamlValueTests(unittest.TestCase):
+    """Unit tests for ``yaml_value()``: plain where it reads back, quoted where it would not."""
+
+    def test_yaml_value_leaves_plain_prose_plain(self):
+        """Prose reads back unchanged so is written as given; a comma would split a flow entry."""
+        self.assertEqual(adr.yaml_value("Ship it, then measure"), "Ship it, then measure")
+        self.assertEqual(adr.yaml_value("a, b/", in_flow=True), '"a, b/"')
+
+    def test_quotes_a_value_with_a_mapping_or_a_comment(self):
+        """`: ` and ` #` each change what a reader gets, so each value is quoted."""
+        for value in ("Use X: not Y", "Issue #12 closes."):
+            with self.subTest(value=value):
+                self.assertEqual(adr.yaml_value(value), f'"{value}"')
+
+    def test_quotes_non_ascii_without_escaping_it(self):
+        """A value needing quotes keeps its characters, so the file stays readable."""
+        self.assertEqual(adr.yaml_value("Ngā: kupu"), '"Ngā: kupu"')
+
+
 class SetFieldsTests(unittest.TestCase):
     """Unit tests for ``set_fields()``: replace, append, delete, and leave the body alone."""
 
@@ -1322,6 +1330,11 @@ class SetFieldsTests(unittest.TestCase):
         text = adr_text() + "\nMore body with status: words in it.\n"
         result = adr.set_fields(text, {"status": "Superseded"})
         self.assertTrue(result.endswith("\nMore body with status: words in it.\n"))
+
+    def test_renders_a_list_as_a_flow_sequence_of_safe_entries(self):
+        """A list value is written `[a, "b, c"]`, each entry quoted only where it must be."""
+        result = adr.set_fields(adr_text(), {"scope": ["x/", "a, b/"]})
+        self.assertIn('\nscope: [x/, "a, b/"]\n', result)
 
     def test_replaces_a_field_written_with_space_before_its_colon(self):
         """The parser accepts `status : Accepted`, so the editor must find that line too."""
@@ -1377,6 +1390,17 @@ class SupersedeTests(RepoTestCase):
 
 class DischargeTests(RepoTestCase):
     """Integration tests for ``discharge()``."""
+
+    def test_discharge_quotes_a_leaving_condition(self):
+        """A `--leaving` condition YAML would misread is written quoted and reads back verbatim."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        adr.discharge(self.repo_root, 1, 2, leaving="Revisit: when X")
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        fields, _, _, problems = parse_adr(content)
+        self.assertEqual(fields[REVISIT_WHEN_FIELD], "Revisit: when X")
+        self.assertEqual(problems, [])
 
     def test_records_the_discharge_and_empties_the_revisit_cell(self):
         """Spent wholly, revisit-when goes, the list gains the ADR, and the Revisit cell empties."""
