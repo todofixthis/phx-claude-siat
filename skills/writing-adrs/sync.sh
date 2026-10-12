@@ -77,12 +77,14 @@ fi
 : >"$marker" || exit 1
 
 # Drop the venv of each version whose directory has left the plugin cache, so no session
-# still running one loses it; the version just synced is kept because its directory is
-# the root. The parent is the root's string trimmed, never `..`, which the kernel
-# resolves physically through a symlinked version directory.
+# still running one loses it. The version just synced is always kept, even if its own
+# directory was removed during the sync, so the python path printed below still exists.
+# The parent is the root's string trimmed, never `..`, which the kernel resolves
+# physically through a symlinked version directory.
 if [ "$cached" -eq 1 ]; then
     for old in "$data/venvs"/*; do
         [ -d "$old" ] || continue
+        [ "${old##*/}" = "$version" ] && continue
         [ -d "${root%/*}/${old##*/}" ] && continue
         rm -rf -- "$old"
     done

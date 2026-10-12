@@ -246,6 +246,21 @@ class SyncTests(PluginTreeTestCase):
                 self.assertTrue(self.venv("0.9.0").is_dir())
                 self.assertFalse(self.venv("0.8.0").exists())
 
+    def test_keeps_the_version_just_synced_when_its_directory_goes_mid_sync(self):
+        """A version directory removed during the sync must not take the venv just built."""
+        root = self.cache_root()
+        # The real uv, then the version directory removed before the prune runs, as Claude
+        # Code might remove it while a session's SessionStart is still syncing.
+        write_executable(
+            self.tmp / "vanishing-bin" / "uv",
+            f'#!/bin/sh\n"{shutil.which("uv")}" "$@" || exit\nrm -rf "{root}"\n',
+        )
+        path = f"{self.tmp / 'vanishing-bin'}{os.pathsep}{os.environ['PATH']}"
+        result = self.sync(root, PATH=path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(root.exists())
+        self.assertTrue((self.venv() / VENV_MARKER).is_file())
+
     def test_sync_refuses_an_empty_data_dir_in_the_cache(self):
         """With no data directory the cache case has nowhere to build, and says so."""
         root = self.cache_root()
