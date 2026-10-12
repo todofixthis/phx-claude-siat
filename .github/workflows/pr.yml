@@ -47,9 +47,11 @@ jobs:
               # the skills shipping a pyproject.toml have a job to run, and a wider
               # glob would run the matrix for every skill edit. The root workspace
               # files and scripts/pyproject.toml gate the same job (ADR 031): a
-              # change to either affects what every leg resolves and installs.
+              # change to either affects what every leg resolves and installs. So do
+              # hooks/*: writing-adrs' tests are the only ones running hooks.json's
+              # commands, and a hooks-only change would otherwise skip them.
               case "$path" in
-                  pyproject.toml|uv.lock|scripts/pyproject.toml|\
+                  hooks/*|pyproject.toml|uv.lock|scripts/pyproject.toml|\
                   skills/creative-commits/*|skills/nz-english/*|skills/writing-adrs/*)
                       python=true ;;
               esac

@@ -38,6 +38,14 @@ VENV_MARKER = ".phx-synced"
 # The order events are timed in, cycling. Twenty-four events give six of each, so each
 # path below is read exactly once.
 EVENT_CYCLE = ("SessionStart", "PreToolUse", "PostToolBatch", "Stop")
+# The events that must print context every time: the note at each SessionStart, and the
+# binding rows at each PreToolUse, every one a first touch. PostToolBatch and Stop speak
+# only of new findings, so silence from them is no fault.
+INJECTING_EVENTS = ("SessionStart", "PreToolUse")
+# How hook.py's crash text opens. hook.py prints it and exits 0, so a crashing hook looks
+# like a working one but for this text; `scripts/` may not import hook.py to share its
+# constant, and a test asserts the two still agree.
+CRASH_PREFIX = "phx:writing-adrs hook failed"
 # Paths decisions bind, each read once so every PreToolUse is a first touch that injects.
 TOUCHED_PATHS = (
     Path("AGENTS.md"),
@@ -48,6 +56,11 @@ TOUCHED_PATHS = (
     Path("docs/adr/INDEX.md"),
 )
 SESSION_ID = "time-hooks"
+# The cold SessionStart opens the session. Each timed one is a compact instead: compact
+# resets the session's per-decision injection record, so every timed PreToolUse is a
+# first touch that injects its path's full set of rows, whatever earlier reads delivered.
+COLD_SOURCE = "startup"
+TIMED_SOURCE = "compact"
 # For an entry naming no timeout of its own; a bound either way.
 DEFAULT_TIMEOUT_SECONDS = 120
 
@@ -99,13 +112,16 @@ def hook_commands(hooks_file: Path) -> dict[str, list[tuple[str, float]]]:
     return commands
 
 
-def build_event(name: str, project_dir: Path, index: int) -> dict:
-    """The stdin for the `index`th timed occurrence of `name`, from the fields hook.py reads."""
+def build_event(name: str, project_dir: Path, index: int, *, cold: bool) -> dict:
+    """The stdin for the `index`th occurrence of `name`, from the fields hook.py reads.
+
+    `cold` marks the untimed SessionStart that opens the session.
+    """
     event = {"cwd": str(project_dir), "hook_event_name": name, "session_id": SESSION_ID}
     path = str(project_dir / TOUCHED_PATHS[index % len(TOUCHED_PATHS)])
     read = {"tool_input": {"file_path": path}, "tool_name": "Read"}
     if name == "SessionStart":
-        event["source"] = "startup"
+        event["source"] = COLD_SOURCE if cold else TIMED_SOURCE
     elif name == "PreToolUse":
         event |= read
     elif name == "PostToolBatch":
@@ -115,8 +131,9 @@ def build_event(name: str, project_dir: Path, index: int) -> dict:
 
 def run_event(
     commands: list[tuple[str, float]], event: dict, env: dict[str, str], cwd: Path
-) -> float:
-    """Run each command for `event` through `sh -c`; return the wall time they took."""
+) -> tuple[float, list[str]]:
+    """Run each command for `event` through `sh -c`; return their wall time and stdouts."""
+    outputs = []
     start = time.perf_counter()
     for command, timeout in commands:
         try:
@@ -138,7 +155,28 @@ def run_event(
             raise HookError(
                 f"{event['hook_event_name']} hook exited {result.returncode}: {result.stderr}"
             )
-    return time.perf_counter() - start
+        outputs.append(result.stdout)
+    return time.perf_counter() - start, outputs
+
+
+def check_outputs(name: str, outputs: list[str], label: str) -> None:
+    """Raise unless each output shows hook.py ran: no crash, and context where it must inject.
+
+    A hook exiting at its marker gate, or a venv path the per-event hooks compute
+    differently from sync.sh, prints nothing; hook.py crashing prints its crash text.
+    Either times no work while passing the ceiling.
+    """
+    for stdout in outputs:
+        context = ""
+        if stdout.strip():
+            try:
+                context = json.loads(stdout)["hookSpecificOutput"]["additionalContext"]
+            except (KeyError, TypeError, ValueError) as exc:
+                raise HookError(f"{label} printed no hook JSON: {stdout!r}") from exc
+        if context.startswith(CRASH_PREFIX):
+            raise HookError(f"{label} reported a hook.py crash: {context}")
+        if name in INJECTING_EVENTS and not context:
+            raise HookError(f"{label} printed no additionalContext")
 
 
 def hook_env(plugin_root: Path, data_dir: Path, project_dir: Path) -> dict[str, str]:
@@ -154,14 +192,27 @@ def hook_env(plugin_root: Path, data_dir: Path, project_dir: Path) -> dict[str, 
 def time_hooks(
     hooks_file: Path, plugin_root: Path, data_dir: Path, project_dir: Path, events: int
 ) -> dict[str, list[float]]:
-    """Time `events` events cycling EVENT_CYCLE in one session; seconds per event name."""
+    """Time `events` events cycling EVENT_CYCLE in one session; seconds per event name.
+
+    Raises HookError where an event's output shows hook.py did not run, or where the venv
+    is unmarked after any event: a SessionStart re-sync that fails unmarks it, the events
+    after it exit at their gate, and a later re-sync would hide that from a check at the end.
+    """
     commands = hook_commands(hooks_file)
     env = hook_env(plugin_root, data_dir, project_dir)
+    marker = marker_path(data_dir)
     samples: dict[str, list[float]] = {name: [] for name in EVENT_CYCLE}
     for index in range(events):
         name = EVENT_CYCLE[index % len(EVENT_CYCLE)]
-        event = build_event(name, project_dir, len(samples[name]))
-        samples[name].append(run_event(commands[name], event, env, project_dir))
+        label = f"{name} (timed event {index + 1} of {events})"
+        event = build_event(name, project_dir, len(samples[name]), cold=False)
+        elapsed, outputs = run_event(commands[name], event, env, project_dir)
+        check_outputs(name, outputs, label)
+        if not marker.is_file():
+            raise HookError(
+                f"No {marker} after {label}: the events after it would time nothing"
+            )
+        samples[name].append(elapsed)
     return samples
 
 
@@ -201,13 +252,14 @@ def main(argv: list[str], repo_root: Path) -> int:
         try:
             commands = hook_commands(hooks_file)
             print("▶️ Cold SessionStart (untimed): syncing the venv")
-            cold = build_event("SessionStart", repo_root, 0)
-            run_event(
+            cold = build_event("SessionStart", repo_root, 0, cold=True)
+            _, outputs = run_event(
                 commands["SessionStart"],
                 cold,
                 hook_env(plugin_root, data_dir, repo_root),
                 repo_root,
             )
+            check_outputs("SessionStart", outputs, "SessionStart (cold)")
             # Without the marker every per-event hook exits at its gate in milliseconds,
             # which would pass the ceiling while timing nothing.
             if not marker.is_file():
@@ -217,9 +269,6 @@ def main(argv: list[str], repo_root: Path) -> int:
             samples = time_hooks(hooks_file, plugin_root, data_dir, repo_root, args.events)
         except HookError as exc:
             print(f"❌ {exc}")
-            return 1
-        if not marker.is_file():
-            print(f"❌ No {marker} after the timed events: the later ones timed nothing")
             return 1
 
     every = print_table(samples)
