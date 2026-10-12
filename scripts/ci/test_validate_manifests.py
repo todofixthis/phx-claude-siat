@@ -260,6 +260,10 @@ class CheckHooksTests(ManifestTestCase):
         """The default fixture must validate clean, or every other case here is meaningless."""
         self.assertEqual(self.check(), [])
 
+    def test_accepts_the_shipped_hooks_manifest(self):
+        """The real hooks.json ends every command with the invocation the fixture uses."""
+        self.assertEqual(self.errors_from(vm.check_hooks, vm.REPO_ROOT), [])
+
     def test_rejects_a_command_that_does_not_name_the_hook_script(self):
         """A command that stopped naming the script breaks the hook silently for consumers."""
         self.write_hooks(command="echo hi")

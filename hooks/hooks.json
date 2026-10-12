@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; command -v python3 >/dev/null 2>&1 || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; r=\"${CLAUDE_PLUGIN_ROOT}\"; r=\"${r%/}\"; case \"$r\" in */plugins/cache/*) v=\"${CLAUDE_PLUGIN_DATA}/venvs/${r##*/}\" ;; *) v=\"${UV_PROJECT_ENVIRONMENT:-.venv}\"; case \"$v\" in /*) ;; *) v=\"$r/$v\" ;; esac ;; esac; p=\"$v/bin/python\"; [ -f \"$v/.phx-synced\" ] && [ -x \"$p\" ] || exit 0; \"$p\" \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
             "timeout": 20,
             "type": "command"
           }
@@ -15,7 +15,7 @@
       {
         "hooks": [
           {
-            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; command -v python3 >/dev/null 2>&1 || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; r=\"${CLAUDE_PLUGIN_ROOT}\"; r=\"${r%/}\"; case \"$r\" in */plugins/cache/*) v=\"${CLAUDE_PLUGIN_DATA}/venvs/${r##*/}\" ;; *) v=\"${UV_PROJECT_ENVIRONMENT:-.venv}\"; case \"$v\" in /*) ;; *) v=\"$r/$v\" ;; esac ;; esac; p=\"$v/bin/python\"; [ -f \"$v/.phx-synced\" ] && [ -x \"$p\" ] || exit 0; \"$p\" \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
             "timeout": 20,
             "type": "command"
           }
@@ -27,8 +27,8 @@
       {
         "hooks": [
           {
-            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; command -v python3 >/dev/null 2>&1 || { printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"phx:writing-adrs hooks need python3 on PATH; the ADR corpus checks are off until it is installed.\"}}'; exit 0; }; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
-            "timeout": 20,
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; command -v uv >/dev/null 2>&1 || { printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"phx:writing-adrs hooks need uv on PATH; the ADR corpus checks are off until it is installed.\"}}'; exit 0; }; p=$(sh \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/sync.sh\" \"${CLAUDE_PLUGIN_DATA}\" </dev/null 2>/dev/null) || { printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"phx:writing-adrs could not build its Python environment with uv (offline on a first session?); the ADR corpus checks are off for this session.\"}}'; exit 0; }; \"$p\" \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "timeout": 120,
             "type": "command"
           }
         ],
@@ -39,7 +39,7 @@
       {
         "hooks": [
           {
-            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; command -v python3 >/dev/null 2>&1 || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; r=\"${CLAUDE_PLUGIN_ROOT}\"; r=\"${r%/}\"; case \"$r\" in */plugins/cache/*) v=\"${CLAUDE_PLUGIN_DATA}/venvs/${r##*/}\" ;; *) v=\"${UV_PROJECT_ENVIRONMENT:-.venv}\"; case \"$v\" in /*) ;; *) v=\"$r/$v\" ;; esac ;; esac; p=\"$v/bin/python\"; [ -f \"$v/.phx-synced\" ] && [ -x \"$p\" ] || exit 0; \"$p\" \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
             "timeout": 20,
             "type": "command"
           }
@@ -50,7 +50,7 @@
       {
         "hooks": [
           {
-            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; command -v python3 >/dev/null 2>&1 || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; r=\"${CLAUDE_PLUGIN_ROOT}\"; r=\"${r%/}\"; case \"$r\" in */plugins/cache/*) v=\"${CLAUDE_PLUGIN_DATA}/venvs/${r##*/}\" ;; *) v=\"${UV_PROJECT_ENVIRONMENT:-.venv}\"; case \"$v\" in /*) ;; *) v=\"$r/$v\" ;; esac ;; esac; p=\"$v/bin/python\"; [ -f \"$v/.phx-synced\" ] && [ -x \"$p\" ] || exit 0; \"$p\" \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
             "timeout": 20,
             "type": "command"
           }
@@ -61,7 +61,7 @@
       {
         "hooks": [
           {
-            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; command -v python3 >/dev/null 2>&1 || exit 0; python3 \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
+            "command": "f=\"${CLAUDE_PROJECT_DIR}/docs/adr/INDEX.md\"; g=\"$PWD/docs/adr/INDEX.md\"; { [ -f \"$f\" ] && head -n 1 \"$f\" | grep -q 'phx:writing-adrs'; } || { [ -f \"$g\" ] && head -n 1 \"$g\" | grep -q 'phx:writing-adrs'; } || exit 0; r=\"${CLAUDE_PLUGIN_ROOT}\"; r=\"${r%/}\"; case \"$r\" in */plugins/cache/*) v=\"${CLAUDE_PLUGIN_DATA}/venvs/${r##*/}\" ;; *) v=\"${UV_PROJECT_ENVIRONMENT:-.venv}\"; case \"$v\" in /*) ;; *) v=\"$r/$v\" ;; esac ;; esac; p=\"$v/bin/python\"; [ -f \"$v/.phx-synced\" ] && [ -x \"$p\" ] || exit 0; \"$p\" \"${CLAUDE_PLUGIN_ROOT}/skills/writing-adrs/hook.py\"",
             "timeout": 20,
             "type": "command"
           }

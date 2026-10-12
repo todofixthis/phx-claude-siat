@@ -43,8 +43,10 @@ EXPECTED_SOURCE = {
 # entry's command is a shell guard plus this exact invocation, so the check below
 # requires the command to *end* with it rather than merely contain it — an
 # unbounded substring match would let `<invocation>; rm -rf ~` through unnoticed.
+# `$p` is the synced venv's python the guard resolves; ADR 034 forbids running the
+# hook from bare `python3` or through `uv run`.
 HOOK_SCRIPT = "skills/writing-adrs/hook.py"
-HOOK_INVOCATION = f'python3 "${{CLAUDE_PLUGIN_ROOT}}/{HOOK_SCRIPT}"'
+HOOK_INVOCATION = f'"$p" "${{CLAUDE_PLUGIN_ROOT}}/{HOOK_SCRIPT}"'
 HOOK_TYPE = "command"
 PYPROJECT_FILENAME = "pyproject.toml"
 SKILL_FILENAME = "SKILL.md"
