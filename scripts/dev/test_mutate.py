@@ -128,7 +128,9 @@ class ApplyMutationTests(SourceFileTestCase):
     def test_replaces_a_match_identified_by_surrounding_lines(self):
         """Disambiguating by context is the whole alternative to an occurrence index."""
         apply_mutation(self.path, f"{ANCHOR}\n    pass\n", "if False:\n    pass\n")
-        self.assertEqual(self.source(), f"{ANCHOR}\n    raise ValueError\nif False:\n    pass\n")
+        self.assertEqual(
+            self.source(), f"{ANCHOR}\n    raise ValueError\nif False:\n    pass\n"
+        )
 
     def test_returns_the_original_bytes_for_restoring(self):
         """The restore is held in memory, so an interrupted run leaves no stray backup."""
@@ -228,7 +230,11 @@ class RunTestsTests(unittest.TestCase):
         cap prevents.
         """
         _, output = run_tests(
-            ("python3", "-c", "import resource; print(resource.getrlimit(resource.RLIMIT_AS)[0])")
+            (
+                "python3",
+                "-c",
+                "import resource; print(resource.getrlimit(resource.RLIMIT_AS)[0])",
+            )
         )
         self.assertIn(str(MEMORY_LIMIT_BYTES), output)
 
@@ -243,9 +249,11 @@ class GuardAgainstRecursionTests(unittest.TestCase):
 
     def test_refuses_the_default_command_inside_a_run(self):
         """The default is this suite, so a nested one spawns copies without end."""
-        with unittest.mock.patch.dict(os.environ, {RECURSION_FLAG: "1"}):
-            with self.assertRaises(SystemExit) as raised:
-                guard_against_recursion(DEFAULT_TEST_COMMAND)
+        with (
+            unittest.mock.patch.dict(os.environ, {RECURSION_FLAG: "1"}),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            guard_against_recursion(DEFAULT_TEST_COMMAND)
         self.assertIn("refusing to run the whole suite", str(raised.exception))
 
     def test_allows_the_default_command_outside_a_run(self):
@@ -272,7 +280,9 @@ class ResolveCommandTests(unittest.TestCase):
 
     def test_keeps_a_later_separator_for_the_command_it_belongs_to(self):
         """`pytest -- path` passes its own separator through; only the first is ours."""
-        self.assertEqual(resolve_command(["--", "pytest", "--", "tests"]), ("pytest", "--", "tests"))
+        self.assertEqual(
+            resolve_command(["--", "pytest", "--", "tests"]), ("pytest", "--", "tests")
+        )
 
 
 class ReportTests(unittest.TestCase):
@@ -360,9 +370,11 @@ class MutateTests(SourceFileTestCase):
 
     def test_restores_the_source_when_the_test_command_cannot_run(self):
         """A crash between mutating and restoring is what leaves a broken check behind."""
-        with self.assertRaises(FileNotFoundError):
-            with contextlib.redirect_stdout(io.StringIO()):
-                mutate(self.path, "raise ValueError", "pass", ("definitely-not-a-command",))
+        with (
+            self.assertRaises(FileNotFoundError),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            mutate(self.path, "raise ValueError", "pass", ("definitely-not-a-command",))
         self.assertEqual(self.source(), SOURCE)
 
     def test_reports_an_unimportable_mutation_as_invalid(self):
@@ -392,7 +404,15 @@ class MainTests(SourceFileTestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
             code = main(
-                ["--file", str(self.path), "--anchor", "raise ValueError", "--with", "pass", *extra]
+                [
+                    "--file",
+                    str(self.path),
+                    "--anchor",
+                    "raise ValueError",
+                    "--with",
+                    "pass",
+                    *extra,
+                ]
             )
         return code, out.getvalue()
 
@@ -412,12 +432,15 @@ class MainTests(SourceFileTestCase):
         the suite again. A test must not fork-bomb the machine when its subject breaks.
         """
         out = io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            with self.assertRaises(SystemExit) as raised:
-                main(
-                    ["--file", str(self.path), "--anchor", ANCHOR, "--with", REPLACEMENT, "--"]
-                    + list(PASSES)
-                )
+        with (
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            main(
+                ["--file", str(self.path), "--anchor", ANCHOR, "--with", REPLACEMENT, "--"]
+                + list(PASSES)
+            )
         self.assertIn("appears 2 times", str(raised.exception))
 
 

@@ -38,7 +38,7 @@ from pathlib import Path, PurePosixPath
 # imported this module by dotted name (`scripts.backlog`) instead.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from adr import (  # noqa: E402 — after the sys.path insert it depends on
+from adr import (
     ADR_DIR,
     RE_H1_TITLE,
     read_document,

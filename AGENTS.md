@@ -29,7 +29,8 @@ preceding the code they document, not as trailing comments.
   workspace, since `scripts/` still declares nothing to install. The `scripts/` suite is
   `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`. After `uv sync --locked`
   at the repo root, each skill's checks run as `uv run --directory skills/<name> pytest`,
-  `ruff check .` and `black --check .`, all three gated by `pr.yml`.
+  `ruff check .` and `black --check .`, all three gated by `pr.yml`; `pr.yml` also
+  gates `uv run --directory scripts ruff check .` and `black --check .`.
 - `scripts/frontmatter.py` is a symlink into `skills/writing-adrs/`; edit the parser there.
 - Every function annotates its return type and its named parameters, `-> None`
   included; `*args` and `**kwargs` are left bare. Test functions are exempt from

@@ -161,7 +161,9 @@ def bound_child() -> None:
     resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT_BYTES, MEMORY_LIMIT_BYTES))
 
 
-def run_tests(command: tuple[str, ...], timeout: float = DEFAULT_TIMEOUT_SECONDS) -> tuple[int, str]:
+def run_tests(
+    command: tuple[str, ...], timeout: float = DEFAULT_TIMEOUT_SECONDS
+) -> tuple[int, str]:
     """Run the suite, returning its exit code and both streams joined.
 
     unittest writes its whole result block to stderr, so a caller reading stdout alone
@@ -178,6 +180,7 @@ def run_tests(command: tuple[str, ...], timeout: float = DEFAULT_TIMEOUT_SECONDS
         result = subprocess.run(
             command,
             capture_output=True,
+            check=False,
             text=True,
             timeout=timeout,
             preexec_fn=bound_child,
@@ -254,7 +257,9 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--file", required=True, type=Path, help="source file to mutate")
     parser.add_argument(
-        "--anchor", required=True, help="exact text to replace; must match once, indentation included"
+        "--anchor",
+        required=True,
+        help="exact text to replace; must match once, indentation included",
     )
     parser.add_argument(
         "--with", dest="replacement", required=True, help="text to put in the anchor's place"
