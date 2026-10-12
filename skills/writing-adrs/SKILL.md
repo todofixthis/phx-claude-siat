@@ -444,7 +444,7 @@ When a new ADR overrides an existing one:
 
 1. Write the new ADR referencing the old one in the Context section
 2. Run `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" supersede OLD --by NEW`; it sets the status and the field and regenerates the index
-3. Commit both files together
+3. Commit both ADRs and `docs/adr/INDEX.md` together
 
 Superseded ADRs are excluded from the index automatically. Marking the old one is not a substantial edit — see the note at the foot of the next section.
 
@@ -454,7 +454,7 @@ When a new ADR meets an older one's `revisit-when` and answers it, wholly or one
 
 1. Write the new ADR, quoting in its Context the trigger it met
 2. Run `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" discharge OLD --by NEW`, then strike the condition through everywhere the old ADR's body sets it out, naming the ADR that spent it. Where `revisit-when` names several conditions and the new ADR spends only some, pass the rest as `--leaving "…"`, which replaces the field verbatim, so it keeps a live trigger and the index keeps carrying it. The tool cannot tell conditions apart: without `--leaving` the field goes, live conditions included, and a rewording that spends nothing is a renewal (below), not a discharge
-3. Commit both files together
+3. Commit both ADRs and `docs/adr/INDEX.md` together
 
 Step 2 edits the body because that is where the condition reads as an instruction, and it is what someone who opened the file is reading. Leave it standing and the ADR tells them to revisit while its frontmatter says the question is answered. Search the whole body rather than the section you expect: where an ADR carries several conditions, one may be argued in Decision and another only named in Consequences, each worded to its paragraph rather than to the field.
 

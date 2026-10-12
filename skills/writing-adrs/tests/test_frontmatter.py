@@ -257,6 +257,16 @@ class YamlValueTests(unittest.TestCase):
                     self.assertIn("comment", problems[0])
                     self.assertIn("delete the comment", problems[0])
 
+    def test_reports_a_comment_after_a_quoted_value(self):
+        """A trailing comment outside quotes is reported, and the fix is to delete it."""
+        for loader in (frontmatter.LOADER, yaml.BaseLoader):
+            with self.subTest(loader=loader.__name__):
+                with mock.patch.object(frontmatter, "LOADER", loader):
+                    fields, problems = parse_frontmatter('summary: "x." # note')
+                self.assertEqual(fields, {})
+                self.assertEqual(len(problems), 1)
+                self.assertIn("delete the comment", problems[0])
+
     def test_reports_a_tag_anchor_or_alias(self):
         """`!x y` and `&x y` both load as `y`, dropping what was written."""
         for loader in (frontmatter.LOADER, yaml.BaseLoader):
