@@ -76,7 +76,10 @@ def _load_field(key: str, lines: list[str]) -> tuple[str | list[str] | None, str
         return None, f"field {key} has a quoted key; write the key unquoted"
     value = document[key]
     if decorated:
-        return None, f"field {key} holds a {decorated}, which YAML drops; quote the value"
+        return None, (
+            f"field {key} holds a {decorated}, which YAML drops; "
+            f"quote the whole value or delete the {decorated}"
+        )
     if isinstance(value, str) or (
         isinstance(value, list) and all(isinstance(item, str) for item in value)
     ):

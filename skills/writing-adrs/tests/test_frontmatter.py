@@ -255,6 +255,7 @@ class YamlValueTests(unittest.TestCase):
                     self.assertEqual(fields, {})
                     self.assertEqual(len(problems), 1)
                     self.assertIn("comment", problems[0])
+                    self.assertIn("delete the comment", problems[0])
 
     def test_reports_a_tag_anchor_or_alias(self):
         """`!x y` and `&x y` both load as `y`, dropping what was written."""
