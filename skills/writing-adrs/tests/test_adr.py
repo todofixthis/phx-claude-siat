@@ -18,8 +18,12 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
+
+import yaml
 
 import adr
+import frontmatter
 from adr import (
     ADR_DIR,
     EMPTY_NOTE,
@@ -1248,6 +1252,24 @@ class NewAdrTests(RepoTestCase):
         self.assertEqual(fields[SCOPE_FIELD], ["a, b/"])
         self.assertEqual(problems, [])
 
+    def test_writes_a_summary_holding_a_line_separator_escaped(self):
+        """U+2028 would split the field under YAML, so it is written escaped and reads back."""
+        summary = "A\u2028b: c"
+        path = adr.new_adr(self.repo_root, "W", summary, [SCOPED_FILE], None, date(2026, 9, 2))
+        content = path.read_text(encoding="utf-8")
+        self.assertNotIn("\u2028", content)
+        self.assertEqual(parse_adr(content)[0]["summary"], summary)
+
+    def test_refuses_before_writing_a_value_the_line_would_not_read_back(self):
+        """Whatever the writer fails to make round-trip is caught before the file lands."""
+        with mock.patch.object(
+            adr, "yaml_value", side_effect=lambda value, in_flow=False: value
+        ):
+            self.assertIn(
+                "summary",
+                self.refuse("W", "Use X: not Y", [SCOPED_FILE]),
+            )
+
     def test_refuses_to_scaffold_beside_a_malformed_sibling(self):
         """An existing fault is caught before writing, so no new file lands beside it index-less."""
         self.write("001-broken.md", adr_text(status="Bogus"))
@@ -1304,6 +1326,51 @@ class YamlValueTests(unittest.TestCase):
         self.assertEqual(adr.yaml_value("Ngā: kupu"), '"Ngā: kupu"')
 
 
+class YamlValueRoundTripTests(unittest.TestCase):
+    """Unit tests for ``yaml_value()``: every value reads back verbatim under both loaders."""
+
+    LOADERS = (
+        (yaml.CBaseLoader, yaml.BaseLoader) if yaml.__with_libyaml__ else (yaml.BaseLoader,)
+    )
+
+    def read_back(self, loader: type, text: str) -> tuple:
+        with mock.patch.object(frontmatter, "LOADER", loader):
+            return frontmatter.parse_frontmatter(text)
+
+    def assert_round_trips(self, value: str) -> None:
+        """The value, written plain-or-quoted, parses back to itself in both positions."""
+        for loader in self.LOADERS:
+            with self.subTest(value=value, loader=loader.__name__):
+                self.assertEqual(
+                    self.read_back(loader, f"k: {adr.yaml_value(value)}"), ({"k": value}, [])
+                )
+                flow = f"k: [{adr.yaml_value(value, in_flow=True)}]"
+                self.assertEqual(self.read_back(loader, flow), ({"k": [value]}, []))
+
+    def test_round_trips_a_character_that_breaks_a_line_or_is_not_printable(self):
+        """U+2028, U+2029, U+0085 and U+007F are escaped, since YAML rejects or splits on them."""
+        for value in ("a\u2028b", "a\u2029b", "a\x85b", "a\x7fb"):
+            self.assert_round_trips(value)
+
+    def test_quotes_a_tab_so_either_loader_reads_it(self):
+        """A plain tab loads under libyaml but fails the pure-Python loader, so it is quoted."""
+        self.assertEqual(adr.yaml_value("a\tb"), '"a\\tb"')
+        self.assert_round_trips("a\tb")
+
+    def test_round_trips_values_that_open_or_close_awkwardly(self):
+        """Edge whitespace, a leading `#`, an empty string and a leading `- ` survive."""
+        for value in (" a", "a ", "#a", "", "- x"):
+            self.assert_round_trips(value)
+
+    def test_leaves_values_plain_that_this_reader_does_not_type(self):
+        """Decision: the loader resolves no types, so `yes`, `null`, `1e3` and `~` read as text
+        and stay plain; quoting them would be noise."""
+        for value in ("yes", "null", "1e3", "~"):
+            with self.subTest(value=value):
+                self.assertEqual(adr.yaml_value(value), value)
+                self.assert_round_trips(value)
+
+
 class SetFieldsTests(unittest.TestCase):
     """Unit tests for ``set_fields()``: replace, append, delete, and leave the body alone."""
 
@@ -1335,6 +1402,24 @@ class SetFieldsTests(unittest.TestCase):
         """A list value is written `[a, "b, c"]`, each entry quoted only where it must be."""
         result = adr.set_fields(adr_text(), {"scope": ["x/", "a, b/"]})
         self.assertIn('\nscope: [x/, "a, b/"]\n', result)
+
+    def test_replaces_a_block_sequence_field_with_its_items(self):
+        """The `- item` lines belong to the key, so replacing the key drops them too."""
+        text = adr_text(**{"revisit-discharged-by": "\n  - 2\n  - 4"})
+        result = adr.set_fields(text, {"revisit-discharged-by": ["2", "4", "5"]})
+        fields, _, _, problems = parse_adr(result)
+        self.assertEqual(problems, [])
+        self.assertEqual(fields["revisit-discharged-by"], ["2", "4", "5"])
+        self.assertNotIn("  - ", result)
+
+    def test_deletes_a_block_sequence_field_with_its_items(self):
+        """Deleting the key leaves no orphaned `- item` lines behind."""
+        text = adr_text(scope="\n  - a/\n  - b/")
+        result = adr.set_fields(text, {"scope": None})
+        fields, _, _, problems = parse_adr(result)
+        self.assertNotIn("scope", fields)
+        self.assertNotIn("  - ", result)
+        self.assertEqual([p for p in problems if "continued" in p], [])
 
     def test_replaces_a_field_written_with_space_before_its_colon(self):
         """The parser accepts `status : Accepted`, so the editor must find that line too."""
@@ -1401,6 +1486,47 @@ class DischargeTests(RepoTestCase):
         fields, _, _, problems = parse_adr(content)
         self.assertEqual(fields[REVISIT_WHEN_FIELD], "Revisit: when X")
         self.assertEqual(problems, [])
+
+    def test_discharge_refuses_before_writing_a_leaving_the_line_would_not_read_back(self):
+        """A condition that would not round-trip leaves the ADR exactly as it was."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        before = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        with (
+            mock.patch.object(
+                adr, "yaml_value", side_effect=lambda value, in_flow=False: value
+            ),
+            self.assertRaises(adr.AdrError),
+        ):
+            adr.discharge(self.repo_root, 1, 2, leaving="Revisit: when X")
+        self.assertEqual((self.adr_dir / "001-first.md").read_text(encoding="utf-8"), before)
+
+    def test_discharge_writes_a_leaving_with_a_line_separator_escaped(self):
+        """U+2028 in `--leaving` is written escaped and reads back verbatim."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        adr.discharge(self.repo_root, 1, 2, leaving="B fires.")
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        self.assertEqual(parse_adr(content)[0][REVISIT_WHEN_FIELD], "B fires.")
+
+    def test_discharge_through_a_block_sequence_leaves_a_clean_file(self):
+        """A discharged-by list written as a block sequence is replaced whole, not half."""
+        self.write(
+            "001-first.md",
+            adr_text(
+                **{"revisit-when": "A fires, or B fires.", "revisit-discharged-by": "\n  - 3"}
+            ),
+        )
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.write("003-third.md", adr_text(title="3: Do a third thing"))
+        self.manage()
+        adr.discharge(self.repo_root, 1, 2, leaving="B fires.")
+        content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        fields, _, _, problems = parse_adr(content)
+        self.assertEqual(problems, [])
+        self.assertEqual(fields["revisit-discharged-by"], ["3", "2"])
 
     def test_records_the_discharge_and_empties_the_revisit_cell(self):
         """Spent wholly, revisit-when goes, the list gains the ADR, and the Revisit cell empties."""

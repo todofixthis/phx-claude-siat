@@ -29,6 +29,7 @@ import json
 import re
 import sys
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -40,6 +41,9 @@ PYTHON_FLOOR = (3, 10)
 if sys.version_info < PYTHON_FLOOR:
     sys.exit(f"adr.py needs Python {PYTHON_FLOOR[0]}.{PYTHON_FLOOR[1]} or newer")
 
+import yaml
+
+import frontmatter
 from frontmatter import parse_frontmatter
 
 ADR_DIR = Path("docs") / "adr"
@@ -776,21 +780,60 @@ class AdrError(Exception):
     """A command that cannot proceed; the message is for the person who ran it."""
 
 
+# What a double-quoted YAML scalar may not carry literally: anything outside YAML's
+# printable set, plus the line separators YAML breaks a scalar on (U+2028, U+2029, U+0085).
+RE_NEEDS_ESCAPE = re.compile(
+    "[^\t\n\r\x20-\x7e\xa0-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]|[\u2028\u2029\ufeff]"
+)
+
+
+def escape_unprintable(match: re.Match[str]) -> str:
+    """The YAML escape for one character a double-quoted scalar cannot hold literally."""
+    code = ord(match.group())
+    return f"\\x{code:02x}" if code <= 0xFF else f"\\u{code:04x}"
+
+
+@contextmanager
+def loader_as(loader: type):
+    """Run the block with the frontmatter parser reading through `loader`."""
+    previous = frontmatter.LOADER
+    frontmatter.LOADER = loader
+    try:
+        yield
+    finally:
+        frontmatter.LOADER = previous
+
+
+def reads_back(text: str, expected: dict[str, str | list[str]]) -> bool:
+    """Whether `text` parses, under both loaders, with no problem and exactly `expected`."""
+    loaders = (
+        (yaml.CBaseLoader, yaml.BaseLoader) if yaml.__with_libyaml__ else (yaml.BaseLoader,)
+    )
+    for loader in loaders:
+        with loader_as(loader):
+            fields, problems = parse_frontmatter(text)
+        if problems or fields != expected:
+            return False
+    return True
+
+
 def yaml_value(value: str, in_flow: bool = False) -> str:
     """`value` as frontmatter text that reads back as `value`: plain where it can, else quoted.
 
     Plain is tried first, by reading it back through `parse_frontmatter` in the position it
-    will take (`k: <v>`, or one entry of `k: [<v>]` when `in_flow`), so the test is the
-    reader's own rather than a rule written beside it. A value that does not survive is
-    quoted with `json.dumps`, which is a valid YAML double-quoted scalar. Quoting is syntax
+    will take (`k: <v>`, or one entry of `k: [<v>]` when `in_flow`), under both loaders the
+    parser may run with: a file written where libyaml is built in must read where it is not.
+    A value that does not survive is quoted with `json.dumps`, a valid YAML double-quoted
+    scalar, with the few characters YAML cannot hold literally escaped. Quoting is syntax
     around a verbatim value, never a rewrite of it.
     """
-    line = f"k: [{value}]" if in_flow else f"k: {value}"
-    fields, problems = parse_frontmatter(line)
-    expected = [value] if in_flow else value
-    if not problems and fields.get("k") == expected:
+    if in_flow:
+        plain = reads_back(f"k: [{value}]", {"k": [value]})
+    else:
+        plain = reads_back(f"k: {value}", {"k": value})
+    if plain:
         return value
-    return json.dumps(value, ensure_ascii=False)
+    return RE_NEEDS_ESCAPE.sub(escape_unprintable, json.dumps(value, ensure_ascii=False))
 
 
 def yaml_field(value: str | list[str]) -> str:
@@ -850,6 +893,18 @@ def render_new(
     )
 
 
+def refuse_unless_read_back(content: str, expected: dict[str, str | list[str]]) -> None:
+    """Raise unless `content`'s frontmatter reads back as `expected`, so nothing bad is written."""
+    match = RE_FRONTMATTER.match(content)
+    block = match.group(1) if match else ""
+    if not reads_back(block, {**parse_frontmatter(block)[0], **expected}):
+        names = ", ".join(expected)
+        raise AdrError(
+            f"{names} would not read back from the frontmatter as written; "
+            "rephrase the value"
+        )
+
+
 def new_adr(
     root: Path,
     title: str,
@@ -888,12 +943,15 @@ def new_adr(
         _, findings = inspect(root)
         if findings:
             raise AdrError("; ".join(f.message for f in findings))
-    adr_dir.mkdir(parents=True, exist_ok=True)
     number = next_number(adr_dir)
+    content = render_new(number, title, summary, scope, revisit_when, today)
+    expected = {SCOPE_FIELD: scope, SUMMARY_FIELD: summary}
+    if revisit_when:
+        expected[REVISIT_WHEN_FIELD] = revisit_when
+    refuse_unless_read_back(content, expected)
+    adr_dir.mkdir(parents=True, exist_ok=True)
     path = adr_dir / f"{number:0{NUMBER_WIDTH}d}-{slugify(title)}.md"
-    path.write_text(
-        render_new(number, title, summary, scope, revisit_when, today), encoding="utf-8"
-    )
+    path.write_text(content, encoding="utf-8")
     findings = reconcile(root, write=True)
     if findings:
         raise AdrError("; ".join(f.message for f in findings))
@@ -914,10 +972,20 @@ def set_fields(content: str, updates: dict[str, str | list[str] | None]) -> str:
     for key, value in updates.items():
         # Matched the way the parser reads a key, so `status : Accepted` is found too.
         present = [i for i, line in enumerate(lines) if line.partition(":")[0].strip() == key]
+        # A block sequence's `- item` lines belong to the key above them, so they go with it.
+        owned = set(present)
+        for index in present:
+            for later in range(index + 1, len(lines)):
+                text = lines[later].strip()
+                if lines[later][:1].isspace() and text.startswith("- "):
+                    owned.add(later)
+                elif text and not text.startswith("#"):
+                    break
         if value is None:
-            lines = [line for i, line in enumerate(lines) if i not in present]
+            lines = [line for i, line in enumerate(lines) if i not in owned]
         elif present:
             lines[present[0]] = f"{key}: {yaml_field(value)}"
+            lines = [line for i, line in enumerate(lines) if i not in owned - {present[0]}]
         else:
             lines.append(f"{key}: {yaml_field(value)}")
     return "---\n" + "\n".join(lines) + "\n---\n" + match.group(2)
@@ -1014,7 +1082,12 @@ def discharge(root: Path, old: int, new: int, leaving: str | None = None) -> Non
         REVISIT_WHEN_FIELD: leaving,
         REVISIT_DISCHARGED_BY_FIELD: [*spent, str(new)],
     }
-    path.write_text(set_fields(content, updates), encoding="utf-8")
+    updated = set_fields(content, updates)
+    expected = {REVISIT_DISCHARGED_BY_FIELD: updates[REVISIT_DISCHARGED_BY_FIELD]}
+    if leaving is not None:
+        expected[REVISIT_WHEN_FIELD] = leaving
+    refuse_unless_read_back(updated, expected)
+    path.write_text(updated, encoding="utf-8")
     regenerate_or_raise(root)
 
 
