@@ -51,15 +51,25 @@ case "$root" in
             /*) ;;
             *) venv="$root/$venv" ;;
         esac
+        # `.` components name nothing, so drop them: `./.venv` is the checkout's `.venv`, and
+        # uv, the marker and the printed path all get the one spelling.
+        while :; do
+            case "$venv" in
+                */./*) venv="${venv%%/./*}/${venv#*/./}" ;;
+                */.) venv="${venv%/.}" ;;
+                *) break ;;
+            esac
+        done
         # uv deletes and rebuilds a venv whose interpreter misses requires-python, even with
-        # --inexact, so a venv elsewhere — another project's — is never handed to it. A `.`
-        # or `..` component is refused outright, since it can resolve outside the checkout
-        # (or to the checkout itself) while still matching the prefix. An in-checkout
-        # symlink pointing out of it is still accepted: only the path's text is judged.
+        # --inexact, so a venv elsewhere — another project's — is never handed to it, nor is
+        # the checkout itself. A `..` component is refused outright, since it can resolve
+        # outside the checkout while still matching the prefix. An in-checkout symlink
+        # pointing out of it is still accepted: only the path's text is judged.
         case "/$venv/" in
-            */../* | */./*) venv_ok=0 ;;
+            */../*) venv_ok=0 ;;
             *)
                 case "$venv" in
+                    "$root" | "$root"/) venv_ok=0 ;;
                     "$root"/*) venv_ok=1 ;;
                     *) venv_ok=0 ;;
                 esac

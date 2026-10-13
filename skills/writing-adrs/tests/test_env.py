@@ -151,6 +151,10 @@ class PluginTreeTestCase(unittest.TestCase):
         else:
             target.write_text(index, encoding="utf-8")
 
+    def reset_sessions(self) -> None:
+        """Forget every session's hook state, so the next event is a first touch again."""
+        shutil.rmtree(self.data / hook.STATE_SUBDIR, ignore_errors=True)
+
     def fake_python(self, venv: Path) -> None:
         """A marked venv whose python only echoes how it was called."""
         write_executable(venv / VENV_PYTHON, '#!/bin/sh\necho "CALLED $*"\n')
@@ -349,6 +353,7 @@ class SyncTests(PluginTreeTestCase):
         elsewhere.mkdir()
         (elsewhere / "keep").write_text("", encoding="utf-8")
         forms = {
+            "..": self.tmp,
             "../elsewhere": elsewhere,
             "a/../../elsewhere": elsewhere,
             f"{root}/../elsewhere": elsewhere,
@@ -363,6 +368,26 @@ class SyncTests(PluginTreeTestCase):
                 self.assertIn("unset UV_PROJECT_ENVIRONMENT", result.stderr)
                 self.assertEqual(self.files(target), before)
                 self.assertEqual(list(self.tmp.rglob(VENV_MARKER)), [])
+
+    def test_checkout_sync_accepts_a_venv_spelt_with_dot_components(self):
+        """`.` components are dropped, so `./.venv` and kin sync and the hooks find them."""
+        root = self.checkout_root()
+        forms = {
+            "./.venv": root / ".venv",
+            ".venv/.": root / ".venv",
+            "./a/./.venv": root / "a" / ".venv",
+        }
+        for form, venv in forms.items():
+            with self.subTest(UV_PROJECT_ENVIRONMENT=form):
+                result = self.sync(root, UV_PROJECT_ENVIRONMENT=form)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"{venv / VENV_PYTHON}\n")
+                self.assertTrue((venv / VENV_MARKER).is_file())
+                hooked = self.run_hook(root, self.read_event(), UV_PROJECT_ENVIRONMENT=form)
+                self.assertEqual(hooked.returncode, 0, hooked.stderr)
+                self.assertIn("Decisions binding", hooked.stdout)
+                # A fresh session in the next subtest, so this one's injected rows stay its own.
+                self.reset_sessions()
 
     def test_checkout_sync_accepts_an_absolute_venv_inside_the_checkout(self):
         """Only a venv outside the checkout is refused; an absolute path inside it syncs."""
