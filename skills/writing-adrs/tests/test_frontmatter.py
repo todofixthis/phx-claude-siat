@@ -318,6 +318,30 @@ class YamlValueTests(ParserTestCase):
                     ),
                 )
 
+    def test_reports_an_escaped_line_break_in_a_value(self):
+        """An escape decoding to a line ending breaks the one-line rule, scalar or list item."""
+        for line in (
+            'summary: "a\\nb"',
+            'summary: "a\\rb"',
+            'summary: "a\\x0ab"',
+            'summary: "a\\u000db"',
+            'scope: [ok/, "a\\nb/"]',
+        ):
+            with self.subTest(line=line):
+                key = line.partition(":")[0]
+                self.assertEqual(
+                    parse_frontmatter(line),
+                    (
+                        {},
+                        [
+                            (
+                                f"field {key} holds a line break, which a value on one line "
+                                "cannot carry; remove it"
+                            )
+                        ],
+                    ),
+                )
+
     def test_reports_a_comment_after_a_block_sequence_item(self):
         """A comment trailing any item of a multi-line field is reported against that field."""
         for block in (

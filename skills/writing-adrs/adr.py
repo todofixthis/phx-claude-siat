@@ -925,12 +925,12 @@ def new_adr(
     if not slugify(title):
         raise AdrError("title yields an empty slug")
     for field, value in ((SUMMARY_FIELD, summary), (REVISIT_WHEN_FIELD, revisit_when)):
-        if value and "\n" in value:
+        if value and frontmatter.RE_LINE_ENDING.search(value):
             raise AdrError(
                 f"{field} holds a line break; frontmatter carries a value on one line"
             )
     for entry in scope:
-        if "\n" in entry:
+        if frontmatter.RE_LINE_ENDING.search(entry):
             raise AdrError(
                 f"scope entry {entry!r} holds a line break, and the inline list "
                 "would split it into entries naming nothing"
@@ -1067,7 +1067,7 @@ def discharge(root: Path, old: int, new: int, leaving: str | None = None) -> Non
     if str(new) in spent:
         raise AdrError(f"ADR {new} already spent a condition of ADR {old}")
     if leaving is not None:
-        if "\n" in leaving:
+        if frontmatter.RE_LINE_ENDING.search(leaving):
             raise AdrError(
                 "--leaving holds a line break; frontmatter carries a value on one line"
             )

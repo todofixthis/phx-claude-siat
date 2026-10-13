@@ -21,6 +21,8 @@ import yaml
 # parser cannot see. Trailing chomping indicators (`-`, `+`) included.
 RE_BLOCK_SCALAR = re.compile(r"^[>|][-+]?$")
 
+RE_LINE_ENDING = re.compile(r"[\n\r]")
+
 RE_WHITESPACE = re.compile(r"\s")
 
 # libyaml's loader where PyYAML was built with it, the pure-Python one otherwise.
@@ -90,6 +92,15 @@ def _load_field(key: str, lines: list[str]) -> tuple[str | list[str] | None, str
     if isinstance(value, str) or (
         isinstance(value, list) and all(isinstance(item, str) for item in value)
     ):
+        # A double-quoted escape decodes to a real line ending, which the one-line rule
+        # forbids and which would break a generated table row. Only "\n" and "\r": the
+        # other separators are no line ending to Markdown, and the writer escapes them.
+        items = value if isinstance(value, list) else [value]
+        if any(RE_LINE_ENDING.search(item) for item in items):
+            return None, (
+                f"field {key} holds a line break, which a value on one line cannot carry; "
+                "remove it"
+            )
         return value, None
     kind = "mapping" if isinstance(value, dict) else "list holding a non-text item"
     return None, f"field {key} holds a {kind}, not text or a list of text; quote it"

@@ -1215,6 +1215,13 @@ class NewAdrTests(RepoTestCase):
             "revisit-when holds a line break; frontmatter carries a value on one line",
         )
 
+    def test_refuses_a_carriage_return_as_a_line_break(self):
+        """A lone "\\r" is a line ending too; written quoted it would decode into the index row."""
+        self.assertEqual(
+            self.refuse("W", "A summary.\rAnd more.", [SCOPED_FILE]),
+            "summary holds a line break; frontmatter carries a value on one line",
+        )
+
     def test_refuses_a_scope_entry_holding_a_line_break(self):
         """A break inside the list ends the field early, leaving the rest as stray frontmatter."""
         self.assertEqual(
@@ -1587,6 +1594,24 @@ class DischargeTests(RepoTestCase):
         for leaving in (" ", "B fires,\nor C fires."):
             with self.subTest(leaving=leaving), self.assertRaises(adr.AdrError):
                 adr.discharge(self.repo_root, 1, 2, leaving=leaving)
+
+    def test_refuses_leaving_with_either_line_ending_by_name(self):
+        """Both "\\n" and a lone "\\r" are refused as a line break, before anything is written."""
+        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("002-second.md", adr_text(title="2: Do another thing"))
+        self.manage()
+        before = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
+        for leaving in ("B fires,\nor C fires.", "B fires,\ror C fires."):
+            with self.subTest(leaving=leaving):
+                with self.assertRaises(adr.AdrError) as caught:
+                    adr.discharge(self.repo_root, 1, 2, leaving=leaving)
+                self.assertEqual(
+                    str(caught.exception),
+                    "--leaving holds a line break; frontmatter carries a value on one line",
+                )
+                self.assertEqual(
+                    (self.adr_dir / "001-first.md").read_text(encoding="utf-8"), before
+                )
 
     def test_refuses_an_adr_that_already_spent_a_condition(self):
         """One ADR spends its conditions in one discharge; a second would list it twice."""
