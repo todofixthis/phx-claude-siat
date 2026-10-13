@@ -46,7 +46,8 @@ def _undecorated_problem(text: str) -> str | None:
     Whole-line comments are gone before this runs, so non-blank text after the last
     token ending on a line can only be an inline comment.
     """
-    lines = text.splitlines()
+    # Split on "\n" alone: `str.splitlines()` also splits on separators YAML treats as text.
+    lines = text.split("\n")
     last_end: dict[int, int] = {}
     for token in yaml.scan(text, Loader=LOADER):
         for kind, name in DROPPED_TOKENS.items():
@@ -99,7 +100,8 @@ def parse_frontmatter(block: str) -> tuple[dict[str, str | list[str]], list[str]
     raw: dict[str, list[str]] = {}
     problems: list[str] = []
     sequence_key: str | None = None
-    for line in block.splitlines():
+    # "\n" alone, for the same reason as above: a stray separator must not invent a key.
+    for line in block.split("\n"):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
