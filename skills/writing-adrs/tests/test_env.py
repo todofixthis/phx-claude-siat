@@ -297,6 +297,28 @@ class SyncTests(PluginTreeTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.files(root), before)
 
+    def test_cache_sync_installs_from_the_lock_as_shipped(self):
+        """A lock behind its manifests is used as it stands, never re-locked inside the cache."""
+        root = self.cache_root()
+        manifest = root / SKILL_DIR / "pyproject.toml"
+        text = manifest.read_text(encoding="utf-8")
+        stale = text.replace('"pyyaml>=6.0.3,<7"', '"pyyaml>=6.0.3,<6.1"')
+        self.assertNotEqual(stale, text)
+        manifest.write_text(stale, encoding="utf-8")
+        before = {
+            path: (root / path).read_bytes()
+            for path in self.files(root)
+            if (root / path).is_file()
+        }
+        result = self.sync(root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        after = {
+            path: (root / path).read_bytes()
+            for path in self.files(root)
+            if (root / path).is_file()
+        }
+        self.assertEqual(after, before)
+
     def test_sync_refuses_a_relative_data_dir_in_the_cache(self):
         """An unsubstituted or relative data directory is refused before uv can build in the cache."""
         root = self.cache_root()
@@ -319,6 +341,28 @@ class SyncTests(PluginTreeTestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("unset UV_PROJECT_ENVIRONMENT", result.stderr)
         self.assertEqual(self.files(foreign), ["keep"])
+
+    def test_checkout_sync_refuses_a_venv_that_escapes_by_dot_components(self):
+        """A path that only looks inside the checkout is refused before uv can touch it."""
+        root = self.checkout_root()
+        elsewhere = self.tmp / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "keep").write_text("", encoding="utf-8")
+        forms = {
+            "../elsewhere": elsewhere,
+            "a/../../elsewhere": elsewhere,
+            f"{root}/../elsewhere": elsewhere,
+            ".": root,
+        }
+        for form, target in forms.items():
+            with self.subTest(UV_PROJECT_ENVIRONMENT=form):
+                before = self.files(target)
+                result = self.sync(root, UV_PROJECT_ENVIRONMENT=form)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("unset UV_PROJECT_ENVIRONMENT", result.stderr)
+                self.assertEqual(self.files(target), before)
+                self.assertEqual(list(self.tmp.rglob(VENV_MARKER)), [])
 
     def test_checkout_sync_accepts_an_absolute_venv_inside_the_checkout(self):
         """Only a venv outside the checkout is refused; an absolute path inside it syncs."""

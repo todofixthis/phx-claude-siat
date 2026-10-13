@@ -52,11 +52,23 @@ case "$root" in
             *) venv="$root/$venv" ;;
         esac
         # uv deletes and rebuilds a venv whose interpreter misses requires-python, even with
-        # --inexact, so a venv elsewhere — another project's — is never handed to it.
-        case "$venv" in
-            "$root"/*) ;;
+        # --inexact, so a venv elsewhere — another project's — is never handed to it. A `.`
+        # or `..` component is refused outright, since it can resolve outside the checkout
+        # (or to the checkout itself) while still matching the prefix. An in-checkout
+        # symlink pointing out of it is still accepted: only the path's text is judged.
+        case "/$venv/" in
+            */../* | */./*) venv_ok=0 ;;
             *)
-                printf '%s\n' "sync.sh: UV_PROJECT_ENVIRONMENT names '$venv', outside this checkout ($root); unset UV_PROJECT_ENVIRONMENT for this checkout, or point it inside it" >&2
+                case "$venv" in
+                    "$root"/*) venv_ok=1 ;;
+                    *) venv_ok=0 ;;
+                esac
+                ;;
+        esac
+        case "$venv_ok" in
+            1) ;;
+            *)
+                printf '%s\n' "sync.sh: UV_PROJECT_ENVIRONMENT names '$venv', which is not a path inside this checkout ($root); unset UV_PROJECT_ENVIRONMENT for this checkout, or point it inside it" >&2
                 exit 1
                 ;;
         esac
