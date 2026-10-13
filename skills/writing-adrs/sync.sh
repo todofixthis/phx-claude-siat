@@ -31,6 +31,16 @@ case "$root" in
             printf '%s\n' "sync.sh: no plugin data directory (CLAUDE_PLUGIN_DATA is empty); nowhere to build the venv" >&2
             exit 1
         fi
+        # uv resolves a relative venv path against the project, which here is the plugin
+        # cache, and nothing may be built inside a cached plugin version. An agent quoting
+        # ${CLAUDE_PLUGIN_DATA} so it is never substituted lands here too.
+        case "$data" in
+            /*) ;;
+            *)
+                printf '%s\n' "sync.sh: the plugin data directory '$data' is not an absolute path; pass the substituted CLAUDE_PLUGIN_DATA" >&2
+                exit 1
+                ;;
+        esac
         version="${root##*/}"
         venv="$data/venvs/$version"
         ;;
@@ -41,10 +51,18 @@ case "$root" in
             /*) ;;
             *) venv="$root/$venv" ;;
         esac
+        # uv deletes and rebuilds a venv whose interpreter misses requires-python, even with
+        # --inexact, so a venv elsewhere — another project's — is never handed to it.
+        case "$venv" in
+            "$root"/*) ;;
+            *)
+                printf '%s\n' "sync.sh: UV_PROJECT_ENVIRONMENT names '$venv', outside this checkout ($root); unset UV_PROJECT_ENVIRONMENT for this checkout, or point it inside it" >&2
+                exit 1
+                ;;
+        esac
         ;;
 esac
-# uv resolves a relative path against the working directory, so it gets the absolute one
-# the hooks compute too.
+# Absolute in both layouts, so uv and the hooks agree on one path.
 UV_PROJECT_ENVIRONMENT="$venv"
 export UV_PROJECT_ENVIRONMENT
 marker="$venv/.phx-synced"

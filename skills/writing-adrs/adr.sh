@@ -18,7 +18,8 @@ shift
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 1
 
 if ! python=$(sh "$here/sync.sh" "$data" --if-needed </dev/null); then
-    printf '%s\n' "Error: the writing-adrs tool could not build its environment: it needs uv on PATH, and the network on its first run after each plugin update." >&2
+    # sync.sh has already printed the specific cause on stderr.
+    printf '%s\n' "Error: the writing-adrs tool could not build its environment: see the reason above (uv not on PATH, no network on its first run after a plugin update, or a misconfigured path)." >&2
     exit 3
 fi
 exec "$python" "$here/adr.py" "$@"

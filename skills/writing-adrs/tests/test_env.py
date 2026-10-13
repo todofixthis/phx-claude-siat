@@ -27,7 +27,7 @@ import tomllib
 
 import adr
 import hook
-from adr import ADR_DIR
+from adr import ADR_DIR, INDEX_FILENAME
 from tests.test_adr import SCOPED_FILE, adr_text
 
 # The real plugin: the source of every fixture tree and of the hooks.json commands under test.
@@ -48,12 +48,21 @@ SESSION = "sess-env"
 TIMEOUT_SECONDS = 120
 
 # Set by the developer's shell, by `uv run` or by a Claude Code session running these tests;
-# each would redirect a subprocess away from its fixture, the checkout case's venv above all.
+# each would redirect a subprocess away from its fixture, the checkout case's venv above all,
+# or steer which interpreter and lock state uv resolves.
 STRIPPED_VARIABLES = (
     "CLAUDE_PLUGIN_DATA",
     "CLAUDE_PLUGIN_ROOT",
     "CLAUDE_PROJECT_DIR",
+    "UV_FROZEN",
+    "UV_LOCKED",
+    "UV_NO_SYNC",
+    "UV_OFFLINE",
+    "UV_PROJECT",
     "UV_PROJECT_ENVIRONMENT",
+    "UV_PYTHON",
+    "UV_PYTHON_DOWNLOADS",
+    "UV_PYTHON_PREFERENCE",
     "VIRTUAL_ENV",
 )
 
@@ -112,7 +121,9 @@ class PluginTreeTestCase(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.tmp = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        # Under a directory whose name holds a space, so every path the shell sees has one.
+        self.tmp = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve() / "a b"
+        self.tmp.mkdir()
         self.data = self.tmp / "data"
         self.data.mkdir()
         self.project = self.tmp / "project"
@@ -131,6 +142,19 @@ class PluginTreeTestCase(unittest.TestCase):
     def checkout_root(self) -> Path:
         """A plugin tree loaded in place from a checkout."""
         return copy_plugin(self.tmp / "checkout")
+
+    def unmanage(self, index: str | None) -> None:
+        """Replace the project's INDEX.md with `index`, or remove it where that is None."""
+        target = self.project / ADR_DIR / INDEX_FILENAME
+        if index is None:
+            target.unlink()
+        else:
+            target.write_text(index, encoding="utf-8")
+
+    def fake_python(self, venv: Path) -> None:
+        """A marked venv whose python only echoes how it was called."""
+        write_executable(venv / VENV_PYTHON, '#!/bin/sh\necho "CALLED $*"\n')
+        (venv / VENV_MARKER).write_text("", encoding="utf-8")
 
     def venv(self, version: str = VERSION) -> Path:
         """Where the cache layout's venv for `version` lives."""
@@ -169,32 +193,60 @@ class PluginTreeTestCase(unittest.TestCase):
         return self.event("PreToolUse", tool_input=tool_input, tool_name="Read")
 
     def run_hook(
-        self, root: Path | str, event: dict, **env: str
+        self, root: Path | str, event: dict, textual: bool = False, **env: str
     ) -> subprocess.CompletedProcess[str]:
         """Run the hooks.json command for `event` as Claude Code would, against `root`.
 
-        A string `root` reaches the command verbatim, a trailing slash included.
+        A string `root` reaches the command verbatim, a trailing slash included. With
+        `textual`, the plugin root and data directory are substituted into the command's
+        text and absent from its environment, the other way Claude Code may pass them.
         """
+        command = hook_command(event["hook_event_name"])
+        plugin = {"CLAUDE_PLUGIN_DATA": str(self.data), "CLAUDE_PLUGIN_ROOT": str(root)}
+        if textual:
+            for name, value in plugin.items():
+                command = command.replace(f"${{{name}}}", value)
+            plugin = {}
         return subprocess.run(
-            ["sh", "-c", hook_command(event["hook_event_name"])],
+            ["sh", "-c", command],
             capture_output=True,
             check=False,
             cwd=self.project,
-            env=subprocess_env(
-                CLAUDE_PLUGIN_DATA=str(self.data),
-                CLAUDE_PLUGIN_ROOT=str(root),
-                CLAUDE_PROJECT_DIR=str(self.project),
-                **env,
-            ),
+            env=subprocess_env(CLAUDE_PROJECT_DIR=str(self.project), **plugin, **env),
             input=json.dumps(event),
             text=True,
             timeout=TIMEOUT_SECONDS,
         )
 
+    def uv_shim(self, body: str) -> str:
+        """A PATH whose `uv` is a shell script running `body`, ahead of everything else.
+
+        `{uv}` in `body` names the real uv.
+        """
+        real = shutil.which("uv")
+        shim = self.tmp / "shim-bin" / "uv"
+        write_executable(shim, "#!/bin/sh\n" + body.replace("{uv}", f'"{real}"') + "\n")
+        return f"{shim.parent}{os.pathsep}{os.environ['PATH']}"
+
     def failing_uv(self) -> str:
-        """A PATH whose `uv` exits 1, ahead of everything else this process can reach."""
-        write_executable(self.tmp / "fake-bin" / "uv", "#!/bin/sh\nexit 1\n")
-        return f"{self.tmp / 'fake-bin'}{os.pathsep}{os.environ['PATH']}"
+        """A PATH whose `uv` exits 1."""
+        return self.uv_shim("exit 1")
+
+    def offline(self) -> dict[str, str]:
+        """The environment of a machine with no network and an empty uv cache."""
+        cache = self.tmp / "empty-uv-cache"
+        cache.mkdir(exist_ok=True)
+        return {
+            "UV_CACHE_DIR": str(cache),
+            "UV_OFFLINE": "1",
+            "UV_PYTHON_DOWNLOADS": "never",
+        }
+
+    def files(self, root: Path) -> list[str]:
+        """Every path under `root`, relative and sorted, bytecode caches aside."""
+        return sorted(
+            str(p.relative_to(root)) for p in root.rglob("*") if "__pycache__" not in p.parts
+        )
 
 
 class SyncTests(PluginTreeTestCase):
@@ -217,9 +269,93 @@ class SyncTests(PluginTreeTestCase):
             timeout=TIMEOUT_SECONDS,
         )
         self.assertEqual(imported.returncode, 0, imported.stderr)
-        self.assertEqual(
-            sorted(p.name for p in root.iterdir() if p.name.startswith(".venv")), []
+
+    def test_cache_sync_installs_the_dependencies_but_not_the_tool(self):
+        """The tool runs from the plugin's own files, so no copy of it is built into the venv."""
+        root = self.cache_root()
+        result = self.sync(root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        installed = subprocess.run(
+            [
+                str(self.venv() / VENV_PYTHON),
+                "-c",
+                "import importlib.metadata as m; print(sorted(d.name for d in m.distributions()))",
+            ],
+            capture_output=True,
+            check=False,
+            env=subprocess_env(),
+            text=True,
+            timeout=TIMEOUT_SECONDS,
         )
+        self.assertEqual(installed.stdout, "['PyYAML']\n", installed.stderr)
+
+    def test_cache_sync_leaves_the_plugin_tree_unchanged(self):
+        """Nothing is created inside a cached plugin version: no venv, no lock, no build."""
+        root = self.cache_root()
+        before = self.files(root)
+        result = self.sync(root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.files(root), before)
+
+    def test_sync_refuses_a_relative_data_dir_in_the_cache(self):
+        """An unsubstituted or relative data directory is refused before uv can build in the cache."""
+        root = self.cache_root()
+        before = self.files(root)
+        result = self.run_script(root / SYNC_SCRIPT, "${CLAUDE_PLUGIN_DATA}")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("${CLAUDE_PLUGIN_DATA}", result.stderr)
+        self.assertEqual(self.files(root), before)
+        self.assertEqual(list(self.project.rglob(VENV_MARKER)), [])
+
+    def test_checkout_sync_refuses_a_venv_outside_the_checkout(self):
+        """A developer's absolute venv elsewhere is left alone rather than rebuilt by uv."""
+        root = self.checkout_root()
+        foreign = self.tmp / "elsewhere" / "project-venv"
+        foreign.mkdir(parents=True)
+        (foreign / "keep").write_text("", encoding="utf-8")
+        result = self.sync(root, UV_PROJECT_ENVIRONMENT=str(foreign))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("unset UV_PROJECT_ENVIRONMENT", result.stderr)
+        self.assertEqual(self.files(foreign), ["keep"])
+
+    def test_checkout_sync_accepts_an_absolute_venv_inside_the_checkout(self):
+        """Only a venv outside the checkout is refused; an absolute path inside it syncs."""
+        root = self.checkout_root()
+        venv = root / ".venv.abs"
+        result = self.sync(root, UV_PROJECT_ENVIRONMENT=str(venv))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, f"{venv / VENV_PYTHON}\n")
+        self.assertTrue((venv / VENV_MARKER).is_file())
+
+    def test_parallel_syncs_from_empty_data_all_succeed(self):
+        """Sessions starting together each get the venv, serialised by uv rather than failing."""
+        root = self.cache_root()
+        processes = [
+            subprocess.Popen(
+                ["sh", str(root / SYNC_SCRIPT), str(self.data)],
+                cwd=self.project,
+                env=subprocess_env(),
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            for _ in range(3)
+        ]
+        results = [(p.communicate(timeout=TIMEOUT_SECONDS), p.returncode) for p in processes]
+        python = f"{self.venv() / VENV_PYTHON}\n"
+        for (stdout, stderr), code in results:
+            self.assertEqual((code, stdout), (0, python), stderr)
+        self.assertTrue((self.venv() / VENV_MARKER).is_file())
+
+    def test_uv_output_never_reaches_stdout(self):
+        """Whatever uv prints, stdout carries only the python path a caller captures."""
+        root = self.cache_root()
+        result = self.sync(root, PATH=self.uv_shim('echo chatter\nexec {uv} "$@"'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, f"{self.venv() / VENV_PYTHON}\n")
 
     def test_prunes_only_versions_gone_from_the_cache(self):
         """A version's venv goes once its cache directory has; one still cached stays."""
@@ -251,11 +387,7 @@ class SyncTests(PluginTreeTestCase):
         root = self.cache_root()
         # The real uv, then the version directory removed before the prune runs, as Claude
         # Code might remove it while a session's SessionStart is still syncing.
-        write_executable(
-            self.tmp / "vanishing-bin" / "uv",
-            f'#!/bin/sh\n"{shutil.which("uv")}" "$@" || exit\nrm -rf "{root}"\n',
-        )
-        path = f"{self.tmp / 'vanishing-bin'}{os.pathsep}{os.environ['PATH']}"
+        path = self.uv_shim(f'{{uv}} "$@" || exit\nrm -rf "{root}"')
         result = self.sync(root, PATH=path)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(root.exists())
@@ -362,6 +494,81 @@ class HookCommandTests(PluginTreeTestCase):
         self.assertEqual(touched.returncode, 0, touched.stderr)
         self.assertIn("Decisions binding", touched.stdout)
 
+    def test_every_per_event_command_runs_the_venv_python_on_the_hook(self):
+        """Each per-event command finds the marked venv in both layouts and runs hook.py."""
+        layouts = {
+            "cache": (self.cache_root(), self.venv()),
+            "checkout": (self.checkout_root(), self.tmp / "checkout" / ".venv"),
+        }
+        for layout, (root, venv) in layouts.items():
+            self.fake_python(venv)
+            for name in PER_EVENT_HOOKS:
+                with self.subTest(layout=layout, event=name):
+                    result = self.run_hook(root, self.event(name))
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, f"CALLED {root / SKILL_DIR / 'hook.py'}\n")
+
+    def test_session_start_in_a_checkout_syncs_the_workspace_venv(self):
+        """Loaded from a checkout, SessionStart builds <checkout>/.venv and notes the corpus."""
+        root = self.checkout_root()
+        started = self.run_hook(root, self.event("SessionStart", source="startup"))
+        self.assertEqual(started.returncode, 0, started.stderr)
+        output = json.loads(started.stdout)["hookSpecificOutput"]
+        self.assertEqual(output["additionalContext"], hook.NOTE.format(count="1 decision"))
+        self.assertTrue((root / ".venv" / VENV_MARKER).is_file())
+
+    def test_an_unmanaged_project_never_calls_uv(self):
+        """Without the tool's index, SessionStart stops at the gate: no uv, no output, no venv."""
+        root = self.cache_root()
+        sentinel = self.tmp / "uv-called"
+        path = self.uv_shim(f'touch "{sentinel}"')
+        for index in ("# Someone else's index\n", None):
+            with self.subTest(index=index):
+                self.unmanage(index)
+                result = self.run_hook(
+                    root, self.event("SessionStart", source="startup"), PATH=path
+                )
+                self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+                self.assertFalse(sentinel.exists())
+                self.assertEqual(list(self.data.iterdir()), [])
+
+    def test_later_session_starts_reuse_the_venv_offline(self):
+        """Resume, clear, compact and fork re-sync as a no-op offline and still inject the note."""
+        root = self.cache_root()
+        synced = self.sync(root)
+        self.assertEqual(synced.returncode, 0, synced.stderr)
+        for source in ("clear", "compact", "fork", "resume"):
+            with self.subTest(source=source):
+                started = self.run_hook(
+                    root, self.event("SessionStart", source=source), **self.offline()
+                )
+                self.assertEqual(started.returncode, 0, started.stderr)
+                output = json.loads(started.stdout)["hookSpecificOutput"]
+                self.assertEqual(
+                    output["additionalContext"], hook.NOTE.format(count="1 decision")
+                )
+                self.assertTrue((self.venv() / VENV_MARKER).is_file())
+
+    def test_substituted_plugin_paths_reach_the_venv(self):
+        """Paths substituted into the command text, not exported, sync and reach the venv alike."""
+        root = self.cache_root()
+        started = self.run_hook(
+            root, self.event("SessionStart", source="startup"), textual=True
+        )
+        self.assertEqual(started.returncode, 0, started.stderr)
+        self.assertIn("hookSpecificOutput", started.stdout)
+        touched = self.run_hook(root, self.read_event(), textual=True)
+        self.assertEqual(touched.returncode, 0, touched.stderr)
+        self.assertIn("Decisions binding", touched.stdout)
+
+    def test_session_start_with_a_trailing_slash_prunes_to_the_current_version(self):
+        """A trailing slash on the root still names the version, so only stale venvs go."""
+        root = self.cache_root()
+        (self.venv("0.8.0") / "bin").mkdir(parents=True)
+        started = self.run_hook(f"{root}/", self.event("SessionStart", source="startup"))
+        self.assertEqual(started.returncode, 0, started.stderr)
+        self.assertEqual(sorted(p.name for p in (self.data / "venvs").iterdir()), [VERSION])
+
     def test_session_start_says_uv_is_missing(self):
         """Without uv, SessionStart says the checks are off, and every other event stays silent."""
         root = self.cache_root()
@@ -382,14 +589,8 @@ class HookCommandTests(PluginTreeTestCase):
     def test_session_start_says_the_sync_failed_offline(self):
         """An offline first session gets no venv, says so, and leaves no marker behind."""
         root = self.cache_root()
-        cache = self.tmp / "empty-uv-cache"
-        cache.mkdir()
         started = self.run_hook(
-            root,
-            self.event("SessionStart", source="startup"),
-            UV_CACHE_DIR=str(cache),
-            UV_OFFLINE="1",
-            UV_PYTHON_DOWNLOADS="never",
+            root, self.event("SessionStart", source="startup"), **self.offline()
         )
         self.assertEqual(started.returncode, 0, started.stderr)
         self.assertIn("could not build", started.stdout)
@@ -438,6 +639,29 @@ class LauncherTests(PluginTreeTestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, f"RAN {root / SKILL_DIR / 'adr.py'} check\n")
+
+    def test_launcher_resyncs_a_venv_whose_python_dangles(self):
+        """A marked venv whose interpreter has gone is rebuilt, not trusted, and the tool runs."""
+        root = self.cache_root()
+        synced = self.sync(root)
+        self.assertEqual(synced.returncode, 0, synced.stderr)
+        python = self.venv() / VENV_PYTHON
+        python.unlink()
+        python.symlink_to(self.tmp / "no-such-python")
+        result = self.run_script(
+            root / ADR_LAUNCHER, str(self.data), "--repo-root", str(self.project), "check"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(python.exists())
+
+    def test_launcher_defers_to_the_sync_reason_it_failed_with(self):
+        """A refused data directory is reported as such, not blamed on uv or the network alone."""
+        root = self.cache_root()
+        result = self.run_script(root / ADR_LAUNCHER, "relative/data", "check")
+        self.assertEqual(result.returncode, 3, result.stderr)
+        *reasons, final = result.stderr.strip().splitlines()
+        self.assertIn("relative/data", "\n".join(reasons))
+        self.assertIn("reason above", final)
 
     def test_launcher_exits_3_when_it_cannot_build_its_environment(self):
         """A failed sync is its own exit code, naming uv and the network, never a tool refusal."""
