@@ -100,17 +100,21 @@ if ! command -v uv >/dev/null 2>&1; then
     exit 1
 fi
 
-# Unmarked for the whole sync, so an interrupted one never leaves the hooks running a
-# half-updated venv.
-rm -f "$marker"
 if [ "$cached" -eq 1 ]; then
+    # A cached version's lock never changes, so re-syncing a complete venv changes nothing
+    # and it stays marked: unmarking it here would silence every other session on this
+    # version until the sync finished. A failed sync still unmarks it, below.
     uv sync --project "$root" --frozen --package writing-adrs --no-dev --no-install-project --quiet >&2
 else
-    # The developer's workspace venv: add the skill's dependencies, remove nothing.
+    # A checkout's lock can change, so its venv is unmarked for the whole sync and an
+    # interrupted one never leaves the hooks running a half-updated venv. The developer's
+    # workspace venv: add the skill's dependencies, remove nothing.
+    rm -f "$marker"
     uv sync --project "$root" --frozen --package writing-adrs --no-dev --no-install-project --quiet --inexact >&2
 fi
 status=$?
 if [ "$status" -ne 0 ]; then
+    rm -f "$marker"
     printf '%s\n' "sync.sh: uv sync failed (exit $status) building $venv" >&2
     exit 1
 fi

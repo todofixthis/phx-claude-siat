@@ -199,16 +199,25 @@ class PluginTreeTestCase(unittest.TestCase):
         return self.event("PreToolUse", tool_input=tool_input, tool_name="Read")
 
     def run_hook(
-        self, root: Path | str, event: dict, textual: bool = False, **env: str
+        self,
+        root: Path | str,
+        event: dict,
+        textual: bool = False,
+        data: str | None = None,
+        **env: str,
     ) -> subprocess.CompletedProcess[str]:
         """Run the hooks.json command for `event` as Claude Code would, against `root`.
 
         A string `root` reaches the command verbatim, a trailing slash included. With
         `textual`, the plugin root and data directory are substituted into the command's
         text and absent from its environment, the other way Claude Code may pass them.
+        `data` replaces the fixture's data directory, as a host that sets none would.
         """
         command = hook_command(event["hook_event_name"])
-        plugin = {"CLAUDE_PLUGIN_DATA": str(self.data), "CLAUDE_PLUGIN_ROOT": str(root)}
+        plugin = {
+            "CLAUDE_PLUGIN_DATA": str(self.data) if data is None else data,
+            "CLAUDE_PLUGIN_ROOT": str(root),
+        }
         if textual:
             for name, value in plugin.items():
                 command = command.replace(f"${{{name}}}", value)
@@ -490,6 +499,31 @@ class SyncTests(PluginTreeTestCase):
         self.assertEqual(result.stdout, "")
         self.assertFalse((self.venv() / VENV_MARKER).exists())
 
+    def marker_seen_during_resync(self, root: Path, venv: Path) -> str:
+        """Sync `root` twice, returning whether the second sync's uv found the venv marked."""
+        first = self.sync(root)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        seen = self.tmp / "marker-seen"
+        path = self.uv_shim(
+            f'if [ -f "{venv / VENV_MARKER}" ]; then echo marked; else echo unmarked; fi'
+            f' > "{seen}"\n{{uv}} "$@"'
+        )
+        second = self.sync(root, PATH=path)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertTrue((venv / VENV_MARKER).is_file())
+        return seen.read_text(encoding="utf-8").strip()
+
+    def test_cache_resync_keeps_the_venv_marked_throughout(self):
+        """A version's lock is frozen, so its no-op re-sync must not silence other sessions."""
+        self.assertEqual(
+            self.marker_seen_during_resync(self.cache_root(), self.venv()), "marked"
+        )
+
+    def test_checkout_resync_unmarks_the_venv_while_it_syncs(self):
+        """A checkout's lock can change, so an interrupted re-sync must leave no marker."""
+        root = self.checkout_root()
+        self.assertEqual(self.marker_seen_during_resync(root, root / ".venv"), "unmarked")
+
     def test_checkout_sync_creates_the_workspace_venv_inexactly(self):
         """The checkout case builds <checkout>/.venv and a re-sync removes nothing it did not add."""
         root = self.checkout_root()
@@ -676,6 +710,17 @@ class HookCommandTests(PluginTreeTestCase):
         touched = self.run_hook(root, self.read_event(), PATH=path)
         self.assertEqual(touched.returncode, 0, touched.stderr)
         self.assertIn("Decisions binding", touched.stdout)
+
+    def test_session_start_names_a_missing_data_directory_among_the_causes(self):
+        """A host that sets no CLAUDE_PLUGIN_DATA must not be told only that it is offline."""
+        started = self.run_hook(
+            self.cache_root(), self.event("SessionStart", source="startup"), data=""
+        )
+        self.assertEqual(started.returncode, 0, started.stderr)
+        context = json.loads(started.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("could not build", context)
+        self.assertIn("CLAUDE_PLUGIN_DATA", context)
+        self.assertIn("UV_PROJECT_ENVIRONMENT", context)
 
     def test_session_start_says_the_sync_failed_offline(self):
         """An offline first session gets no venv, says so, and leaves no marker behind."""

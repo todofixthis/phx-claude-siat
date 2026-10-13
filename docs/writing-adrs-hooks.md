@@ -250,17 +250,21 @@ and of two sharing a number, the one whose filename sorts second binds nothing.
 - **Offline first session:** the first session after a plugin update syncs the tool's
   environment, which needs network access. If the sync fails, `SessionStart` says once
   that it could not build the environment, and every other event stays silent. The next
-  session with network access syncs it. The same note appears for a checkout loaded with
-  `--plugin-dir` whose `UV_PROJECT_ENVIRONMENT` names a path with a `..` component, the
-  checkout itself, or a place outside the checkout: the sync refuses it, and the cause is
-  that path, not the network (see the README's local development section).
+  session with network access syncs it. The same note, which names all three causes,
+  appears in two other cases. One is a Claude Code that sets no `CLAUDE_PLUGIN_DATA`,
+  leaving the sync nowhere to build. The other is a checkout loaded with `--plugin-dir`
+  whose `UV_PROJECT_ENVIRONMENT` names a path with a `..` component, the checkout itself,
+  or a place outside the checkout: the sync refuses it (see the README's local
+  development section).
 - **Interrupted sync:** the environment is marked complete only after a successful sync,
-  so a sync cut short leaves no marker and every event stays silent, with no note. The
-  likeliest cause is a kill, or the 120 s `SessionStart` timeout on a slow first build.
-  Each plugin version has one environment shared by every session, and each `SessionStart`
-  removes the marker before it syncs, so a sync cut short silences every open session using
-  it. The next `SessionStart` completes it, as does any of the skill's own `adr.sh`
-  commands, which rebuild it where the marker is missing.
+  so a first build cut short leaves no marker and every event stays silent, with no note.
+  The likeliest cause is a kill, or the 120 s `SessionStart` timeout on a slow first
+  build. Each plugin version has one environment shared by every session, so that
+  silences every open session using it. A later `SessionStart` re-syncs with the marker
+  left in place, since a version's lock never changes, and a failed sync removes it. A
+  checkout's lock can change, so a checkout's own venv is unmarked for the whole re-sync
+  instead. The next `SessionStart` completes an unfinished build, as does any of the
+  skill's own `adr.sh` commands, which rebuild it where the marker is missing.
 - **Parallel calls** share the state file under a lock. A call that can't get the lock
   within about a second says nothing rather than delay the tool.
 - **Old state files** are pruned after 30 days, at session start.
