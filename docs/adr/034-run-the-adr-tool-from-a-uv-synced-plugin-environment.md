@@ -236,7 +236,7 @@ hooks remain POSIX-only, Windows without Git Bash out of scope.
   which loosen it.
 - The skill's frontmatter rules and command forms, the standard-library claims in
   `adr.py`'s and `frontmatter.py`'s docstrings and the skill's `pyproject.toml`, and the
-  README are corrected in the implementing change, which the [backlog item][] tracks.
+  README are corrected in the implementing change, which the [backlog item][] tracked.
 
 ## Revisit watch
 
@@ -282,7 +282,7 @@ hooks remain POSIX-only, Windows without Git Bash out of scope.
 [ADR 025]: 025-deliver-binding-decisions-by-hook-at-first-touch.md
 [ADR 035]: 035-run-repo-scripts-under-uv-with-declared-dependencies.md
 [`adr.py`]: ../../skills/writing-adrs/adr.py
-[backlog item]: ../backlog/scripts-frontmatter-parser-should-use-pyyaml.md
+[backlog item]: https://github.com/todofixthis/phx-claude-siat/blob/b314689/docs/backlog/scripts-frontmatter-parser-should-use-pyyaml.md
 [`frontmatter.py`]: ../../skills/writing-adrs/frontmatter.py
 [Nielsen]: https://www.nngroup.com/articles/response-times-3-important-limits/
 [PyYAML]: https://pypi.org/project/PyYAML/
