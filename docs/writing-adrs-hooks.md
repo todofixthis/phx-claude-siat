@@ -251,8 +251,8 @@ and of two sharing a number, the one whose filename sorts second binds nothing.
   environment, which needs network access. If the sync fails, `SessionStart` says once
   that it could not build the environment, and every other event stays silent. The next
   session with network access syncs it. The same note appears for a checkout loaded with
-  `--plugin-dir` whose `UV_PROJECT_ENVIRONMENT` resolves outside the checkout: the sync
-  refuses it, and the cause is that path, not the network (see the README's local
+  `--plugin-dir` whose `UV_PROJECT_ENVIRONMENT` names a path with a `..` component, the
+  checkout itself, or a place outside the checkout: the sync refuses it, and the cause is that path, not the network (see the README's local
   development section).
 - **Interrupted sync:** the environment is marked complete only after a successful sync,
   so a sync cut short leaves no marker and every event stays silent, with no note. The

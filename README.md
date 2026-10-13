@@ -93,7 +93,8 @@ At session start the plugin syncs the tool's virtual environment (with PyYAML) f
 plugin version, under the plugin's data directory, and drops the environments of versions
 no longer installed; a sync of an environment that is already current does nothing. The
 first session after an update therefore needs network access. Where uv is missing or the
-sync fails, the session says so and the hooks stay off. The first ADR the agent
+sync fails, the session says so and the checks are off for that session (with uv missing,
+an environment an earlier session synced keeps the other hooks running). The first ADR the agent
 records creates `docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks
 regenerate the index after the agent edits an ADR (an edit made through the shell is
 reported, not fixed), inject the decisions binding a file the first time a session touches
@@ -188,8 +189,9 @@ precedence over any installed copy for the session), so edits take effect after
 
 Under `--plugin-dir` the `writing-adrs` hooks use the checkout's own virtual environment,
 `${UV_PROJECT_ENVIRONMENT:-.venv}`, synced without removing anything else in it. Leave
-`UV_PROJECT_ENVIRONMENT` unset or point it inside the checkout: the sync refuses a path
-that resolves outside it, and the hooks stay off.
+`UV_PROJECT_ENVIRONMENT` unset, or set it to a path inside the checkout with no `..`
+component (and not the checkout itself); the sync refuses any other, and the hooks stay
+off.
 
 > [!WARNING]
 > Installing from a local marketplace (`/plugin marketplace add` +
