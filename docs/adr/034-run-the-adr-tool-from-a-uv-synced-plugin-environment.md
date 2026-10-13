@@ -246,16 +246,21 @@ hooks remain POSIX-only, Windows without Git Bash out of scope.
   subagent transcripts, 700 tool-calling messages — 593 turns gave a median of 8.8 s, a
   mean of 15.7 s and a 25th percentile of 4.9 s. Main transcripts alone gave a median of
   9.4 s over 140 turns; subagents gave 8.7 s over 453. One session supplied 634 of the 700
-  messages. A turn runs as defined above, within one transcript. A turn spanning the end of
-  a run was not timed: a human prompt, an `end_turn`, a compaction or a subagent's handback.
-  Four turns over 900 s were dropped as waits on a person, such as a permission prompt.
+  messages. A turn runs as defined above, within one transcript. Four turns over 900 s were
+  dropped as waits on a person, such as a permission prompt.
 
   *Events a turn.* One `PreToolUse` per `Read`, `Edit`, `Write`, `NotebookEdit` or `Bash`
   call plus one `PostToolBatch` gave a mean of 2.05 over all 700 messages (1.05
   `PreToolUse`). That is up from 2026-10-08's 1.69, which counted subagents alone and no
-  parallel calls; here 100 messages (14%) issued them. The count came from a throwaway
-  script, `python3 measure_turns.py ~/.claude/projects/-Users-phx-Documents-phx-claude-siat`,
-  not kept in the repository, so the rules above are the method to repeat.
+  parallel calls; here 100 messages (14%) issued them. The events are averaged over every
+  tool-calling message, untimed turns included, hence 700 messages against 593 turns.
+
+  *To repeat it.* Read each `.jsonl` transcript under
+  `~/.claude/projects/-Users-phx-Documents-phx-claude-siat/`, with a session's subagents at
+  `<session>/subagents/*.jsonl`. One tool-calling message spans several records sharing a
+  `message.id`, so group by that id; parallel calls are one message. A human prompt is a
+  user record that is neither `isMeta` nor a `tool_result`. It breaks a turn, as do a
+  compaction boundary, an `end_turn` and a subagent's handback. Drop turns over 900 s.
 
   *Cost an event.* Three runs of `uv run python -m scripts.ci.time_hooks` on this tree, on
   one linux/aarch64 container, gave means of 0.039–0.044 s for `PreToolUse` and
