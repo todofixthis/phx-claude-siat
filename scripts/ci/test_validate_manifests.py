@@ -80,8 +80,10 @@ class ManifestTestCase(unittest.TestCase):
     ) -> None:
         """Write a SKILL.md whose declared name matches its directory by default."""
         directory = Path(path)
-        content = body if body is not None else SKILL_FRONTMATTER.format(
-            name=name if name is not None else directory.name
+        content = (
+            body
+            if body is not None
+            else SKILL_FRONTMATTER.format(name=name if name is not None else directory.name)
         )
         self.write(directory / vm.SKILL_FILENAME, content)
 
@@ -121,9 +123,7 @@ class LoadJsonTests(ManifestTestCase):
             with self.subTest(payload=payload):
                 errors: list = []
                 self.write("odd.json", payload)
-                self.assertIsNone(
-                    vm.load_json(Path("odd.json"), self.root, errors)
-                )
+                self.assertIsNone(vm.load_json(Path("odd.json"), self.root, errors))
                 self.assertIn("must hold a JSON object", errors[0])
 
 
@@ -165,9 +165,7 @@ class CheckMarketplaceTests(ManifestTestCase):
     def check(self) -> list:
         """Run the marketplace check against the fixture's two manifests."""
         errors: list = []
-        vm.check_marketplace(
-            vm.load_json(vm.PLUGIN_FILE, self.root, errors), self.root, errors
-        )
+        vm.check_marketplace(vm.load_json(vm.PLUGIN_FILE, self.root, errors), self.root, errors)
         return errors
 
     def test_rejects_an_entry_carrying_a_version(self):
@@ -518,10 +516,9 @@ class RepoRootTests(unittest.TestCase):
 
     def test_chdir_cannot_redirect_the_anchor(self):
         """The anchor names the tree the module ships in, wherever the caller stands."""
-        with tempfile.TemporaryDirectory() as directory:
-            with contextlib.chdir(directory):
-                self.assertTrue(vm.REPO_ROOT.is_absolute())
-                self.assertFalse(vm.REPO_ROOT.is_relative_to(directory))
+        with tempfile.TemporaryDirectory() as directory, contextlib.chdir(directory):
+            self.assertTrue(vm.REPO_ROOT.is_absolute())
+            self.assertFalse(vm.REPO_ROOT.is_relative_to(directory))
 
     def test_root_is_this_repository(self):
         """The anchor has to reach the real repo, not merely some absolute directory."""

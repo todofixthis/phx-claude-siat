@@ -49,9 +49,7 @@ def release_files(changelog: str = CHANGELOG, version: str = "1.3.0") -> Iterato
     """Yield a temp directory holding a changelog and manifest at their default paths."""
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
-        (root / release_notes.DEFAULT_CHANGELOG_FILE).write_text(
-            changelog, encoding="utf-8"
-        )
+        (root / release_notes.DEFAULT_CHANGELOG_FILE).write_text(changelog, encoding="utf-8")
         manifest = root / release_notes.DEFAULT_PLUGIN_FILE
         manifest.parent.mkdir(parents=True, exist_ok=True)
         manifest.write_text(json.dumps({"version": version}), encoding="utf-8")
@@ -99,15 +97,12 @@ class PluginVersionTests(unittest.TestCase):
     def test_reads_the_declared_version(self):
         """The version comes from the manifest's `version` field."""
         with release_files(version="9.9.9") as root:
-            self.assertEqual(
-                plugin_version(release_notes.DEFAULT_PLUGIN_FILE, root), "9.9.9"
-            )
+            self.assertEqual(plugin_version(release_notes.DEFAULT_PLUGIN_FILE, root), "9.9.9")
 
     def test_unusable_version_raises(self):
         """A manifest missing a usable version is an error, not an empty string."""
-        with release_files(version="") as root:
-            with self.assertRaises(ValueError):
-                plugin_version(release_notes.DEFAULT_PLUGIN_FILE, root)
+        with release_files(version="") as root, self.assertRaises(ValueError):
+            plugin_version(release_notes.DEFAULT_PLUGIN_FILE, root)
 
 
 class CliTests(unittest.TestCase):
@@ -156,10 +151,9 @@ class RepoRootTests(unittest.TestCase):
 
     def test_chdir_cannot_redirect_the_anchor(self):
         """The anchor names the tree the module ships in, wherever the caller stands."""
-        with tempfile.TemporaryDirectory() as directory:
-            with contextlib.chdir(directory):
-                self.assertTrue(REPO_ROOT.is_absolute())
-                self.assertFalse(REPO_ROOT.is_relative_to(directory))
+        with tempfile.TemporaryDirectory() as directory, contextlib.chdir(directory):
+            self.assertTrue(REPO_ROOT.is_absolute())
+            self.assertFalse(REPO_ROOT.is_relative_to(directory))
 
     def test_root_is_this_repository(self):
         """The anchor has to reach the real repo, not merely some absolute directory."""

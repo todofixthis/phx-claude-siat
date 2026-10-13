@@ -22,6 +22,8 @@ All optional:
 - **`model`** — model for the gather subagents; default the cheapest capable model
   (e.g. Haiku).
 - **`path`** — restrict the range, diff, and PR discovery to a subtree (monorepos).
+- **`prerelease`** — whether this is a pre-release, for a caller that knows this before
+  it has chosen the version. Where both are given, `version` wins.
 - **`version`** — the version being released, where the caller has chosen it. It only
   decides whether the notes carry the pre-release alert (see Template).
 
@@ -246,9 +248,9 @@ pre-release being any `0.y.z` version, or one with a pre-release segment (`4.0.0
 > This is an early release. APIs, configuration formats, and CLI flags may change without notice in future versions. Bugs and crashes are possible.
 ```
 
-Omit it from every other release. You don't choose the version, so without a `version`
-argument, ask whether this is a pre-release rather than inferring it from the
-recommended level.
+Omit it from every other release. You don't choose the version, so with neither a
+`version` nor a `prerelease` argument, ask whether this is a pre-release rather than
+inferring it from the recommended level.
 
 ## Edge cases
 

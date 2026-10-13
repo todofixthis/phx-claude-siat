@@ -85,7 +85,9 @@ class WrappedValueTests(ParserTestCase):
         self.assertEqual(fields, {"summary": "Use mypy, not ty; revisit when"})
         self.assertEqual(
             problems,
-            ["continued onto another line; wrap it onto one: 'ty reaches 1.0: it is not ready'"],
+            [
+                "continued onto another line; wrap it onto one: 'ty reaches 1.0: it is not ready'"
+            ],
         )
 
     def test_flags_an_indented_continuation_without_a_colon(self):
@@ -104,8 +106,10 @@ class WrappedValueTests(ParserTestCase):
         self.assertEqual(
             problems,
             [
-                "has a key containing whitespace, so it reads as a wrapped line: "
-                "'ty reaches 1.0'"
+                (
+                    "has a key containing whitespace, so it reads as a wrapped line: "
+                    "'ty reaches 1.0'"
+                )
             ],
         )
 
@@ -215,9 +219,7 @@ class YamlValueTests(ParserTestCase):
     def test_resolves_no_types(self):
         """BaseLoader: numbers, booleans and dates stay strings."""
         fields, _ = parse_frontmatter("a: 34\nb: yes\nc: 2026-10-08\nd: [12, 3]")
-        self.assertEqual(
-            fields, {"a": "34", "b": "yes", "c": "2026-10-08", "d": ["12", "3"]}
-        )
+        self.assertEqual(fields, {"a": "34", "b": "yes", "c": "2026-10-08", "d": ["12", "3"]})
 
     def test_reports_invalid_yaml_against_its_field(self):
         """`: ` inside a plain value is a YAML error; only that field is lost."""
