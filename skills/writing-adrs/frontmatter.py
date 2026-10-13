@@ -72,7 +72,13 @@ def _load_field(key: str, lines: list[str]) -> tuple[str | list[str] | None, str
     except yaml.YAMLError as exc:
         reason = getattr(exc, "problem", None) or str(exc)
         return None, f"field {key} is not valid YAML; quote the value: {reason}"
-    # YAML strips quotes from a key, so a quoted key loads under a different name.
+    # YAML strips quotes from a key, so a quoted key loads under a different name; a line
+    # separator YAML breaks on inside the value loads as a second key.
+    if isinstance(document, dict) and len(document) > 1:
+        return None, (
+            f"field {key}: YAML reads more than one key here "
+            "(a line separator inside the value?); remove it or quote the value"
+        )
     if not isinstance(document, dict) or list(document) != [key]:
         return None, f"field {key} has a quoted key; write the key unquoted"
     value = document[key]

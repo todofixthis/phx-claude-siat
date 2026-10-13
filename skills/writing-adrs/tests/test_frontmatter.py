@@ -301,6 +301,23 @@ class YamlValueTests(ParserTestCase):
                 self.assertNotIn("x", fields)
                 self.assertEqual(len(fields) + len(problems), 1, (fields, problems))
 
+    def test_names_a_line_separator_rather_than_a_quoted_key(self):
+        """YAML reads two keys across U+2028, U+2029 and \\x85, so the message must not blame quotes."""
+        for separator in ("\u2028", "\u2029", "\x85"):
+            with self.subTest(separator=separator):
+                self.assertEqual(
+                    parse_frontmatter(f"k: v{separator}x: y"),
+                    (
+                        {},
+                        [
+                            (
+                                "field k: YAML reads more than one key here "
+                                "(a line separator inside the value?); remove it or quote the value"
+                            )
+                        ],
+                    ),
+                )
+
     def test_reports_a_comment_after_a_block_sequence_item(self):
         """A comment trailing any item of a multi-line field is reported against that field."""
         for block in (
