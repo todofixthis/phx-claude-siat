@@ -6,7 +6,7 @@
 ## What
 
 Give [`skills/writing-adrs/SKILL.md`][] frontmatter that pre-approves
-`python3 ${CLAUDE_SKILL_DIR}/adr.py`, so the commands the skill tells the agent to run
+`sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}"`, so the commands the skill tells the agent to run
 cost no permission prompt, and restore the assertion in
 [`skills/writing-adrs/tests/test_skill_drift.py`][] that couples the grant to those
 command lines.
@@ -29,7 +29,7 @@ skill's `allowed-tools` for a bundled tool.
 
 - A headless session (`claude -p` with `--plugin-dir`) invokes `phx:writing-adrs` without a
   permission denial.
-- That session runs `python3 ${CLAUDE_SKILL_DIR}/adr.py check` without a permission denial.
+- That session runs `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" check` without a permission denial.
 - `skills/writing-adrs/tests/test_skill_drift.py` asserts the grant's rule text against the
   command lines the skill gives, in place of today's assertion that the frontmatter carries
   no grant.

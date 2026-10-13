@@ -87,9 +87,12 @@ path is reached. Where either program is missing, the skill says so and stops.
 
 #### writing-adrs
 
-`writing-adrs` ships a tool and session hooks, so the skill needs **`python3` (3.10 or
-newer)** on your `PATH`. Nothing else to install. (The CI recipe below needs only `uv`,
-which fetches an interpreter meeting the tool's 3.12 floor.) The first ADR the agent
+`writing-adrs` ships a tool and session hooks, so the skill needs **`uv`** on your
+`PATH`. Nothing else to install: uv fetches an interpreter meeting the tool's 3.12 floor.
+At session start the plugin builds the tool's virtual environment (with PyYAML) once per
+plugin version, under the plugin's data directory, and drops the environments of versions
+no longer installed. The first session after an update therefore needs network access.
+Where uv is missing or the build fails, the session says so and the hooks stay off. The first ADR the agent
 records creates `docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks
 regenerate the index after the agent edits an ADR (an edit made through the shell is
 reported, not fixed), inject the decisions binding a file the first time a session touches
@@ -231,20 +234,20 @@ The setting lives in the clone's shared config and the path is relative, so a si
 activation also covers every worktree. To regenerate the index by hand:
 
 ```bash
-python3 skills/writing-adrs/adr.py index
+uv run python skills/writing-adrs/adr.py index
 ```
 
 To ask which decisions bind a file before changing it, from the repo root:
 
 ```bash
-python3 skills/writing-adrs/adr.py for scripts/ci/versions.py
+uv run python skills/writing-adrs/adr.py for scripts/ci/versions.py
 ```
 
 Paths may be repo-relative or absolute; one outside the repository binds nothing and
 prints nothing.
 
 Contributions go to `develop` — `main` carries releases only. Run the `scripts/` suite
-with `python3 -m unittest discover -s scripts -t . -p 'test_*.py'`. The repository root
+with `uv run python -m unittest discover -s scripts -t . -p 'test_*.py'`. The repository root
 is a uv workspace (`pyproject.toml` plus one shared `uv.lock`) spanning `scripts/` and
 every skill that ships its own `pyproject.toml`; after `uv sync --locked` at the repo
 root, each skill's checks run as `uv run --directory skills/<name> pytest`,
