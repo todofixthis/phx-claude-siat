@@ -20,10 +20,9 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
-
-import tomllib
 
 import adr
 import hook
