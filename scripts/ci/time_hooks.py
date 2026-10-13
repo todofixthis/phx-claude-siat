@@ -37,8 +37,7 @@ CACHE_PARENT = Path("plugins/cache/phx-claude-siat/phx")
 # skills/writing-adrs/tests name it too, but `scripts/` may not import from there.
 VENV_MARKER = ".phx-synced"
 
-# The order events are timed in, cycling. Twenty-four events give six of each, so each
-# path below is read exactly once.
+# The order events are timed in, cycling, so the default gives twenty of each.
 EVENT_CYCLE = ("SessionStart", "PreToolUse", "PostToolBatch", "Stop")
 # The events that must print context every time: the note at each SessionStart, and the
 # binding rows at each PreToolUse, every one a first touch. PostToolBatch and Stop speak
@@ -48,7 +47,8 @@ INJECTING_EVENTS = ("SessionStart", "PreToolUse")
 # like a working one but for this text; `scripts/` may not import hook.py to share its
 # constant, and a test asserts the two still agree.
 CRASH_PREFIX = "phx:writing-adrs hook failed"
-# Paths decisions bind, each read once so every PreToolUse is a first touch that injects.
+# Paths decisions bind, cycled through by the PreToolUse events. Each follows a timed
+# SessionStart, a compact that resets injection, so every read is a first touch.
 TOUCHED_PATHS = (
     Path("AGENTS.md"),
     Path("hooks/hooks.json"),
