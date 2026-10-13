@@ -89,10 +89,11 @@ path is reached. Where either program is missing, the skill says so and stops.
 
 `writing-adrs` ships a tool and session hooks, so the skill needs **`uv`** on your
 `PATH`. Nothing else to install: uv fetches an interpreter meeting the tool's 3.12 floor.
-At session start the plugin builds the tool's virtual environment (with PyYAML) once per
+At session start the plugin syncs the tool's virtual environment (with PyYAML) for the
 plugin version, under the plugin's data directory, and drops the environments of versions
-no longer installed. The first session after an update therefore needs network access.
-Where uv is missing or the build fails, the session says so and the hooks stay off. The first ADR the agent
+no longer installed; a sync of an environment that is already current does nothing. The
+first session after an update therefore needs network access. Where uv is missing or the
+sync fails, the session says so and the hooks stay off. The first ADR the agent
 records creates `docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks
 regenerate the index after the agent edits an ADR (an edit made through the shell is
 reported, not fixed), inject the decisions binding a file the first time a session touches
@@ -184,6 +185,11 @@ claude --plugin-dir ./
 This loads the skills and commands directly from the working tree (taking
 precedence over any installed copy for the session), so edits take effect after
 `/reload-plugins` without reinstalling or clearing the cache.
+
+Under `--plugin-dir` the `writing-adrs` hooks use the checkout's own virtual environment,
+`${UV_PROJECT_ENVIRONMENT:-.venv}`, synced without removing anything else in it. Leave
+`UV_PROJECT_ENVIRONMENT` unset or point it inside the checkout: the sync refuses a path
+that resolves outside it, and the hooks stay off.
 
 > [!WARNING]
 > Installing from a local marketplace (`/plugin marketplace add` +
