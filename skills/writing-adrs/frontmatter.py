@@ -21,6 +21,7 @@ import yaml
 # parser cannot see. Trailing chomping indicators (`-`, `+`) included.
 RE_BLOCK_SCALAR = re.compile(r"^[>|][-+]?$")
 
+# The line endings Markdown honours, so a value holding one would split a table row.
 RE_LINE_ENDING = re.compile(r"[\n\r]")
 
 RE_WHITESPACE = re.compile(r"\s")

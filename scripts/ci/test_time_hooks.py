@@ -156,6 +156,13 @@ class DefaultEventsTests(unittest.TestCase):
         """The ceiling is defined over at least twenty timed events (docs/adr/034)."""
         self.assertGreaterEqual(DEFAULT_EVENTS, 20)
 
+    def test_times_at_least_twenty_of_each_event_type_by_default(self):
+        """Each type's p95 is gated, and of fewer than twenty samples it is the maximum,
+        so one slow sample on a shared runner would fail the build."""
+        self.assertEqual(DEFAULT_EVENTS % len(EVENT_CYCLE), 0)
+        self.assertGreaterEqual(DEFAULT_EVENTS // len(EVENT_CYCLE), 20)
+        self.assertLess(p95([1.0] * 19 + [99.0]), 99.0)
+
 
 class BuildEventTests(unittest.TestCase):
     """Unit tests for ``build_event()``."""
@@ -262,6 +269,7 @@ class MainTests(TimeHooksTestCase):
         self.assertIn("❌ PostToolBatch p95 0.3", stdout)
         self.assertIn(f"exceeds the {FIXTURE_CEILING} s ceiling", stdout)
         self.assertIn("✅ Overall p95", stdout)
+        self.assertTrue(stdout.rstrip().splitlines()[-1].startswith("❌"), stdout)
 
     def test_refuses_a_data_dir_holding_other_venvs(self):
         """The sync would prune every other version's venv there, so a real data dir is refused."""

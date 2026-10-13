@@ -250,7 +250,7 @@ and of two sharing a number, the one whose filename sorts second binds nothing.
 - **Offline first session:** the first session after a plugin update syncs the tool's
   environment, which needs network access. If the sync fails, `SessionStart` says once
   that it could not build the environment, and every other event stays silent. The next
-  session with network access syncs it. The same note, which names all three causes,
+  session with network access syncs it. The same note, which names these causes as examples,
   appears in two other cases. One is a Claude Code that sets no `CLAUDE_PLUGIN_DATA`,
   leaving the sync nowhere to build. The other is a checkout loaded with `--plugin-dir`
   whose `UV_PROJECT_ENVIRONMENT` names a path with a `..` component, the checkout itself,

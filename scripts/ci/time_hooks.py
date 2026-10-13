@@ -27,7 +27,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_HOOKS_FILE = Path("hooks/hooks.json")
 
 CEILING_SECONDS = 1.0
-DEFAULT_EVENTS = 24
+# Twenty of each event type: each type's p95 is gated, and of fewer than twenty samples
+# the nearest-rank p95 is the maximum, so one slow sample would fail the build.
+DEFAULT_EVENTS = 80
 # The plugin root's last component, which the hooks take as the version naming the venv.
 TIMING_VERSION = "0.0.0-timing"
 CACHE_PARENT = Path("plugins/cache/phx-claude-siat/phx")
@@ -303,7 +305,11 @@ def main(argv: list[str], repo_root: Path) -> int:
         )
         return 1
     print(f"✅ Overall p95 {overall:.3f} s is within the {args.ceiling} s ceiling")
-    return 1 if failed else 0
+    if failed:
+        # Logs are scanned for the last marker, so a failing run never ends on a ✅.
+        print("❌ An event type's p95 exceeds the ceiling; see above")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
