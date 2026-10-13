@@ -58,6 +58,8 @@ jobs:
           git config user.email "$user_id+${APP_SLUG}[bot]@users.noreply.github.com"
           echo "✅ committing as ${APP_SLUG}[bot]"
 
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
       # One command for both, so the tag and the notes cannot disagree: the script
       # asserts the CHANGELOG top entry matches plugin.json (exit 1 if not),
       # prints that version, and writes the notes. Every later step keys off this
@@ -67,7 +69,7 @@ jobs:
       - name: Read the version and build the release notes
         id: release
         run: |
-          version=$(python3 -m scripts.ci.release_notes --out notes.md)
+          version=$(uv run python -m scripts.ci.release_notes --out notes.md)
           if [ -z "$version" ]; then
             echo "❌ no version resolved from the CHANGELOG and plugin manifest"
             exit 1

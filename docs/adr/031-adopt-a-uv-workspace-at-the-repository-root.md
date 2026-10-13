@@ -224,7 +224,7 @@ future skill directory without a matching edit to this list.
 [`creative-commits`]: ../../skills/creative-commits/SKILL.md
 [`nz-english`]: ../../skills/nz-english/SKILL.md
 [PEP 723]: https://peps.python.org/pep-0723/
-[pyyaml-backlog]: ../backlog/scripts-frontmatter-parser-should-use-pyyaml.md
+[pyyaml-backlog]: https://github.com/todofixthis/phx-claude-siat/blob/b314689/docs/backlog/scripts-frontmatter-parser-should-use-pyyaml.md
 [PyYAML]: https://pyyaml.org/
 [`renovate.json`]: ../../renovate.json
 [`validate_manifests.py`]: ../../scripts/ci/validate_manifests.py

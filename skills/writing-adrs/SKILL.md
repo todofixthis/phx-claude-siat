@@ -12,36 +12,45 @@ ADRs record _why_ things are the way they are, so future contributors don't reli
 A bundled tool does the mechanics — scaffolding, the index, the frontmatter rules, scope
 checks, the reverse lookup — and never rewrites a sentence you wrote. You do the reasoning.
 Every command below resolves the repository from the path in hand, so run it from anywhere
-inside the repository. `${CLAUDE_SKILL_DIR}` is substituted before you see this text.
+inside the repository. `${CLAUDE_SKILL_DIR}` and `${CLAUDE_PLUGIN_DATA}` are substituted before
+you see this text. Every command runs through `adr.sh`, the launcher: it builds the tool's
+environment on first use, then runs `adr.py`, the tool itself.
 
 | To | Run |
 |---|---|
-| Scaffold the next ADR, creating `docs/adr/` and the index on first use | `python3 ${CLAUDE_SKILL_DIR}/adr.py new "Title in imperative mood" --summary "What was decided." --scope path/ --scope file.py` — or `--no-scope` for a decision that binds no path; add `--revisit-when "Condition."` where one would reopen it |
-| See which decisions bind a path before changing it | `python3 ${CLAUDE_SKILL_DIR}/adr.py for path/to/file` |
-| Regenerate the index by hand (the hooks do it after an Edit or Write to an ADR; an edit through the shell leaves it for you) | `python3 ${CLAUDE_SKILL_DIR}/adr.py index` |
-| Validate without writing; exits 1 on any finding — what a CI job would run | `python3 ${CLAUDE_SKILL_DIR}/adr.py check` |
-| Mark an ADR superseded | `python3 ${CLAUDE_SKILL_DIR}/adr.py supersede OLD --by NEW` |
-| Record a discharged revisit trigger | `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW --leaving "Conditions still live."` — `--leaving` is for a trigger NEW spent only part of; omit it where NEW spent the whole |
-| Renumber an ADR to resolve a real collision | `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD [NEW]` — omit `NEW` to let the tool pick |
+| Scaffold the next ADR, creating `docs/adr/` and the index on first use | `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" new "Title in imperative mood" --summary "What was decided." --scope path/ --scope file.py` — or `--no-scope` for a decision that binds no path; add `--revisit-when "Condition."` where one would reopen it |
+| See which decisions bind a path before changing it | `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" for path/to/file` |
+| Regenerate the index by hand (the hooks do it after an Edit or Write to an ADR; an edit through the shell leaves it for you) | `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" index` |
+| Validate without writing; exits 1 on any finding — what a CI job would run | `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" check` |
+| Mark an ADR superseded | `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" supersede OLD --by NEW` |
+| Record a discharged revisit trigger | `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" discharge OLD --by NEW --leaving "Conditions still live."` — `--leaving` is for a trigger NEW spent only part of; omit it where NEW spent the whole |
+| Renumber an ADR to resolve a real collision | `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" renumber OLD [NEW]` — omit `NEW` to let the tool pick |
 
 `new` writes the frontmatter complete and the body as the Format template below, for you
 to fill. The tool refuses a `scope` entry naming nothing on disk, so name paths that exist.
-Where the tool cannot run at all — no `python3`, or it breaks — stop and say so rather than
-writing the index or the fields it sets (`status`, `superseded-by`, `revisit-discharged-by`) by
-hand; `scope`, `summary` and `revisit-when` stay yours to edit. A refusal is not that: it
-prints `Error:` on stderr and exits 1, naming an ADR and what is wrong with it. Fix that ADR
-and rerun. `new`, `index`, `supersede`, `discharge` and `renumber` each refuse while any
-fault stands and write nothing, so an unrelated ADR's dangling `scope` entry blocks `new` and
-`renumber` alike — `renumber` alone tolerates the one fault it exists to fix: a collision on
-the number it is moving away from (ADR 033). `for` is the exception: an ADR it cannot read
-draws a warning naming it, and the lookup still exits 0.
+Never write the index or the fields the tool sets (`status`, `superseded-by`,
+`revisit-discharged-by`) by hand, even where the tool cannot run; `scope`, `summary` and
+`revisit-when` stay yours to edit. The launcher's exit code says what went wrong:
+
+- **1, with `Error:` on stderr** — a refusal. It names what is wrong, an ADR or the arguments
+  you passed (a title that yields an empty slug, a `--scope` path naming nothing, an ADR number
+  that does not exist). Fix that and rerun.
+- **2** — a bad command or flag, or the launcher's own usage error. Fix the invocation.
+- **3** — the launcher could not build the tool's environment. Stop and report its stderr text.
+- **A traceback** — the tool broke. Stop and report it.
+
+`new`, `index`, `supersede`, `discharge` and `renumber` each refuse while any fault stands and
+write nothing, so an unrelated ADR's dangling `scope` entry blocks `new` and `renumber` alike
+— `renumber` alone tolerates the one fault it exists to fix: a collision on the number it is
+moving away from (ADR 033). `for` is the exception: an ADR it cannot read draws a warning
+naming it, and the lookup still exits 0.
 
 Adopting a corpus somebody wrote by hand takes one pass. Those commands refuse while any ADR
 under `docs/adr/` fails its rules — a lowercase `status: accepted`, a `tags` field where
 `scope` belongs, no `scope` at all — and the hooks stay silent until `docs/adr/INDEX.md` opens
 with the tool's generated header line. Bring each ADR's frontmatter to the Format below —
 title-case `status`, and `tags` replaced by `scope`, or `scope: []` where the decision binds no
-path — then run `python3 ${CLAUDE_SKILL_DIR}/adr.py index` once: it writes that header and
+path — then run `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" index` once: it writes that header and
 switches the hooks on.
 
 With the phx plugin's hooks active, the decisions binding a file arrive in your context the
@@ -114,12 +123,16 @@ status quo (see Conventions).
 ## Frontmatter Fields
 
 Every value sits on one line — no wrapping, no `>` or `|` block scalars. The parsers read
-line by line and now fail on anything else, where a wrapped `summary` used to yield a
-truncated index row. A value also starts with a word or a number, holds no `: ` or ` #`,
-and does not end in a colon: GitHub renders the frontmatter through a YAML parser, which
-takes an opening backtick, quote or bracket as syntax and `: ` as a nested mapping, failing
-the whole file, and ` #` as a comment, dropping the rest of the value. The tool refuses all
-three.
+line by line and fail on anything else.
+
+Values are YAML, as GitHub reads them, and each `scope` entry is a value too. Put a value in
+double quotes where YAML would misread it: one opening with a YAML indicator (`` ` `` `"` `'`
+`[` `]` `{` `}` `&` `*` `!` `|` `>` `%` `@` `#` `,`, or `- ` or `? `), holding `: ` or ` #`, or
+ending in `:`. A `scope` entry holding any of `,` `[` `]` `{` `}` anywhere needs them too,
+since inside the inline list those characters split or break the entry. Inside double quotes,
+write `\` as `\\` and `"` as `\"`. The tool's own commands quote what they write, `new --scope`
+included, and `check` reports a value YAML cannot read. Where `check` reports a comment on a
+value already in quotes, the comment sits outside them: delete it or move it inside the quotes.
 
 - **`status`** — `Accepted`, `Archived`, or `Superseded`. All three stay in the repo; the last two are excluded from `docs/adr/INDEX.md`, which is what an agent loads by default.
   - `Accepted` — in force, and worth carrying in context.
@@ -135,7 +148,7 @@ three.
   - **A repo-wide convention has no root shorthand** — name the top-level directories it genuinely reaches. Being made to list them is the point: most "repo-wide" decisions turn out not to be.
   - **An `Archived` ADR defended by a rule names that rule file too** — the files a comment defends are in `scope` already; the rule defending them is not. See Defending a decision with a path-scoped rule, below.
   - **`scope: []`** is a real answer, for a decision whose subject is not a file at all — a platform setting, a habit at review time. Say in Decision why there is no file home.
-  - **The tool rejects** an entry naming nothing on disk, a glob, and a directory written without its trailing `/`.
+  - **The tool rejects** an entry naming nothing on disk, a glob, and a directory written without its trailing `/`. A `[` counts as a glob, so a directory such as `app/[id]/` cannot be scoped by name: scope its parent.
 - **`summary`** — one sentence: what was decided, not why. This appears verbatim in the index. Phrase it so a reader who sees _only_ the frontmatter won't breach the decision: name the binding choice, including the notable rejected alternative where one exists (e.g. "Use mypy, not ty"). Leave the revisit trigger to `revisit-when`: the index carries that in a column of its own, so naming it here spends the reader's sentence twice.
 - **`revisit-when`** — one sentence naming the condition that would change the choice; omit where none would. A condition the decision accommodates is a premise, not a trigger; one that would replace the decision outright is still a trigger, since it says when to look and what the answering ADR does is settled then, not now. State the condition alone and not the option it argues for — Decision has already weighed that. Where several conditions each reopen the ADR, put them on the one line and phrase each so it can be cut without the rest — the discharge workflow spends them one at a time. Write a recurring condition for any instance ("another skill ships tooling"), not the next ("a second skill ships tooling"): an ordinal reads as spent by the first arrival, where the question returns with each.
 - **`revisit-discharged-by`** — an inline list of the ADRs that spent a condition, as bare integers (`[11]`, then `[11, 14]`; never `011`); omit until one has. `discharge` appends to it and, unless told what is still live, removes `revisit-when`, which empties the ADR's Revisit cell in the index: a spent condition stops costing every reader context.
@@ -430,8 +443,8 @@ renders as literal text rather than erroring, and over-linking is easy to miss. 
 When a new ADR overrides an existing one:
 
 1. Write the new ADR referencing the old one in the Context section
-2. Run `python3 ${CLAUDE_SKILL_DIR}/adr.py supersede OLD --by NEW`; it sets the status and the field and regenerates the index
-3. Commit both files together
+2. Run `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" supersede OLD --by NEW`; it sets the status and the field and regenerates the index
+3. Commit both ADRs and `docs/adr/INDEX.md` together
 
 Superseded ADRs are excluded from the index automatically. Marking the old one is not a substantial edit — see the note at the foot of the next section.
 
@@ -440,8 +453,8 @@ Superseded ADRs are excluded from the index automatically. Marking the old one i
 When a new ADR meets an older one's `revisit-when` and answers it, wholly or one condition of it:
 
 1. Write the new ADR, quoting in its Context the trigger it met
-2. Run `python3 ${CLAUDE_SKILL_DIR}/adr.py discharge OLD --by NEW`, then strike the condition through everywhere the old ADR's body sets it out, naming the ADR that spent it. Where `revisit-when` names several conditions and the new ADR spends only some, pass the rest as `--leaving "…"`, which replaces the field verbatim, so it keeps a live trigger and the index keeps carrying it. The tool cannot tell conditions apart: without `--leaving` the field goes, live conditions included, and a rewording that spends nothing is a renewal (below), not a discharge
-3. Commit both files together
+2. Run `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" discharge OLD --by NEW`, then strike the condition through everywhere the old ADR's body sets it out, naming the ADR that spent it. Where `revisit-when` names several conditions and the new ADR spends only some, pass the rest as `--leaving "…"`, which replaces the field verbatim, so it keeps a live trigger and the index keeps carrying it. The tool cannot tell conditions apart: without `--leaving` the field goes, live conditions included, and a rewording that spends nothing is a renewal (below), not a discharge
+3. Commit both ADRs and `docs/adr/INDEX.md` together
 
 Step 2 edits the body because that is where the condition reads as an instruction, and it is what someone who opened the file is reading. Leave it standing and the ADR tells them to revisit while its frontmatter says the question is answered. Search the whole body rather than the section you expect: where an ADR carries several conditions, one may be argued in Decision and another only named in Consequences, each worded to its paragraph rather than to the field.
 
@@ -478,7 +491,7 @@ tree; two branches landing on the same number is resolved once, by whichever mer
 not by one guessing ahead of the other.
 
 Once a real collision exists — your rebase brought a sibling's ADR in under the same number as
-your own — run `python3 ${CLAUDE_SKILL_DIR}/adr.py renumber OLD` on your own file, `OLD` being
+your own — run `sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}" renumber OLD` on your own file, `OLD` being
 the number you now share; leave `NEW` for the tool to pick (one past everything now in the
 tree). It picks whichever of the two `OLD`-numbered files sorts first by filename — check
 that this is the one you meant to move before trusting the result, since the tool has no

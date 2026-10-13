@@ -1,9 +1,9 @@
 """Tests for release_notes.py.
 
-Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
-(ADR 007). Run from the repo root:
+`unittest` rather than pytest, so the suite needs no dependency beyond the declared ones
+(ADR 035). Run from the repo root:
 
-    python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+    uv run python -m unittest discover -s scripts -t . -p 'test_*.py'
 
 The subject joins every path to a `repo_root` its entry point requires (ADR 027), so these
 tests pass a fixture root and never `chdir`. The one test that does change directory

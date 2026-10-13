@@ -10,8 +10,8 @@ Port the ADR tool — `adr.py`, `hook.py` and the parser `frontmatter.py`, all u
 [`skills/writing-adrs/`][] — to a runtime that starts faster than CPython, and decide in an
 ADR which runtime and how it reaches consumers.
 
-Land ADR 034 first; the [PyYAML item][] tracks it. Its per-event figures are projections
-until that implementation measures them, and those measurements are this item's baseline.
+ADR 034 and [ADR 035][] are implemented. The per-event and per-turn figures measured then,
+on 2026-10-13, are in ADR 034's Revisit watch, and they are this item's baseline.
 
 The new ADR replaces only ADR 034's delivery: the venv, `uv` and the launcher. It keeps the
 rest, so it restates them rather than superseding them wholesale — YAML decides every value
@@ -65,10 +65,10 @@ against each other before choosing this.
 
 [ADR 025]: ../adr/025-deliver-binding-decisions-by-hook-at-first-touch.md
 [ADR 034]: ../adr/034-run-the-adr-tool-from-a-uv-synced-plugin-environment.md
+[ADR 035]: ../adr/035-run-repo-scripts-under-uv-with-declared-dependencies.md
 [`.githooks/pre-commit`]: ../../.githooks/pre-commit
 [`.github/workflows/pr.yml`]: ../../.github/workflows/pr.yml
 [`hooks/hooks.json`]: ../../hooks/hooks.json
-[PyYAML item]: scripts-frontmatter-parser-should-use-pyyaml.md
 [`scripts/adr.py`]: ../../scripts/adr.py
 [`scripts/backlog.py`]: ../../scripts/backlog.py
 [`scripts/ci/validate_manifests.py`]: ../../scripts/ci/validate_manifests.py

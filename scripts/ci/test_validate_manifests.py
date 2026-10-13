@@ -1,9 +1,9 @@
 """Tests for validate_manifests.py.
 
-Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
-(ADR 007). Run from the repo root:
+`unittest` rather than pytest, so the suite needs no dependency beyond the declared ones
+(ADR 035). Run from the repo root:
 
-    python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+    uv run python -m unittest discover -s scripts -t . -p 'test_*.py'
 
 The subject joins every path constant to a `repo_root` its checks require (ADR 027), so
 these tests pass the fixture root and never `chdir`. Nothing here can fall back to the
@@ -257,6 +257,10 @@ class CheckHooksTests(ManifestTestCase):
     def test_accepts_the_fixture(self):
         """The default fixture must validate clean, or every other case here is meaningless."""
         self.assertEqual(self.check(), [])
+
+    def test_accepts_the_shipped_hooks_manifest(self):
+        """The real hooks.json ends every command with the invocation the fixture uses."""
+        self.assertEqual(self.errors_from(vm.check_hooks, vm.REPO_ROOT), [])
 
     def test_rejects_a_command_that_does_not_name_the_hook_script(self):
         """A command that stopped naming the script breaks the hook silently for consumers."""
