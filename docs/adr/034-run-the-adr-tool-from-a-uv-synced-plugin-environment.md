@@ -238,6 +238,37 @@ hooks remain POSIX-only, Windows without Git Bash out of scope.
   `adr.py`'s and `frontmatter.py`'s docstrings and the skill's `pyproject.toml`, and the
   README are corrected in the implementing change, which the [backlog item][] tracks.
 
+## Revisit watch
+
+- **2026-10-13, at implementation: no trigger has fired.**
+
+  *The turn.* Across three sessions in this repository's transcripts — 3 main and 39
+  subagent transcripts, 700 tool-calling messages — 593 turns gave a median of 8.8 s, a
+  mean of 15.7 s and a 25th percentile of 4.9 s. Main transcripts alone gave a median of
+  9.4 s over 140 turns; subagents gave 8.7 s over 453. One session supplied 634 of the 700
+  messages. A turn runs as defined above, within one transcript. A turn spanning the end of
+  a run was not timed: a human prompt, an `end_turn`, a compaction or a subagent's handback.
+  Four turns over 900 s were dropped as waits on a person, such as a permission prompt.
+
+  *Events a turn.* One `PreToolUse` per `Read`, `Edit`, `Write`, `NotebookEdit` or `Bash`
+  call plus one `PostToolBatch` gave a mean of 2.05 over all 700 messages (1.05
+  `PreToolUse`). That is up from 2026-10-08's 1.69, which counted subagents alone and no
+  parallel calls; here 100 messages (14%) issued them. The count came from a throwaway
+  script, `python3 measure_turns.py ~/.claude/projects/-Users-phx-Documents-phx-claude-siat`,
+  not kept in the repository, so the rules above are the method to repeat.
+
+  *Cost an event.* Three runs of `uv run python -m scripts.ci.time_hooks` on this tree, on
+  one linux/aarch64 container, gave means of 0.039–0.044 s for `PreToolUse` and
+  0.040–0.041 s for `PostToolBatch`, and an overall p95 of 0.048–0.063 s. The highest p95
+  of any one event type was `SessionStart`'s 0.072 s. Every timed `PreToolUse` was a first
+  touch injecting its full rows, so these overstate a typical one.
+
+  *Against the bounds.* At the highest means, 1.05 × 0.044 s + 1 × 0.041 s ≈ 0.087 s a
+  turn: 1.0% of the 8.8 s median turn, against 5% (0.44 s). The worst p95, 0.072 s, is
+  under the 1 s ceiling. No consumer has been found needing the skills without the hooks or
+  running without `uv`. Whether Claude Code now installs a plugin's Python dependencies was
+  not re-checked.
+
 [ADR 007]: 007-keep-repo-scripts-stdlib-only.md
 [ADR 012]: 012-advertise-one-plugin-per-catalogue.md
 [ADR 017]: 017-move-a-skills-deterministic-steps-into-shipped-code.md
