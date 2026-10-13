@@ -66,6 +66,9 @@ STRIPPED_VARIABLES = (
     "VIRTUAL_ENV",
 )
 
+# What SessionStart says when uv is missing and no earlier session left a synced venv.
+NEEDS_UV_NOTE = "need uv on PATH"
+
 # The events whose hook only runs a synced venv's python, never `uv`.
 PER_EVENT_HOOKS = ("PostToolBatch", "PreToolUse", "Stop", "SubagentStart", "SubagentStop")
 
@@ -235,6 +238,14 @@ class PluginTreeTestCase(unittest.TestCase):
     def failing_uv(self) -> str:
         """A PATH whose `uv` exits 1."""
         return self.uv_shim("exit 1")
+
+    def path_without_uv(self) -> str:
+        """A PATH holding only the tools the hooks and sync.sh call bar `uv`."""
+        bin_dir = self.tmp / "bare-bin"
+        bin_dir.mkdir(exist_ok=True)
+        for tool in ("dirname", "grep", "head", "sh"):
+            (bin_dir / tool).symlink_to(shutil.which(tool))
+        return str(bin_dir)
 
     def offline(self) -> dict[str, str]:
         """The environment of a machine with no network and an empty uv cache."""
@@ -639,21 +650,33 @@ class HookCommandTests(PluginTreeTestCase):
         self.assertEqual(sorted(p.name for p in (self.data / "venvs").iterdir()), [VERSION])
 
     def test_session_start_says_uv_is_missing(self):
-        """Without uv, SessionStart says the checks are off, and every other event stays silent."""
+        """Without uv or a synced venv, SessionStart says the checks are off; later events stay silent."""
         root = self.cache_root()
-        bin_dir = self.tmp / "bare-bin"
-        bin_dir.mkdir()
-        for tool in ("grep", "head", "sh"):
-            (bin_dir / tool).symlink_to(shutil.which(tool))
+        path = self.path_without_uv()
 
-        started = self.run_hook(
-            root, self.event("SessionStart", source="startup"), PATH=str(bin_dir)
-        )
+        started = self.run_hook(root, self.event("SessionStart", source="startup"), PATH=path)
         self.assertEqual(started.returncode, 0, started.stderr)
-        self.assertIn("need uv on PATH", started.stdout)
+        self.assertIn(NEEDS_UV_NOTE, started.stdout)
 
-        touched = self.run_hook(root, self.read_event(), PATH=str(bin_dir))
+        touched = self.run_hook(root, self.read_event(), PATH=path)
         self.assertEqual((touched.returncode, touched.stdout), (0, ""), touched.stderr)
+
+    def test_session_start_without_uv_runs_an_earlier_sessions_venv(self):
+        """With uv gone but a venv synced before, SessionStart takes its baseline as usual."""
+        root = self.cache_root()
+        synced = self.sync(root)
+        self.assertEqual(synced.returncode, 0, synced.stderr)
+        path = self.path_without_uv()
+
+        started = self.run_hook(root, self.event("SessionStart", source="startup"), PATH=path)
+        self.assertEqual(started.returncode, 0, started.stderr)
+        self.assertNotIn(NEEDS_UV_NOTE, started.stdout)
+        output = json.loads(started.stdout)["hookSpecificOutput"]
+        self.assertEqual(output["additionalContext"], hook.NOTE.format(count="1 decision"))
+
+        touched = self.run_hook(root, self.read_event(), PATH=path)
+        self.assertEqual(touched.returncode, 0, touched.stderr)
+        self.assertIn("Decisions binding", touched.stdout)
 
     def test_session_start_says_the_sync_failed_offline(self):
         """An offline first session gets no venv, says so, and leaves no marker behind."""

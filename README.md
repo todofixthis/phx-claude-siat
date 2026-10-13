@@ -87,21 +87,22 @@ path is reached. Where either program is missing, the skill says so and stops.
 
 #### writing-adrs
 
-`writing-adrs` ships a tool and session hooks, so the skill needs **`uv`** on your
-`PATH`. Nothing else to install: uv fetches an interpreter meeting the tool's 3.12 floor.
-At session start the plugin syncs the tool's virtual environment (with PyYAML) for the
-plugin version, under the plugin's data directory, and drops the environments of versions
-no longer installed; a sync of an environment that is already current does nothing. The
-first session after an update therefore needs network access. Where uv is missing or the
-sync fails, the session says so and the checks are off for that session (with uv missing,
-an environment an earlier session synced keeps the other hooks running). The first ADR the agent
-records creates `docs/adr/` and a generated `INDEX.md`; from then on the plugin's hooks
-regenerate the index after the agent edits an ADR (an edit made through the shell is
-reported, not fixed), inject the decisions binding a file the first time a session touches
-it, and report a `scope` entry left dangling by a move or delete. The hooks are inert in a
-repository whose `docs/adr/INDEX.md` the tool did not generate. [How the writing-adrs
-hooks shape a session](docs/writing-adrs-hooks.md) walks through each hook with what the
-agent sees at every step.
+`writing-adrs` ships a tool and session hooks, so the skill needs **`uv`** on your `PATH`.
+Nothing else to install: uv fetches an interpreter meeting the tool's 3.12 floor. At
+session start the plugin syncs the tool's virtual environment (with PyYAML) for the plugin
+version, under the plugin's data directory, and drops the environments of versions no
+longer installed; a sync of an environment that is already current does nothing. The first
+session after an update therefore needs network access. Where the sync fails, the session
+says so and the checks are off for that session. Where uv is missing, an environment an
+earlier session synced still runs every hook; with none, the session says the checks are
+off until uv is installed. The first ADR the agent records creates `docs/adr/` and a
+generated `INDEX.md`; from then on the plugin's hooks regenerate the index after the agent
+edits an ADR (an edit made through the shell is reported, not fixed), inject the decisions
+binding a file the first time a session touches it, and report a `scope` entry left
+dangling by a move or delete. The hooks are inert in a repository whose
+`docs/adr/INDEX.md` the tool did not generate. [How the writing-adrs hooks shape a
+session](docs/writing-adrs-hooks.md) walks through each hook with what the agent sees at
+every step.
 
 To gate a consumer's CI on the corpus, pinned to a release tag (`<tag>`):
 
