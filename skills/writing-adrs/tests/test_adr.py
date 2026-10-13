@@ -34,6 +34,7 @@ from adr import (
     REVISIT_WHEN_FIELD,
     SCOPE_FIELD,
     STATUS_FIELDS,
+    SUMMARY_FIELD,
     TABLE_HEADER,
     TAGS_FIELD,
     binding,
@@ -1229,7 +1230,7 @@ class NewAdrTests(RepoTestCase):
         content = path.read_text(encoding="utf-8")
         self.assertIn('\nsummary: "Use X: not Y #1"\n', content)
         fields, _, _, problems = parse_adr(content)
-        self.assertEqual(fields["summary"], summary)
+        self.assertEqual(fields[SUMMARY_FIELD], summary)
         self.assertEqual(problems, [])
 
     def test_new_writes_a_templated_scope_entry_for_reads_back(self):
@@ -1258,7 +1259,7 @@ class NewAdrTests(RepoTestCase):
         path = adr.new_adr(self.repo_root, "W", summary, [SCOPED_FILE], None, date(2026, 9, 2))
         content = path.read_text(encoding="utf-8")
         self.assertNotIn("\u2028", content)
-        self.assertEqual(parse_adr(content)[0]["summary"], summary)
+        self.assertEqual(parse_adr(content)[0][SUMMARY_FIELD], summary)
 
     def test_refuses_before_writing_a_value_the_line_would_not_read_back(self):
         """Whatever the writer fails to make round-trip is caught before the file lands."""
@@ -1266,7 +1267,7 @@ class NewAdrTests(RepoTestCase):
             adr, "yaml_value", side_effect=lambda value, in_flow=False: value
         ):
             self.assertIn(
-                "summary",
+                SUMMARY_FIELD,
                 self.refuse("W", "Use X: not Y", [SCOPED_FILE]),
             )
 
@@ -1400,24 +1401,24 @@ class SetFieldsTests(unittest.TestCase):
 
     def test_renders_a_list_as_a_flow_sequence_of_safe_entries(self):
         """A list value is written `[a, "b, c"]`, each entry quoted only where it must be."""
-        result = adr.set_fields(adr_text(), {"scope": ["x/", "a, b/"]})
+        result = adr.set_fields(adr_text(), {SCOPE_FIELD: ["x/", "a, b/"]})
         self.assertIn('\nscope: [x/, "a, b/"]\n', result)
 
     def test_replaces_a_block_sequence_field_with_its_items(self):
         """The `- item` lines belong to the key, so replacing the key drops them too."""
-        text = adr_text(**{"revisit-discharged-by": "\n  - 2\n  - 4"})
-        result = adr.set_fields(text, {"revisit-discharged-by": ["2", "4", "5"]})
+        text = adr_text(**{REVISIT_DISCHARGED_BY_FIELD: "\n  - 2\n  - 4"})
+        result = adr.set_fields(text, {REVISIT_DISCHARGED_BY_FIELD: ["2", "4", "5"]})
         fields, _, _, problems = parse_adr(result)
         self.assertEqual(problems, [])
-        self.assertEqual(fields["revisit-discharged-by"], ["2", "4", "5"])
+        self.assertEqual(fields[REVISIT_DISCHARGED_BY_FIELD], ["2", "4", "5"])
         self.assertNotIn("  - ", result)
 
     def test_deletes_a_block_sequence_field_with_its_items(self):
         """Deleting the key leaves no orphaned `- item` lines behind."""
         text = adr_text(scope="\n  - a/\n  - b/")
-        result = adr.set_fields(text, {"scope": None})
+        result = adr.set_fields(text, {SCOPE_FIELD: None})
         fields, _, _, problems = parse_adr(result)
-        self.assertNotIn("scope", fields)
+        self.assertNotIn(SCOPE_FIELD, fields)
         self.assertNotIn("  - ", result)
         self.assertEqual([p for p in problems if "continued" in p], [])
 
@@ -1478,7 +1479,7 @@ class DischargeTests(RepoTestCase):
 
     def test_discharge_quotes_a_leaving_condition(self):
         """A `--leaving` condition YAML would misread is written quoted and reads back verbatim."""
-        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("001-first.md", adr_text(**{REVISIT_WHEN_FIELD: "A fires, or B fires."}))
         self.write("002-second.md", adr_text(title="2: Do another thing"))
         self.manage()
         adr.discharge(self.repo_root, 1, 2, leaving="Revisit: when X")
@@ -1489,7 +1490,7 @@ class DischargeTests(RepoTestCase):
 
     def test_discharge_refuses_before_writing_a_leaving_the_line_would_not_read_back(self):
         """A condition that would not round-trip leaves the ADR exactly as it was."""
-        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("001-first.md", adr_text(**{REVISIT_WHEN_FIELD: "A fires, or B fires."}))
         self.write("002-second.md", adr_text(title="2: Do another thing"))
         self.manage()
         before = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
@@ -1504,19 +1505,25 @@ class DischargeTests(RepoTestCase):
 
     def test_discharge_writes_a_leaving_with_a_line_separator_escaped(self):
         """U+2028 in `--leaving` is written escaped and reads back verbatim."""
-        self.write("001-first.md", adr_text(**{"revisit-when": "A fires, or B fires."}))
+        self.write("001-first.md", adr_text(**{REVISIT_WHEN_FIELD: "A fires, or B fires."}))
         self.write("002-second.md", adr_text(title="2: Do another thing"))
         self.manage()
-        adr.discharge(self.repo_root, 1, 2, leaving="B fires.")
+        leaving = "B fires. C: fires."
+        adr.discharge(self.repo_root, 1, 2, leaving=leaving)
         content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
-        self.assertEqual(parse_adr(content)[0][REVISIT_WHEN_FIELD], "B fires.")
+        self.assertNotIn(" ", content)
+        self.assertIn("\\u2028", content)
+        self.assertEqual(parse_adr(content)[0][REVISIT_WHEN_FIELD], leaving)
 
     def test_discharge_through_a_block_sequence_leaves_a_clean_file(self):
         """A discharged-by list written as a block sequence is replaced whole, not half."""
         self.write(
             "001-first.md",
             adr_text(
-                **{"revisit-when": "A fires, or B fires.", "revisit-discharged-by": "\n  - 3"}
+                **{
+                    REVISIT_WHEN_FIELD: "A fires, or B fires.",
+                    REVISIT_DISCHARGED_BY_FIELD: "\n  - 3",
+                }
             ),
         )
         self.write("002-second.md", adr_text(title="2: Do another thing"))
@@ -1526,7 +1533,7 @@ class DischargeTests(RepoTestCase):
         content = (self.adr_dir / "001-first.md").read_text(encoding="utf-8")
         fields, _, _, problems = parse_adr(content)
         self.assertEqual(problems, [])
-        self.assertEqual(fields["revisit-discharged-by"], ["3", "2"])
+        self.assertEqual(fields[REVISIT_DISCHARGED_BY_FIELD], ["3", "2"])
 
     def test_records_the_discharge_and_empties_the_revisit_cell(self):
         """Spent wholly, revisit-when goes, the list gains the ADR, and the Revisit cell empties."""
