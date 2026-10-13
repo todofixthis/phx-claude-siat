@@ -178,19 +178,25 @@ def run_tests(
     needs the source put back is the one that leaves it mutated.
     """
     guard_against_recursion(command)
+    # Its own session, so a timeout can kill the whole group: `uv run` spawns the
+    # interpreter rather than exec'ing it, and SIGKILL to `uv` alone orphans the suite.
+    # preexec_fn is unsafe only alongside threads, and this process starts none.
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        preexec_fn=bound_child,  # noqa: PLW1509
+        start_new_session=True,
+        env=os.environ | {RECURSION_FLAG: "1"},
+    )
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=timeout,
-            preexec_fn=bound_child,
-            env=os.environ | {RECURSION_FLAG: "1"},
-        )
+        stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.communicate()
         return -1, f"timed out after {timeout:g}s without finishing"
-    return result.returncode, result.stdout + result.stderr
+    return process.returncode, stdout + stderr
 
 
 def report(code: int, output: str) -> int:

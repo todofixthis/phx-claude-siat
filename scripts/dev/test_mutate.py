@@ -18,7 +18,10 @@ the parsing this module exists to do.
 import contextlib
 import io
 import os
+import signal
+import subprocess
 import tempfile
+import time
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -214,6 +217,30 @@ class RunTestsTests(unittest.TestCase):
         code, output = run_tests(("python3", "-c", "import time; time.sleep(30)"), timeout=1)
         self.assertEqual(code, -1)
         self.assertIn("timed out", output)
+
+    def test_stops_the_whole_process_group_on_a_timeout(self):
+        """`uv run` spawns the interpreter rather than exec'ing it, so killing only the
+        direct child would leave the hung suite running with no time bound at all."""
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "grandchild.pid"
+            script = f"sleep 30 >/dev/null 2>&1 & echo $! > '{pid_file}'; wait"
+            code, _ = run_tests(("sh", "-c", script), timeout=1)
+            self.assertEqual(code, -1)
+            grandchild = int(pid_file.read_text(encoding="utf-8"))
+        # A killed orphan can linger as a zombie where PID 1 never reaps, so a zombie
+        # counts as stopped; and death is asynchronous, so allow it a moment.
+        for _ in range(40):
+            state = subprocess.run(
+                ("ps", "-o", "stat=", "-p", str(grandchild)),
+                capture_output=True,
+                check=False,
+                text=True,
+            ).stdout.strip()
+            if not state or state.startswith("Z"):
+                return
+            time.sleep(0.05)
+        os.kill(grandchild, signal.SIGKILL)
+        self.fail(f"the suite's own child {grandchild} outlived the timeout")
 
     def test_marks_the_child_as_being_inside_a_run(self):
         """Without the flag reaching the child, the recursion guard can never fire."""
