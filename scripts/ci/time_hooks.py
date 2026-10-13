@@ -238,6 +238,20 @@ def main(argv: list[str], repo_root: Path) -> int:
     if args.events < 1:
         parser.error("--events must be at least 1")
     hooks_file = repo_root / args.hooks_file
+    # The timing sync prunes every venv whose version is missing from its own one-version
+    # cache, so pointed at a real plugin data directory it would delete the real venvs.
+    if args.data_dir is not None and (args.data_dir / "venvs").is_dir():
+        others = sorted(
+            entry.name
+            for entry in (args.data_dir / "venvs").iterdir()
+            if entry.name != TIMING_VERSION
+        )
+        if others:
+            print(
+                f"❌ {args.data_dir} holds other venvs ({', '.join(others)}) the timing "
+                "sync would prune; pass an empty or timing-only data directory"
+            )
+            return 1
 
     with tempfile.TemporaryDirectory() as directory:
         tmp = Path(directory)
@@ -272,6 +286,16 @@ def main(argv: list[str], repo_root: Path) -> int:
             return 1
 
     every = print_table(samples)
+    # ADR 034 bounds each hook event's p95, so one slow event type fails on its own even
+    # where the others pull the overall figure under the ceiling.
+    failed = False
+    for name, values in samples.items():
+        if values and p95(values) > args.ceiling:
+            print(
+                f"❌ {name} p95 {p95(values):.3f} s exceeds the {args.ceiling} s ceiling "
+                "(docs/adr/034)"
+            )
+            failed = True
     overall = p95(every)
     if overall > args.ceiling:
         print(
@@ -279,7 +303,7 @@ def main(argv: list[str], repo_root: Path) -> int:
         )
         return 1
     print(f"✅ Overall p95 {overall:.3f} s is within the {args.ceiling} s ceiling")
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

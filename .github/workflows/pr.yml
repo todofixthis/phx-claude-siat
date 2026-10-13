@@ -57,8 +57,10 @@ jobs:
                   skills/creative-commits/*|skills/nz-english/*|skills/writing-adrs/*)
                       python=true ;;
               esac
+              # The scripts/ suite runs here and imports what the lock pins, so the root
+              # workspace files gate it too: a lock-only bump must re-run it.
               case "$path" in
-                  CHANGELOG.md|.claude-plugin/*|hooks/*|scripts/*|\
+                  CHANGELOG.md|.claude-plugin/*|hooks/*|pyproject.toml|uv.lock|scripts/*|\
                   skills/*|.agents/skills/*)
                       manifests=true ;;
               esac

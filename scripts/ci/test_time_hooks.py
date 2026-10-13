@@ -250,6 +250,30 @@ class MainTests(TimeHooksTestCase):
         self.assertEqual(code, 1)
         self.assertIn(f"exceeds the {FIXTURE_CEILING} s ceiling", stdout)
 
+    def test_one_slow_event_type_fails_though_the_overall_p95_passes(self):
+        """ADR 034 bounds each hook event's p95, so one slow event type must fail on its own."""
+        once = self.tmp / "slow-once"
+        self.write_hooks(
+            "true", PostToolBatch=f"[ -f '{once}' ] || {{ : > '{once}'; {SLOW_COMMAND}; }}"
+        )
+        self.mark_synced()
+        code, stdout = self.run_main("--events", str(len(EVENT_CYCLE) * 6))
+        self.assertEqual(code, 1)
+        self.assertIn("❌ PostToolBatch p95 0.3", stdout)
+        self.assertIn(f"exceeds the {FIXTURE_CEILING} s ceiling", stdout)
+        self.assertIn("✅ Overall p95", stdout)
+
+    def test_refuses_a_data_dir_holding_other_venvs(self):
+        """The sync would prune every other version's venv there, so a real data dir is refused."""
+        self.write_hooks("true")
+        self.mark_synced()
+        other = self.data / "venvs" / "1.2.3"
+        other.mkdir()
+        code, stdout = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("1.2.3", stdout)
+        self.assertTrue(other.is_dir())
+
     def test_an_unsynced_venv_fails_the_timing(self):
         """No marker after the cold SessionStart means every hook would time its gate alone."""
         self.write_hooks("true")
