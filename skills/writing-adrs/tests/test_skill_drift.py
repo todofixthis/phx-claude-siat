@@ -14,7 +14,8 @@ from frontmatter import parse_frontmatter
 ALLOWED_TOOLS_FIELD = "allowed-tools"
 SKILL = Path(__file__).resolve().parents[1] / "SKILL.md"
 RE_FORMAT_FENCE = re.compile(r"## Format\n\nFile: .*?\n\n```markdown\n(.*?)```", re.DOTALL)
-RE_COMMAND_LINE = re.compile(r"`python3 \$\{CLAUDE_SKILL_DIR\}/adr\.py ([a-z]+)[^`]*`")
+LAUNCHER = r'sh "\$\{CLAUDE_SKILL_DIR\}/adr\.sh" "\$\{CLAUDE_PLUGIN_DATA\}"'
+RE_COMMAND_LINE = re.compile(rf"`{LAUNCHER} ([a-z]+)[^`]*`")
 RE_FLAG = re.compile(r"--[a-z-]+")
 
 
@@ -70,6 +71,11 @@ class CommandLineTests(unittest.TestCase):
         """
         self.assertNotIn(ALLOWED_TOOLS_FIELD, skill_frontmatter())
 
+    def test_no_command_line_uses_bare_python3(self):
+        """No command line in the skill runs `adr.py` through bare `python3`."""
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertNotIn("python3 ${CLAUDE_SKILL_DIR}", text)
+
     def test_every_command_line_names_a_subcommand(self):
         """Every command line the skill gives names a subcommand the tool offers."""
         text = SKILL.read_text(encoding="utf-8")
@@ -91,7 +97,7 @@ class CommandLineTests(unittest.TestCase):
         """A flag the skill tells the agent to pass must exist on that subcommand's parser."""
         text = SKILL.read_text(encoding="utf-8")
         subcommands = adr.build_parser()._subparsers._group_actions[0].choices
-        lines = re.findall(r"`python3 \$\{CLAUDE_SKILL_DIR\}/adr\.py ([a-z]+)([^`]*)`", text)
+        lines = re.findall(rf"`{LAUNCHER} ([a-z]+)([^`]*)`", text)
         self.assertTrue(
             any(RE_FLAG.search(rest) for _, rest in lines), "no command names a flag"
         )

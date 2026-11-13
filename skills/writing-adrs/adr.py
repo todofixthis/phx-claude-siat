@@ -1,8 +1,8 @@
 """ADR scaffolding, index and scope checks for the writing-adrs skill.
 
-Standard library only, so it runs wherever `python3` does and needs no virtualenv.
-The skill runs it as `python3 ${CLAUDE_SKILL_DIR}/adr.py <command>`, the plugin's hooks
-reach it through hook.py, and a consumer's CI as `phx-adr`.
+Needs PyYAML, so it runs from the plugin's uv-synced environment rather than a bare
+`python3`: the skill runs it through the launcher the plugin's SessionStart hook prepares,
+the plugin's hooks reach it through hook.py, and a consumer's CI as `phx-adr`.
 
     adr.py [--repo-root DIR] new TITLE --summary S (--scope P ... | --no-scope) [--revisit-when R]
     adr.py [--repo-root DIR] index
@@ -25,19 +25,25 @@ agent passed verbatim. It never rewrites a sentence the agent wrote.
 """
 
 import argparse
+import json
 import re
 import sys
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 # The floor the syntax here needs (`X | None` in evaluated annotations, dataclass slots).
-# Checked rather than assumed: a consumer runs this on whatever python3 they have.
+# Checked rather than assumed: a consumer's `phx-adr` runs on whatever interpreter their
+# environment resolves.
 PYTHON_FLOOR = (3, 10)
 if sys.version_info < PYTHON_FLOOR:
     sys.exit(f"adr.py needs Python {PYTHON_FLOOR[0]}.{PYTHON_FLOOR[1]} or newer")
 
+import yaml
+
+import frontmatter
 from frontmatter import parse_frontmatter
 
 ADR_DIR = Path("docs") / "adr"
@@ -81,8 +87,6 @@ NUMBER_WIDTH = 3
 
 RE_ADR_FILENAME = re.compile(r"^\d+-.*\.md$")
 RE_FILE_NUMBER = re.compile(r"^(\d+)")
-# A character that cannot open a plain YAML scalar, or an indicator that a space follows.
-RE_YAML_INDICATOR = re.compile(r"""^(?:[`"'*&!%@,\[\]{}>|#]|[-?:]\s)""")
 RE_FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
 RE_H1_TITLE = re.compile(r"^# (.+)$", re.MULTILINE)
 RE_NUMBER_PREFIX = re.compile(r"^(\d+):\s*")
@@ -244,12 +248,6 @@ def parse_adr(content: str) -> tuple[dict, str, str | None, list[str]]:
             for entry in spent
             if not entry.isdigit()
         )
-
-    for key, value in fields.items():
-        for entry in value if isinstance(value, list) else [value]:
-            hazard = yaml_hazard(entry)
-            if hazard:
-                problems.append(f"declares `{key}` holding {hazard}")
 
     if TAGS_FIELD in fields:
         problems.append(
@@ -782,29 +780,67 @@ class AdrError(Exception):
     """A command that cannot proceed; the message is for the person who ran it."""
 
 
-def yaml_hazard(value: str) -> str | None:
-    """Why a YAML reader would misread `value`, or None. Our parser reads it fine.
+# What a double-quoted YAML scalar may not carry literally: anything outside YAML's
+# printable set, plus the line separators YAML breaks a scalar on (U+2028, U+2029, U+0085).
+RE_NEEDS_ESCAPE = re.compile(
+    "[^\t\n\r\x20-\x7e\xa0-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]|[\u2028\u2029\ufeff]"
+)
 
-    GitHub renders the frontmatter through a YAML parser. An opening indicator character —
-    a backtick, quote, bracket or the like — cannot start a plain value, and `: ` inside one
-    or a `:` ending it opens a nested mapping; either fails the whole file's rendering. ` #`
-    starts a comment, which drops the rest of the value without a word.
+
+def escape_unprintable(match: re.Match[str]) -> str:
+    """The YAML escape for one character a double-quoted scalar cannot hold literally."""
+    code = ord(match.group())
+    return f"\\x{code:02x}" if code <= 0xFF else f"\\u{code:04x}"
+
+
+@contextmanager
+def loader_as(loader: type):
+    """Run the block with the frontmatter parser reading through `loader`."""
+    previous = frontmatter.LOADER
+    frontmatter.LOADER = loader
+    try:
+        yield
+    finally:
+        frontmatter.LOADER = previous
+
+
+def reads_back(text: str, expected: dict[str, str | list[str]]) -> bool:
+    """Whether `text` parses, under both loaders, with no problem and exactly `expected`."""
+    loaders = (
+        (yaml.CBaseLoader, yaml.BaseLoader) if yaml.__with_libyaml__ else (yaml.BaseLoader,)
+    )
+    for loader in loaders:
+        with loader_as(loader):
+            fields, problems = parse_frontmatter(text)
+        if problems or fields != expected:
+            return False
+    return True
+
+
+def yaml_value(value: str, in_flow: bool = False) -> str:
+    """`value` as frontmatter text that reads back as `value`: plain where it can, else quoted.
+
+    Plain is tried first, by reading it back through `parse_frontmatter` in the position it
+    will take (`k: <v>`, or one entry of `k: [<v>]` when `in_flow`), under both loaders the
+    parser may run with: a file written where libyaml is built in must read where it is not.
+    A value that does not survive is quoted with `json.dumps`, a valid YAML double-quoted
+    scalar, with the few characters YAML cannot hold literally escaped. Quoting is syntax
+    around a verbatim value, never a rewrite of it.
     """
-    if RE_YAML_INDICATOR.match(value):
-        return (
-            f"an opening `{value[0]}`, which a YAML reader such as GitHub's takes as syntax; "
-            "start the value with a word"
-        )
-    if ": " in value or value.endswith(":"):
-        return (
-            "`: `, which a YAML reader such as GitHub's takes as a nested mapping; "
-            "rephrase the value"
-        )
-    if " #" in value:
-        return (
-            "` #`, which a YAML reader such as GitHub's takes as a comment; rephrase the value"
-        )
-    return None
+    if in_flow:
+        plain = reads_back(f"k: [{value}]", {"k": [value]})
+    else:
+        plain = reads_back(f"k: {value}", {"k": value})
+    if plain:
+        return value
+    return RE_NEEDS_ESCAPE.sub(escape_unprintable, json.dumps(value, ensure_ascii=False))
+
+
+def yaml_field(value: str | list[str]) -> str:
+    """The text after `key: ` for a field value: a list as a flow sequence, else a scalar."""
+    if isinstance(value, list):
+        return "[" + ", ".join(yaml_value(entry, in_flow=True) for entry in value) + "]"
+    return yaml_value(value)
 
 
 def slugify(title: str) -> str:
@@ -843,11 +879,11 @@ def render_new(
     frontmatter = [
         "status: Accepted",
         f"date: {today.isoformat()}",
-        f"scope: [{', '.join(scope)}]",
-        f"summary: {summary}",
+        f"scope: {yaml_field(scope)}",
+        f"summary: {yaml_field(summary)}",
     ]
     if revisit_when:
-        frontmatter.append(f"revisit-when: {revisit_when}")
+        frontmatter.append(f"revisit-when: {yaml_field(revisit_when)}")
     _, body = FORMAT_TEMPLATE.split("---\n\n# NNN: Title (Imperative Mood)\n", 1)
     return (
         "---\n"
@@ -855,6 +891,18 @@ def render_new(
         + f"\n---\n\n# {number:0{NUMBER_WIDTH}d}: {title}\n"
         + body
     )
+
+
+def refuse_unless_read_back(content: str, expected: dict[str, str | list[str]]) -> None:
+    """Raise unless `content`'s frontmatter reads back as `expected`, so nothing bad is written."""
+    match = RE_FRONTMATTER.match(content)
+    block = match.group(1) if match else ""
+    if not reads_back(block, {**parse_frontmatter(block)[0], **expected}):
+        names = ", ".join(expected)
+        raise AdrError(
+            f"{names} would not read back from the frontmatter as written; "
+            "rephrase the value"
+        )
 
 
 def new_adr(
@@ -870,27 +918,21 @@ def new_adr(
     The title, the values, the scope and the existing corpus are all checked before
     anything is written: a scope entry naming nothing is refused the way the index would
     refuse it, and a fault already on disk is refused before a new file could land beside
-    it, index-less. A value the frontmatter cannot carry is refused for the same reason —
-    written, it would fail the reconcile that follows and leave an ADR the index omits.
+    it, index-less. A value the frontmatter cannot carry on one line is refused for the same
+    reason — written, it would fail the reconcile that follows and leave an ADR the index
+    omits. Any other value is written, quoted where plain text would not read back.
     """
     if not slugify(title):
         raise AdrError("title yields an empty slug")
     for field, value in ((SUMMARY_FIELD, summary), (REVISIT_WHEN_FIELD, revisit_when)):
-        if value and "\n" in value:
+        if value and frontmatter.RE_LINE_ENDING.search(value):
             raise AdrError(
                 f"{field} holds a line break; frontmatter carries a value on one line"
             )
-    for field, value in (
-        (SUMMARY_FIELD, summary),
-        (REVISIT_WHEN_FIELD, revisit_when),
-        *((SCOPE_FIELD, entry) for entry in scope),
-    ):
-        if value and yaml_hazard(value):
-            raise AdrError(f"{field} holds {yaml_hazard(value)}")
     for entry in scope:
-        if "," in entry or "\n" in entry:
+        if frontmatter.RE_LINE_ENDING.search(entry):
             raise AdrError(
-                f"scope entry {entry!r} holds a comma or a line break, and the inline list "
+                f"scope entry {entry!r} holds a line break, and the inline list "
                 "would split it into entries naming nothing"
             )
     problems = scope_problems(scope, root)
@@ -901,23 +943,27 @@ def new_adr(
         _, findings = inspect(root)
         if findings:
             raise AdrError("; ".join(f.message for f in findings))
-    adr_dir.mkdir(parents=True, exist_ok=True)
     number = next_number(adr_dir)
+    content = render_new(number, title, summary, scope, revisit_when, today)
+    expected = {SCOPE_FIELD: scope, SUMMARY_FIELD: summary}
+    if revisit_when:
+        expected[REVISIT_WHEN_FIELD] = revisit_when
+    refuse_unless_read_back(content, expected)
+    adr_dir.mkdir(parents=True, exist_ok=True)
     path = adr_dir / f"{number:0{NUMBER_WIDTH}d}-{slugify(title)}.md"
-    path.write_text(
-        render_new(number, title, summary, scope, revisit_when, today), encoding="utf-8"
-    )
+    path.write_text(content, encoding="utf-8")
     findings = reconcile(root, write=True)
     if findings:
         raise AdrError("; ".join(f.message for f in findings))
     return path
 
 
-def set_fields(content: str, updates: dict[str, str | None]) -> str:
+def set_fields(content: str, updates: dict[str, str | list[str] | None]) -> str:
     """Return `content` with frontmatter fields replaced, appended, or (given None) removed.
 
     Only the block between the markers changes; a field in place keeps its position and a
-    new one goes last. The body is returned byte for byte.
+    new one goes last. The body is returned byte for byte. A `list` renders as a flow
+    sequence, and each value is quoted only where plain text would not read back.
     """
     match = RE_FRONTMATTER.match(content)
     if not match:
@@ -926,12 +972,22 @@ def set_fields(content: str, updates: dict[str, str | None]) -> str:
     for key, value in updates.items():
         # Matched the way the parser reads a key, so `status : Accepted` is found too.
         present = [i for i, line in enumerate(lines) if line.partition(":")[0].strip() == key]
+        # A block sequence's `- item` lines belong to the key above them, so they go with it.
+        owned = set(present)
+        for index in present:
+            for later in range(index + 1, len(lines)):
+                text = lines[later].strip()
+                if lines[later][:1].isspace() and text.startswith("- "):
+                    owned.add(later)
+                elif text and not text.startswith("#"):
+                    break
         if value is None:
-            lines = [line for i, line in enumerate(lines) if i not in present]
+            lines = [line for i, line in enumerate(lines) if i not in owned]
         elif present:
-            lines[present[0]] = f"{key}: {value}"
+            lines[present[0]] = f"{key}: {yaml_field(value)}"
+            lines = [line for i, line in enumerate(lines) if i not in owned - {present[0]}]
         else:
-            lines.append(f"{key}: {value}")
+            lines.append(f"{key}: {yaml_field(value)}")
     return "---\n" + "\n".join(lines) + "\n---\n" + match.group(2)
 
 
@@ -1011,7 +1067,7 @@ def discharge(root: Path, old: int, new: int, leaving: str | None = None) -> Non
     if str(new) in spent:
         raise AdrError(f"ADR {new} already spent a condition of ADR {old}")
     if leaving is not None:
-        if "\n" in leaving:
+        if frontmatter.RE_LINE_ENDING.search(leaving):
             raise AdrError(
                 "--leaving holds a line break; frontmatter carries a value on one line"
             )
@@ -1024,9 +1080,14 @@ def discharge(root: Path, old: int, new: int, leaving: str | None = None) -> Non
             )
     updates = {
         REVISIT_WHEN_FIELD: leaving,
-        REVISIT_DISCHARGED_BY_FIELD: f"[{', '.join([*spent, str(new)])}]",
+        REVISIT_DISCHARGED_BY_FIELD: [*spent, str(new)],
     }
-    path.write_text(set_fields(content, updates), encoding="utf-8")
+    updated = set_fields(content, updates)
+    expected = {REVISIT_DISCHARGED_BY_FIELD: updates[REVISIT_DISCHARGED_BY_FIELD]}
+    if leaving is not None:
+        expected[REVISIT_WHEN_FIELD] = leaving
+    refuse_unless_read_back(updated, expected)
+    path.write_text(updated, encoding="utf-8")
     regenerate_or_raise(root)
 
 
@@ -1125,9 +1186,7 @@ def renumber(root: Path, old: int, new: int | None = None) -> tuple[int, list[st
                     ambiguous.append(f"{relative}: `{field}: {rendered}`")
                     continue
                 moved = [str(new) if names_number(entry, old) else entry for entry in entries]
-                peer_updates[field] = (
-                    f"[{', '.join(moved)}]" if isinstance(value, list) else moved[0]
-                )
+                peer_updates[field] = moved if isinstance(value, list) else moved[0]
         if peer_updates:
             text = set_fields(text, peer_updates)
         peer.write_text(text, encoding="utf-8")
