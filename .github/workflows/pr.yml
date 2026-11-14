@@ -20,6 +20,7 @@ jobs:
     outputs:
       manifests: ${{ steps.filter.outputs.manifests }}
       python: ${{ steps.filter.outputs.python }}
+      scripts: ${{ steps.filter.outputs.scripts }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,6 +33,7 @@ jobs:
         run: |
           manifests=false
           python=false
+          scripts=false
 
           changed=$(git diff --name-only "$(git merge-base "$BASE_SHA" "$HEAD_SHA")" "$HEAD_SHA")
           echo "Changed files:"
@@ -47,28 +49,38 @@ jobs:
               # the skills shipping a pyproject.toml have a job to run, and a wider
               # glob would run the matrix for every skill edit. The root workspace
               # files and scripts/pyproject.toml gate the same job (ADR 031): a
-              # change to either affects what every leg resolves and installs.
+              # change to either affects what every leg resolves and installs. So do
+              # hooks/*: writing-adrs' tests are the only ones running hooks.json's
+              # commands, and a hooks-only change would otherwise skip them.
               case "$path" in
-                  pyproject.toml|uv.lock|scripts/pyproject.toml|\
+                  hooks/*|pyproject.toml|uv.lock|scripts/pyproject.toml|\
                   skills/creative-commits/*|skills/nz-english/*|skills/writing-adrs/*)
                       python=true ;;
               esac
+              # The scripts/ suite runs here and imports what the lock pins, so the root
+              # workspace files gate it too: a lock-only bump must re-run it.
               case "$path" in
-                  CHANGELOG.md|.claude-plugin/*|hooks/*|scripts/*|\
+                  CHANGELOG.md|.claude-plugin/*|hooks/*|pyproject.toml|uv.lock|scripts/*|\
                   skills/*|.agents/skills/*)
                       manifests=true ;;
+              esac
+              # The root workspace files carry the ruff/black settings and pins.
+              case "$path" in
+                  pyproject.toml|uv.lock|scripts/*)
+                      scripts=true ;;
               esac
               # A change to the workflow itself re-runs everything it gates. The `adr`
               # job runs unconditionally (ADR 021), so it needs no arm here.
               case "$path" in
                   .github/workflows/*)
-                      manifests=true; python=true ;;
+                      manifests=true; python=true; scripts=true ;;
               esac
           done
 
           echo "manifests=$manifests" >> "$GITHUB_OUTPUT"
           echo "python=$python" >> "$GITHUB_OUTPUT"
-          echo "Selected checks: manifests=$manifests python=$python"
+          echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
+          echo "Selected checks: manifests=$manifests python=$python scripts=$scripts"
 
   # The pre-commit hook runs these checks, but hooks are not installed on clone —
   # this is the backstop for a contributor who never set core.hooksPath. The tool now
@@ -82,10 +94,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Check the ADR corpus and index
-        run: python3 skills/writing-adrs/adr.py check
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      # The hook budget ADR 034 sets: fails where a hook event's p95 on this corpus
+      # exceeds 1 s, or where the venv the hooks run never synced.
+      - name: Time the ADR hooks against their p95 ceiling
+        run: uv run python -m scripts.ci.time_hooks
+
+      - name: Check the ADR corpus and index
+        run: uv run python skills/writing-adrs/adr.py check
 
       # The recipe consumers' CI runs, against this checkout, so it cannot rot unnoticed.
       - name: Check the consumer recipe still resolves
@@ -98,11 +115,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
       - name: Validate the manifests and skill frontmatter
-        run: python3 -m scripts.ci.validate_manifests
+        run: uv run python -m scripts.ci.validate_manifests
 
       - name: Unit-test the repo scripts
-        run: python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+        run: uv run python -m unittest discover -s scripts -t . -p 'test_*.py'
 
       # Against the real CHANGELOG, not fixtures: this is what makes an
       # unreleasable version or a CHANGELOG/plugin.json mismatch fail on the pull
@@ -111,7 +130,7 @@ jobs:
       # extracted notes land in the log — worth having on the rare run where what
       # the script read is the question.
       - name: Check the release notes resolve
-        run: python3 -m scripts.ci.release_notes
+        run: uv run python -m scripts.ci.release_notes
 
   # Mirrors the tooling each skill's pyproject.toml already declares. The matrix values
   # are full paths on purpose: validate_manifests.py looks for each skill directory as a
@@ -142,7 +161,7 @@ jobs:
       # Pinned to a commit digest; the v8 line publishes no floating major tag,
       # so the version comment tracks the exact release. Renovate's github-actions
       # manager keeps both digest and comment current.
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           cache-dependency-glob: uv.lock
           enable-cache: true
@@ -163,11 +182,36 @@ jobs:
       - name: Test
         run: uv run --directory ${{ matrix.skill }} pytest
 
+  # scripts/ declares no tooling, so the `python` matrix's mirror (ADR 005) never
+  # reaches it. Lint and format only: nothing type-checks scripts/, and its tests run
+  # in the `manifests` job.
+  scripts:
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          cache-dependency-glob: uv.lock
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run --directory scripts ruff check .
+
+      - name: Check formatting
+        run: uv run --directory scripts black --check .
+
   # The single required status check. Path-filtered jobs report as "skipped"
   # rather than "success", which would deadlock branch protection if each were
   # required directly; depending on them here collapses that into one result.
   gate:
-    needs: [adr, changes, manifests, python]
+    needs: [adr, changes, manifests, python, scripts]
     if: always()
     runs-on: ubuntu-latest
     steps:

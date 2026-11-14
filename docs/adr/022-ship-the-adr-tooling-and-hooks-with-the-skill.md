@@ -1,9 +1,10 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-09-02
 scope: [.claude-plugin/, .githooks/pre-commit, .github/workflows/pr.yml, hooks/, skills/writing-adrs/]
 summary: Ship the ADR generator, index and scope checks as a stdlib tool beside the writing-adrs skill, wired to sessions by hooks the phx plugin declares — not a standalone plugin, and not hooks declared in the skill's frontmatter alone.
 revisit-when: A consumer needs the skills without the hooks and Claude Code offers no per-hook opt-out, or a hook needs more than a POSIX shell and python3 to run, or a hook event's median cost is measured above 100 ms on this repository's corpus.
+superseded-by: 34
 ---
 
 # 022: Ship the ADR tooling and hooks with the skill

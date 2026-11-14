@@ -6,10 +6,12 @@ license = "MIT"
 name = "writing-adrs"
 requires-python = ">=3.12, <4"
 
-# No runtime dependencies on purpose: the tool is standard library only, so a consumer
-# runs `python3 <skilldir>/adr.py` with no virtualenv to build. The build backend exists
-# so a consumer's CI can run `uvx --from 'git+…#subdirectory=skills/writing-adrs' phx-adr`;
-# it packages the modules below and installs nothing into them.
+# PyYAML is the one runtime dependency: it decides every frontmatter value, so the tool
+# runs from an environment `uv sync` builds, never bare `python3`. The build backend
+# exists so a consumer's CI can run
+# `uvx --from 'git+…#subdirectory=skills/writing-adrs' phx-adr`; it packages the modules
+# below and pulls PyYAML in with them.
+dependencies = ["pyyaml>=6.0.3,<7"]
 
 [project.scripts]
 phx-adr = "adr:cli"

@@ -1,9 +1,9 @@
 """Tests for mutate.py.
 
-Stdlib `unittest` rather than pytest, so the suite needs no dependency of its own
-(ADR 007). Run from the repo root:
+`unittest` rather than pytest, so the suite needs no dependency beyond the declared ones
+(ADR 035). Run from the repo root:
 
-    python3 -m unittest discover -s scripts -t . -p 'test_*.py'
+    uv run python -m unittest discover -s scripts -t . -p 'test_*.py'
 
 `mutate()` takes the file to mutate as an argument and the suite to run as another, so
 these tests never chdir and never let it reach the real command: an argumentless run
@@ -18,7 +18,10 @@ the parsing this module exists to do.
 import contextlib
 import io
 import os
+import signal
+import subprocess
 import tempfile
+import time
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -128,7 +131,9 @@ class ApplyMutationTests(SourceFileTestCase):
     def test_replaces_a_match_identified_by_surrounding_lines(self):
         """Disambiguating by context is the whole alternative to an occurrence index."""
         apply_mutation(self.path, f"{ANCHOR}\n    pass\n", "if False:\n    pass\n")
-        self.assertEqual(self.source(), f"{ANCHOR}\n    raise ValueError\nif False:\n    pass\n")
+        self.assertEqual(
+            self.source(), f"{ANCHOR}\n    raise ValueError\nif False:\n    pass\n"
+        )
 
     def test_returns_the_original_bytes_for_restoring(self):
         """The restore is held in memory, so an interrupted run leaves no stray backup."""
@@ -213,6 +218,30 @@ class RunTestsTests(unittest.TestCase):
         self.assertEqual(code, -1)
         self.assertIn("timed out", output)
 
+    def test_stops_the_whole_process_group_on_a_timeout(self):
+        """`uv run` spawns the interpreter rather than exec'ing it, so killing only the
+        direct child would leave the hung suite running with no time bound at all."""
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "grandchild.pid"
+            script = f"sleep 30 >/dev/null 2>&1 & echo $! > '{pid_file}'; wait"
+            code, _ = run_tests(("sh", "-c", script), timeout=1)
+            self.assertEqual(code, -1)
+            grandchild = int(pid_file.read_text(encoding="utf-8"))
+        # A killed orphan can linger as a zombie where PID 1 never reaps, so a zombie
+        # counts as stopped; and death is asynchronous, so allow it a moment.
+        for _ in range(40):
+            state = subprocess.run(
+                ("ps", "-o", "stat=", "-p", str(grandchild)),
+                capture_output=True,
+                check=False,
+                text=True,
+            ).stdout.strip()
+            if not state or state.startswith("Z"):
+                return
+            time.sleep(0.05)
+        os.kill(grandchild, signal.SIGKILL)
+        self.fail(f"the suite's own child {grandchild} outlived the timeout")
+
     def test_marks_the_child_as_being_inside_a_run(self):
         """Without the flag reaching the child, the recursion guard can never fire."""
         _, output = run_tests(
@@ -228,7 +257,11 @@ class RunTestsTests(unittest.TestCase):
         cap prevents.
         """
         _, output = run_tests(
-            ("python3", "-c", "import resource; print(resource.getrlimit(resource.RLIMIT_AS)[0])")
+            (
+                "python3",
+                "-c",
+                "import resource; print(resource.getrlimit(resource.RLIMIT_AS)[0])",
+            )
         )
         self.assertIn(str(MEMORY_LIMIT_BYTES), output)
 
@@ -243,9 +276,11 @@ class GuardAgainstRecursionTests(unittest.TestCase):
 
     def test_refuses_the_default_command_inside_a_run(self):
         """The default is this suite, so a nested one spawns copies without end."""
-        with unittest.mock.patch.dict(os.environ, {RECURSION_FLAG: "1"}):
-            with self.assertRaises(SystemExit) as raised:
-                guard_against_recursion(DEFAULT_TEST_COMMAND)
+        with (
+            unittest.mock.patch.dict(os.environ, {RECURSION_FLAG: "1"}),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            guard_against_recursion(DEFAULT_TEST_COMMAND)
         self.assertIn("refusing to run the whole suite", str(raised.exception))
 
     def test_allows_the_default_command_outside_a_run(self):
@@ -272,7 +307,9 @@ class ResolveCommandTests(unittest.TestCase):
 
     def test_keeps_a_later_separator_for_the_command_it_belongs_to(self):
         """`pytest -- path` passes its own separator through; only the first is ours."""
-        self.assertEqual(resolve_command(["--", "pytest", "--", "tests"]), ("pytest", "--", "tests"))
+        self.assertEqual(
+            resolve_command(["--", "pytest", "--", "tests"]), ("pytest", "--", "tests")
+        )
 
 
 class ReportTests(unittest.TestCase):
@@ -360,9 +397,11 @@ class MutateTests(SourceFileTestCase):
 
     def test_restores_the_source_when_the_test_command_cannot_run(self):
         """A crash between mutating and restoring is what leaves a broken check behind."""
-        with self.assertRaises(FileNotFoundError):
-            with contextlib.redirect_stdout(io.StringIO()):
-                mutate(self.path, "raise ValueError", "pass", ("definitely-not-a-command",))
+        with (
+            self.assertRaises(FileNotFoundError),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            mutate(self.path, "raise ValueError", "pass", ("definitely-not-a-command",))
         self.assertEqual(self.source(), SOURCE)
 
     def test_reports_an_unimportable_mutation_as_invalid(self):
@@ -392,7 +431,15 @@ class MainTests(SourceFileTestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
             code = main(
-                ["--file", str(self.path), "--anchor", "raise ValueError", "--with", "pass", *extra]
+                [
+                    "--file",
+                    str(self.path),
+                    "--anchor",
+                    "raise ValueError",
+                    "--with",
+                    "pass",
+                    *extra,
+                ]
             )
         return code, out.getvalue()
 
@@ -412,12 +459,15 @@ class MainTests(SourceFileTestCase):
         the suite again. A test must not fork-bomb the machine when its subject breaks.
         """
         out = io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            with self.assertRaises(SystemExit) as raised:
-                main(
-                    ["--file", str(self.path), "--anchor", ANCHOR, "--with", REPLACEMENT, "--"]
-                    + list(PASSES)
-                )
+        with (
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            main(
+                ["--file", str(self.path), "--anchor", ANCHOR, "--with", REPLACEMENT, "--"]
+                + list(PASSES)
+            )
         self.assertIn("appears 2 times", str(raised.exception))
 
 

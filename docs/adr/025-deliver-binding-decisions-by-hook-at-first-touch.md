@@ -3,7 +3,7 @@ status: Accepted
 date: 2026-09-02
 scope: [.agents/rules/, hooks/, skills/writing-adrs/]
 summary: Inject the decisions binding a path from a PreToolUse hook the first time a session touches it — by a file tool or a shell command naming it — labelled as binding that path and not the corpus, beside a session-start instruction to read INDEX.md; still generate no rule files from frontmatter.
-revisit-when: A proposed ADR relitigates an indexed decision that was not among the rows injected for the paths it touched; the injection's cost is measured above the 100 ms per event ADR 022 budgets; or the harness delivers path-keyed context itself.
+revisit-when: A proposed ADR relitigates an indexed decision that was not among the rows injected for the paths it touched; the injection's cost breaches the hook budgets ADR 034 sets; or the harness delivers path-keyed context itself.
 ---
 
 # 025: Deliver binding decisions by hook at first touch
@@ -106,6 +106,9 @@ harness runs the plugin.
   return matches rather than a file, the rest fire no matched tool call.
 - Root resolution follows ADR 024; what is reported after a change, and how often,
   follows [ADR 026][].
+- The cost condition in `revisit-when` first cited ADR 022's 100 ms per event. [ADR 034][]
+  replaced that budget with one per tool-calling turn and a 1 s per-event ceiling, which
+  loosens the condition; it now cites those.
 
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 018]: 018-admit-a-path-scoped-rule-as-an-archival-defence.md
@@ -113,4 +116,5 @@ harness runs the plugin.
 [ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
 [ADR 024]: 024-resolve-the-repository-root-from-the-path-in-hand.md
 [ADR 026]: 026-report-findings-by-delta-from-a-session-baseline.md
+[ADR 034]: 034-run-the-adr-tool-from-a-uv-synced-plugin-environment.md
 [hooks]: https://code.claude.com/docs/en/hooks

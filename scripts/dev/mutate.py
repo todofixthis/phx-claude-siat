@@ -1,8 +1,8 @@
 """Disable one check in place, run the suite, and report whether a test caught it.
 
-Run from the repo root (ADR 011):
+Run from the repo root (ADR 035):
 
-    python3 -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
+    uv run python -m scripts.dev.mutate --file skills/writing-adrs/adr.py \
         --anchor 'if not target.exists():' --with 'if False:' \
         -- uv run --directory skills/writing-adrs python -m unittest discover -s tests -t .
 
@@ -17,7 +17,7 @@ next, and that is usually a commit. A hard kill — SIGKILL, a segfault — cann
 from inside the process; recovery is `git restore <file>`, and since the mutation is one
 anchor replaced once, `git diff` shows exactly what to undo.
 
-Stdlib-only, like everything under scripts/ (ADR 007).
+Imports nothing beyond the standard library; the suite it launches runs under uv (ADR 035).
 """
 
 import argparse
@@ -42,7 +42,9 @@ MEMORY_LIMIT_BYTES = 2 * 1024 * 1024 * 1024
 RECURSION_FLAG = "MUTATE_IN_PROGRESS"
 
 DEFAULT_TEST_COMMAND = (
-    "python3",
+    "uv",
+    "run",
+    "python",
     "-m",
     "unittest",
     "discover",
@@ -161,7 +163,9 @@ def bound_child() -> None:
     resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT_BYTES, MEMORY_LIMIT_BYTES))
 
 
-def run_tests(command: tuple[str, ...], timeout: float = DEFAULT_TIMEOUT_SECONDS) -> tuple[int, str]:
+def run_tests(
+    command: tuple[str, ...], timeout: float = DEFAULT_TIMEOUT_SECONDS
+) -> tuple[int, str]:
     """Run the suite, returning its exit code and both streams joined.
 
     unittest writes its whole result block to stderr, so a caller reading stdout alone
@@ -174,18 +178,25 @@ def run_tests(command: tuple[str, ...], timeout: float = DEFAULT_TIMEOUT_SECONDS
     needs the source put back is the one that leaves it mutated.
     """
     guard_against_recursion(command)
+    # Its own session, so a timeout can kill the whole group: `uv run` spawns the
+    # interpreter rather than exec'ing it, and SIGKILL to `uv` alone orphans the suite.
+    # preexec_fn is unsafe only alongside threads, and this process starts none.
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        preexec_fn=bound_child,  # noqa: PLW1509
+        start_new_session=True,
+        env=os.environ | {RECURSION_FLAG: "1"},
+    )
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            preexec_fn=bound_child,
-            env=os.environ | {RECURSION_FLAG: "1"},
-        )
+        stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.communicate()
         return -1, f"timed out after {timeout:g}s without finishing"
-    return result.returncode, result.stdout + result.stderr
+    return process.returncode, stdout + stderr
 
 
 def report(code: int, output: str) -> int:
@@ -254,7 +265,9 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--file", required=True, type=Path, help="source file to mutate")
     parser.add_argument(
-        "--anchor", required=True, help="exact text to replace; must match once, indentation included"
+        "--anchor",
+        required=True,
+        help="exact text to replace; must match once, indentation included",
     )
     parser.add_argument(
         "--with", dest="replacement", required=True, help="text to put in the anchor's place"

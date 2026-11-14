@@ -1,5 +1,102 @@
 # Changelog
 
+## 9.0.0 - 2026-11-14
+
+### For phx plugin users
+
+#### Breaking changes
+
+- **`writing-adrs` now needs [`uv`](https://docs.astral.sh/uv/) on your `PATH`, not
+  `python3`.** The tool now parses frontmatter with PyYAML, so at session start the plugin
+  syncs a virtual environment for each plugin version under its data directory and runs
+  the hooks from it, which needs a Claude Code that sets `CLAUDE_PLUGIN_DATA`. To migrate,
+  install uv. The first session after each plugin update pauses while it syncs, and needs
+  network access to do so. Until uv is installed and a sync has succeeded, the session
+  says the ADR checks are off, the hooks stay silent, and your agent's ADR commands fail
+  with a note saying why.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b),
+  [ADR 034](https://github.com/todofixthis/phx-claude-siat/blob/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b/docs/adr/034-run-the-adr-tool-from-a-uv-synced-plugin-environment.md))
+- **Upgrade your CI pin and your team's plugin together.** The tool now double-quotes any
+  value YAML would misread, where 8.1.0 refused it, and 8.1.0 rejects any file holding
+  one. Once anyone records a quoted value, a CI or teammate still on 8.1.0 fails `check`
+  — loudly, never misreading. Bump `<tag>` in your
+  `uvx --from '…@<tag>#subdirectory=skills/writing-adrs' phx-adr check` step and have
+  teammates update the plugin at the same time.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+- **Quote any `scope` entry holding `{`, `}`, `[` or `]` part-way through**, such as
+  `templates/{{ cookiecutter.slug }}/`: inside an inline list YAML takes those characters
+  as syntax, so `check` now rejects an unquoted entry that 8.1.0 accepted. Write it as
+  `"templates/{{ cookiecutter.slug }}/"` in the same commit that bumps your CI's `<tag>`,
+  since each form fails the other version's `check`.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+
+#### Added
+
+- `writing-release-notes` takes optional `prerelease` and `version` arguments. Notes for a
+  pre-release — a `0.y.z` version, or one with a pre-release segment such as `2.0.0-rc.1` —
+  open with an "Alpha software" caution block. Given neither argument, the skill asks
+  whether the release is a pre-release.
+  ([#86](https://github.com/todofixthis/phx-claude-siat/commit/5e3c81efcc7810ff71a1b8b2080ea8b204e86cbe),
+  [#88](https://github.com/todofixthis/phx-claude-siat/commit/29abf28537a6e797ef7c7f0fa34dd9785401e130))
+
+#### Fixed
+
+- `writing-adrs` refused a quoted `scope` entry, such as a cookiecutter template's
+  `"{{ cookiecutter.slug }}/"`: `index`, `check` and the writing commands all stopped on
+  it, and `for` read the ADR as binding nothing. YAML requires the quotes there, so those
+  decisions could not be recorded at all. Quoted values are now read as YAML reads them.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+
+### For contributors
+
+#### Breaking changes
+
+- **Everything in the repository now runs through `uv`.** Run a script as
+  `uv run python -m scripts.<area>.<name>` from the repo root, the ADR tool as
+  `uv run python skills/writing-adrs/adr.py index` (or `for <path>`), and the `scripts/`
+  suite as `uv run python -m unittest discover -s scripts -t . -p 'test_*.py'`. Most
+  scripts fail to import when run by path, and a bare `python3` is not guaranteed to
+  resolve the declared dependencies. Without uv, the pre-commit hook blocks a commit
+  staging an ADR, and skips its binding-decision and backlog reports on every other. Run
+  `uv sync --locked` at the repo root after pulling.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+- **`scripts/` is no longer stdlib-only.** It may import what `scripts/pyproject.toml`
+  declares, and only that; add a dependency with `uv add --package scripts <dep>`.
+  [ADR 035](https://github.com/todofixthis/phx-claude-siat/blob/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b/docs/adr/035-run-repo-scripts-under-uv-with-declared-dependencies.md)
+  supersedes ADRs 007 and 011, and
+  [ADR 034](https://github.com/todofixthis/phx-claude-siat/blob/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b/docs/adr/034-run-the-adr-tool-from-a-uv-synced-plugin-environment.md)
+  supersedes ADR 022.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+- **Two new CI gates can fail your pull request.** A change touching `scripts/`,
+  `pyproject.toml` or `uv.lock` must pass `uv run --directory scripts ruff check .` and
+  `uv run --directory scripts black --check .`; ruff now selects the `DTZ` rules
+  explicitly, since ruff 0.17 dropped them from its defaults. Every pull request also
+  times the `writing-adrs` hooks, failing where an event's p95 exceeds 1 s, a hook
+  crashes or prints anything but hook JSON, or `SessionStart` or `PreToolUse` prints no
+  context; run it locally with `uv run python -m scripts.ci.time_hooks`.
+  ([#90](https://github.com/todofixthis/phx-claude-siat/commit/238d7a01a5e12ad6047cd0bb7935a5d2582ef95b),
+  [#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+- Under `--plugin-dir`, the `writing-adrs` hooks sync the checkout's own
+  `${UV_PROJECT_ENVIRONMENT:-.venv}`, adding to it without removing anything. Leave
+  `UV_PROJECT_ENVIRONMENT` unset, or point it inside the checkout with no `..` component;
+  any other path is refused and the hooks stay off.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+
+#### Changed
+
+- The frontmatter parser's tests live only in `skills/writing-adrs/tests/`;
+  `scripts/test_frontmatter.py` now only checks the symlink to it.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+- Dev tooling refreshed: `ruff` 0.17.4, `black` 26.10.1, `pytest` 9.2.0,
+  `astral-sh/setup-uv` v10.3.3 and `actions/create-github-app-token` v3.3.0 in CI. Run
+  `uv sync --locked` at the repo root to match.
+
+#### Fixed
+
+- A `scripts.dev.mutate` timeout killed only `uv`, leaving the test suite under it
+  running. It now kills the suite's whole process group.
+  ([#92](https://github.com/todofixthis/phx-claude-siat/commit/6446dcfc3cd6fd4a17a8646590407e5cb98f6c9b))
+
 ## 8.1.0 - 2026-10-06
 
 ### For phx plugin users

@@ -1,7 +1,6 @@
 # Makes scripts/ a uv workspace member (ADR 031) with no [build-system]: uv resolves
-# it as a virtual project, never built or installed, so `python3 -m scripts.<area>.<name>`
-# (ADR 011) is unchanged. No dependency is declared yet — every import here stays
-# standard library (ADR 007) until a follow-up spends this workspace member on one.
+# it as a virtual project, never built or installed. Scripts import only what is declared
+# below and run as `uv run python -m scripts.<area>.<name>` (ADR 035), never bare `python3`.
 
 [project]
 name = "scripts"
@@ -10,4 +9,4 @@ name = "scripts"
 version = "0.1.0"
 description = "Repository automation: ADR index generation, manifest validation, release notes"
 requires-python = ">=3.12, <4"
-dependencies = []
+dependencies = ["pyyaml>=6.0.3,<7"]

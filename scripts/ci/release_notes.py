@@ -1,9 +1,9 @@
 """Extract the top CHANGELOG entry and assert it matches plugin.json's version.
 
-Stdlib-only, run from the repo root (ADR 007): the repo carries no root Python
-project. Prints the version to stdout and writes the notes to `--out`:
+Runs under uv from the repo root and imports only what `scripts/pyproject.toml`
+declares (ADR 035). Prints the version to stdout and writes the notes to `--out`:
 
-    python3 -m scripts.ci.release_notes --out notes.md
+    uv run python -m scripts.ci.release_notes --out notes.md
 """
 
 import argparse

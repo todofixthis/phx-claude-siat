@@ -1,8 +1,9 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-08-01
 scope: [scripts/]
 summary: Make scripts/ a Python package and run every script as `python3 -m scripts.<area>.<name>`, so the frontmatter parser can be imported once instead of adapted per directory; this amends ADR 007's plain-file invocation and retires its parser-duplication trigger, leaving its stdlib-only constraint intact; run the suite with `python3 -m unittest discover -s scripts -t .`.
+superseded-by: 35
 ---
 
 # 011: Make scripts a package

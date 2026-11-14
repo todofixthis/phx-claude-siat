@@ -1,11 +1,11 @@
 """Validate the plugin manifests and skill frontmatter.
 
-Run manually from the repo root: python3 -m scripts.ci.validate_manifests
+Run manually from the repo root: uv run python -m scripts.ci.validate_manifests
 Run automatically by .github/workflows/pr.yml on every pull request.
 
-Stdlib-only by design (ADR 007): the repo needs no Python project (or PyYAML) at
-its root. The frontmatter parser is imported from scripts.frontmatter rather than
-adapted, so this and the ADR index cannot disagree on the same input (ADR 011).
+Imports only what `scripts/pyproject.toml` declares (ADR 035), PyYAML among it, via
+the frontmatter parser. That parser is imported from scripts.frontmatter rather than
+adapted, so this and the ADR index cannot disagree on the same input (ADR 035).
 """
 
 import json
@@ -43,8 +43,10 @@ EXPECTED_SOURCE = {
 # entry's command is a shell guard plus this exact invocation, so the check below
 # requires the command to *end* with it rather than merely contain it — an
 # unbounded substring match would let `<invocation>; rm -rf ~` through unnoticed.
+# `$p` is the synced venv's python the guard resolves; ADR 034 forbids running the
+# hook from bare `python3` or through `uv run`.
 HOOK_SCRIPT = "skills/writing-adrs/hook.py"
-HOOK_INVOCATION = f'python3 "${{CLAUDE_PLUGIN_ROOT}}/{HOOK_SCRIPT}"'
+HOOK_INVOCATION = f'"$p" "${{CLAUDE_PLUGIN_ROOT}}/{HOOK_SCRIPT}"'
 HOOK_TYPE = "command"
 PYPROJECT_FILENAME = "pyproject.toml"
 SKILL_FILENAME = "SKILL.md"
