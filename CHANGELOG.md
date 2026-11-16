@@ -1,5 +1,31 @@
 # Changelog
 
+## 9.0.1 - 2026-11-16
+
+### For phx plugin users
+
+#### Fixed
+
+- `writing-adrs` reported a frontmatter field it could not read twice: once as unreadable,
+  and again as missing. An unquoted brace in `scope` (the 9.0.0 break) drew "declares no
+  `scope`; list the paths it binds, or `[]` where it binds none", and following that
+  advice would have silently unbound the decision. An unreadable `status` likewise drew
+  "has status None", and an unreadable `superseded-by` drew "declares no
+  `superseded-by`". A block-scalar or quoted `scope` key cascaded the same way. Each now
+  draws only the error saying the field could not be read, naming what to fix.
+  ([#103](https://github.com/todofixthis/phx-claude-siat/commit/e99b71d0fabe2c7afd4d1f7856207f69eb24e3c4))
+
+### For contributors
+
+#### Added
+
+- `parse_fields()` in `skills/writing-adrs/frontmatter.py` (and through its symlink,
+  `scripts/frontmatter.py`) returns the keys whose value was rejected alongside the fields
+  and problems. A caller that requires a key should skip its "absent" report for a key in
+  that set, as `parse_adr()` now does, since the rejection already carries its own problem.
+  `parse_frontmatter()` is unchanged.
+  ([#103](https://github.com/todofixthis/phx-claude-siat/commit/e99b71d0fabe2c7afd4d1f7856207f69eb24e3c4))
+
 ## 9.0.0 - 2026-11-14
 
 ### For phx plugin users
