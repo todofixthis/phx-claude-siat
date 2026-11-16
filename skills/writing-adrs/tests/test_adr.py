@@ -313,6 +313,57 @@ class ParseAdrTests(unittest.TestCase):
             self.problems(adr_text(**{SCOPE_FIELD: "scripts/"}))[0],
         )
 
+    def test_reports_an_unreadable_scope_once(self):
+        """A scope YAML cannot read is reported as unreadable, never also as absent."""
+        problems = self.problems(adr_text(**{SCOPE_FIELD: "[templates/{{x}}/, a.py]"}))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(
+            problems[0].startswith(f"field {SCOPE_FIELD} is not valid YAML"), problems
+        )
+
+    def test_reports_a_block_scalar_scope_once(self):
+        """A block-scalar scope is reported as one, never also as absent."""
+        problems = self.problems(adr_text(**{SCOPE_FIELD: ">"}))
+        self.assertEqual(
+            problems, [f"field {SCOPE_FIELD} uses a block scalar; put it on one line"]
+        )
+
+    def test_reports_a_quoted_scope_key_once(self):
+        """A quoted `scope` key is reported as quoted, never also as absent."""
+        content = adr_text(**{SCOPE_FIELD: None}).replace(
+            "---\n", f'---\n"{SCOPE_FIELD}": []\n', 1
+        )
+        problems = self.problems(content)
+        self.assertEqual(
+            problems, [f'field "{SCOPE_FIELD}" has a quoted key; write the key unquoted']
+        )
+
+    def test_reports_an_unreadable_status_once(self):
+        """A status YAML cannot read is reported as unreadable, never also as `None`."""
+        problems = self.problems(adr_text(status="Accepted: yes"))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith("field status is not valid YAML"), problems)
+
+    def test_judges_no_status_field_against_an_unreadable_status(self):
+        """With the status unreadable, a field it would require or forbid draws no verdict."""
+        for field in STATUS_FIELDS.values():
+            with self.subTest(field=field):
+                problems = self.problems(adr_text(status="a: b", **{field: "Reason."}))
+                self.assertEqual(len(problems), 1, problems)
+                self.assertTrue(
+                    problems[0].startswith("field status is not valid YAML"), problems
+                )
+
+    def test_reports_an_unreadable_status_field_once(self):
+        """A field the status requires, but YAML cannot read, is not also reported absent."""
+        problems = self.problems(
+            adr_text(status="Superseded", **{STATUS_FIELDS["Superseded"]: "[12"})
+        )
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(
+            problems[0].startswith("field superseded-by is not valid YAML"), problems
+        )
+
     def test_collects_every_problem_in_one_pass(self):
         """One fix must not be the thing that reveals the next."""
         content = "---\nstatus: Draft\nnonsense\n---\n\nNo heading.\n"

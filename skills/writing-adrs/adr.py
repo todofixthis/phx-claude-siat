@@ -44,7 +44,7 @@ if sys.version_info < PYTHON_FLOOR:
 import yaml
 
 import frontmatter
-from frontmatter import parse_frontmatter
+from frontmatter import parse_fields, parse_frontmatter
 
 ADR_DIR = Path("docs") / "adr"
 INDEX_FILENAME = "INDEX.md"
@@ -206,7 +206,7 @@ def parse_adr(content: str) -> tuple[dict, str, str | None, list[str]]:
     if not match:
         return {}, "", None, ["has no frontmatter block"]
 
-    fields, problems = parse_frontmatter(match.group(1))
+    fields, problems, rejected = parse_fields(match.group(1))
 
     title_match = RE_H1_TITLE.search(match.group(2))
     heading_number = None
@@ -220,10 +220,14 @@ def parse_adr(content: str) -> tuple[dict, str, str | None, list[str]]:
         title = ""
         problems.append("has no level-one title heading")
 
+    # A field whose value was rejected already has its problem; judging it, or what it
+    # governs, as absent would add a second verdict that contradicts the first.
     status = fields.get("status")
-    if status not in STATUSES:
+    if "status" not in rejected and status not in STATUSES:
         problems.append(f"has status {status!r}; expected one of {', '.join(STATUSES)}")
     for owner, field in STATUS_FIELDS.items():
+        if "status" in rejected or field in rejected:
+            continue
         if status == owner and not fields.get(field):
             problems.append(f"is {owner} but declares no `{field}`")
         elif status != owner and fields.get(field):
@@ -258,9 +262,10 @@ def parse_adr(content: str) -> tuple[dict, str, str | None, list[str]]:
     # Absent and empty are different answers, so the field is required and `[]` says the
     # decision binds no path.
     if SCOPE_FIELD not in fields:
-        problems.append(
-            f"declares no `{SCOPE_FIELD}`; list the paths it binds, or `[]` where it binds none"
-        )
+        if SCOPE_FIELD not in rejected:
+            problems.append(
+                f"declares no `{SCOPE_FIELD}`; list the paths it binds, or `[]` where it binds none"
+            )
     elif not isinstance(fields[SCOPE_FIELD], list):
         problems.append(
             f"declares `{SCOPE_FIELD}` as a scalar; write it as an inline list, e.g. "
