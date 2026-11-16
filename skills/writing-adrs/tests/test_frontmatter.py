@@ -11,7 +11,7 @@ from unittest import mock
 import yaml
 
 import frontmatter
-from frontmatter import parse_frontmatter
+from frontmatter import parse_fields, parse_frontmatter
 
 
 class ParserTestCase(unittest.TestCase):
@@ -407,6 +407,55 @@ class LoaderDifferenceTests(unittest.TestCase):
         self.assertEqual(fields, {})
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith("field k holds a comment"), problems)
+
+
+class ParseFieldsTests(ParserTestCase):
+    """Unit tests for ``parse_fields()``: which keys a block named but no value survived."""
+
+    def test_rejects_no_key_from_a_clean_block(self):
+        """A block that parses clean leaves nothing rejected."""
+        self.assertEqual(
+            parse_fields("status: Accepted\nscope: [a/, b/]"),
+            ({"status": "Accepted", "scope": ["a/", "b/"]}, [], set()),
+        )
+
+    def test_rejects_the_key_of_a_value_yaml_cannot_load(self):
+        """A value YAML cannot load is rejected under its key, beside the fields that loaded."""
+        fields, _, rejected = parse_fields("status: Accepted\nscope: [{{ x }}/, a/]")
+        self.assertEqual(fields, {"status": "Accepted"})
+        self.assertEqual(rejected, {"scope"})
+
+    def test_rejects_the_key_of_a_value_that_is_not_text(self):
+        """A value that loads but is not text is rejected under its key too."""
+        _, _, rejected = parse_fields("scope: {a: b}")
+        self.assertEqual(rejected, {"scope"})
+
+    def test_rejects_the_key_of_a_block_scalar(self):
+        """A block scalar names its key though no value is read for it."""
+        _, _, rejected = parse_fields("scope: >\nstatus: Accepted")
+        self.assertEqual(rejected, {"scope"})
+
+    def test_does_not_reject_a_key_a_later_line_gives_a_value(self):
+        """A block scalar a second line for its key then sets leaves that key with a value."""
+        fields, _, rejected = parse_fields("scope: >\nscope: [a/]")
+        self.assertEqual(fields, {"scope": ["a/"]})
+        self.assertEqual(rejected, set())
+
+    def test_rejects_a_quoted_key_under_its_unquoted_name(self):
+        """A quoted key is rejected under the name a caller requires, not its quoted spelling."""
+        for line in ('"scope": [a/]', "'scope': [a/]"):
+            with self.subTest(line=line):
+                self.assertEqual(parse_fields(line)[2], {"scope"})
+
+    def test_rejects_every_failing_key(self):
+        """Two failing fields are both rejected, not only the first."""
+        _, _, rejected = parse_fields("status: a: b\nscope: [{{ x }}/]")
+        self.assertEqual(rejected, {"status", "scope"})
+
+    def test_matches_parse_frontmatter(self):
+        """``parse_frontmatter()`` returns the same fields and problems, minus the rejected keys."""
+        block = "status: a: b\nscope: [a/]\nsummary: >"
+        self.assertEqual(parse_frontmatter(block), parse_fields(block)[:2])
 
 
 def _add_base_loader_twins() -> None:

@@ -107,6 +107,13 @@ def _load_field(key: str, lines: list[str]) -> tuple[str | list[str] | None, str
     return None, f"field {key} holds a {kind}, not text or a list of text; quote it"
 
 
+def _unquoted(key: str) -> str:
+    """The name YAML reads for `key`: a quoted key loses its one pair of quotes."""
+    if len(key) >= 2 and key[0] == key[-1] and key[0] in "\"'":
+        return key[1:-1]
+    return key
+
+
 def parse_frontmatter(block: str) -> tuple[dict[str, str | list[str]], list[str]]:
     """Parse a frontmatter block into a dict, plus any problems found.
 
@@ -114,9 +121,20 @@ def parse_frontmatter(block: str) -> tuple[dict[str, str | list[str]], list[str]
     sequences. List values become list[str]; scalars stay str. Skill frontmatter uses
     no inline lists, but parsing the superset lets both callers share one implementation.
     """
+    fields, problems, _ = parse_fields(block)
+    return fields, problems
+
+
+def parse_fields(block: str) -> tuple[dict[str, str | list[str]], list[str], set[str]]:
+    """Parse as ``parse_frontmatter()`` does, adding the keys whose value was rejected.
+
+    A rejected key is one the block names but no value of which survived: its problem is
+    already among the problems, so a caller requiring the key must not report it absent too.
+    """
     # Raw lines per accepted field, in order: the key line plus its `- item` lines.
     raw: dict[str, list[str]] = {}
     problems: list[str] = []
+    rejected: set[str] = set()
     sequence_key: str | None = None
     # "\n" alone, for the same reason as above: a stray separator must not invent a key.
     for line in block.split("\n"):
@@ -148,6 +166,7 @@ def parse_frontmatter(block: str) -> tuple[dict[str, str | list[str]], list[str]
             continue
         if RE_BLOCK_SCALAR.match(value):
             problems.append(f"field {key} uses a block scalar; put it on one line")
+            rejected.add(_unquoted(key))
             continue
         if key in raw:
             problems.append(f"sets field {key} twice; the first value stands")
@@ -164,6 +183,8 @@ def parse_frontmatter(block: str) -> tuple[dict[str, str | list[str]], list[str]
         value, problem = _load_field(key, lines)
         if problem:
             problems.append(problem)
+            rejected.add(_unquoted(key))
         else:
             fields[key] = value
-    return fields, problems
+    # A block scalar followed by a second, valid line for the same key leaves a value after all.
+    return fields, problems, rejected - fields.keys()
