@@ -1,30 +1,30 @@
 ---
 name: technical-writing
-description: "Use when writing or reviewing prose a person reads: docs, RFCs, ADRs, READMEs, PR descriptions, issue bodies, or long commit messages. Layered standard: Diátaxis structure, Google developer style sentences, STE instruction rules, Global English syntax. Not for conversational replies, or for text only a model reads, such as a skill, prompt, or AGENTS.md."
+description: "Use when writing or reviewing prose a person reads: docs, RFCs, ADRs, READMEs, PR descriptions, issue bodies, or long commit messages. Layered standard: Diátaxis structure, Google developer style sentences, STE instruction rules, Global English syntax, then a catalogue of AI tells to cut. Not for conversational replies, or for text only a model reads, such as a skill, prompt, or AGENTS.md."
 ---
 
 # Technical writing
 
-Write so a tired engineer understands on the first read. Apply all four layers.
+Write so a tired engineer understands on the first read. Apply all four layers, then cut the AI tells.
 
 Three rules sit above the layers:
 
-- **Cut every word that does no work.** If the sentence survives without a word, the word goes. "In order to" is "to". "It is important to note that" is nothing.
-- **Use the short, everyday word.** "Use", not "utilise". "Help", not "facilitate". "Do", not "perform". A long word has to buy its length with precision.
+- **Cut every word that does no work.** If the sentence survives without a word, the word goes. "In order to" is "to". "Due to the fact that" is "because". "It is important to note that" is nothing.
+- **Use the short, everyday word.** "Use", not "utilise". "Help", not "facilitate". "Do", not "perform". "Many", not "numerous". "If", not "in the event that". A long word has to buy its length with precision.
 - **When a rule makes a sentence worse, fix the sentence another way or leave it alone.** A sentence that follows every rule and sounds like a machine wrote it has failed.
 
 The codebase is the word list. Write the real symbol, file, flag, or command name, not a synonym or a description of it.
 
-Don't invent jargon. Use the words a developer would say out loud: "move", "delete", "a budget that only decreases", not "evacuate", "ratchet", or "endgame". A named pattern is fine when the doc says what it means the first time. Propose a new offender and its replacement as an addition to `phx:unslop`'s abstract-metaphor rule (rule 26) in your reply, with the diff. Don't edit that skill.
+Don't invent jargon. Use the words a developer would say out loud: "move", "delete", "a budget that only decreases", not "evacuate", "ratchet", or "endgame". A named pattern is fine when the doc says what it means the first time. Propose a new offender and its replacement for the abstract-metaphor list under "Cut the AI tells" in your reply, with the diff. Don't edit this skill.
 
 ## Vary the rhythm
 
 A doc can obey every layer and still read machine-written: every sentence clipped short, no view anywhere, nothing specific.
 
 - Mix sentence lengths on purpose. Short sentences land a point. Longer ones carry a fact with its condition or consequence.
-- One thought per sentence does not mean one length per sentence. Split the sentence that carries two thoughts. Keep the long sentence that carries one.
+- One thought per sentence does not mean one length per sentence. Split the sentence that carries two thoughts. Keep the long sentence that carries one, if it parses on the first read.
 - Have a view where the mode allows it. Explanation weighs trade-offs, so say what you make of them instead of listing pros and cons. Reference stays dry.
-- Be specific over sterile. Not "schema changes can cause issues" but "a column rename fails the build".
+- Be specific over sterile. "Say what it does" under "Cut the AI tells" has the test.
 
 ## Pick the mode first (Diátaxis)
 
@@ -50,7 +50,7 @@ Don't mix modes: no reference tables inside a tutorial, no tutorial hand-holding
 ## Write sentences to the reader (Google developer style)
 
 - Talk to the reader as "you", in the present tense. "Will" only for things that genuinely happen later.
-- Say who does what: "the compiler checks", not "is checked". Passive is fine only when the actor is unknown or beside the point.
+- Say who does what: "the compiler checks", not "is checked". Catch "is", "are", "was", or "were" followed by a past participle, and name the actor. Passive is fine only when the actor is unknown or beside the point.
 - Write instructions as commands: "Click Submit." State facts plainly. Never "should be done".
 - Put the condition before the instruction: "To delete the document, click Delete."
 - Put the common case first. Exceptions after.
@@ -65,6 +65,7 @@ Don't mix modes: no reference tables inside a tutorial, no tutorial hand-holding
 
 - One instruction per sentence. One thought per sentence everywhere else.
 - Split instructions longer than about 20 words and other sentences longer than about 25.
+- Split or trim any sentence the reader has to backtrack to parse, whatever its length. Break it in two or drop clauses.
 - Put the warning or condition before the step it guards: "If hot oil touches your skin, injuries can occur."
 - Keep "the" and "a": "Remove backup file" reads two ways. "Remove the backup file" reads one.
 - Give each word one meaning and one job, then keep it. If "check" means inspect, don't also use it for restrain.
@@ -81,15 +82,51 @@ Don't mix modes: no reference tables inside a tutorial, no tutorial hand-holding
 - Keep the small words that show structure, such as "that" in "Ensure that the switch is off". Never trade clarity for word count.
 - Repeat the article in a series when it prevents a misread: "the client and the host", not "the client and host", when they are two things.
 - Say which parts "and" or "or" joins when a sentence can group two ways. "Both...and", "either...or", and "if...then" are free disambiguators.
-- Use periods, not semicolons. Replace an em dash with a new sentence.
+- Use periods, not semicolons. Replace an em dash with a new sentence or a comma. Don't swap in an en dash or a hyphen as a dash.
 - Make text in parentheses a full grammatical unit or its own sentence. Never form plurals with "(s)".
 - No slashes: write "a, b, or both" instead of "a/b" or "and/or".
 - Call each thing by one name, everywhere. A doc that says "the gate", "the ratchet", and "the budget check" for one thing teaches three things. Don't churn what didn't change.
 - Skip idioms, colloquialisms, Latin abbreviations, and metaphors.
 
+## Cut the AI tells
+
+These patterns mark text as machine-written. Scan for each one, then rewrite. Keep the meaning and the intended tone.
+
+### Content
+
+- **Superficial "-ing" phrases.** "highlighting...", "ensuring...", "reflecting...", "showcasing...", "fostering...". Delete them, or expand them with a real source.
+- **Vague attributions.** "Experts believe", "Industry reports suggest", "Some critics argue". Name the source or delete the claim.
+- **Say what it does, not how it feels.** "the database stays close at hand", "SQL you can read", and "types that follow your schema" name a feeling. Name the mechanism or a number instead: "`.toSQL()` returns the exact string sent to the database", "a column rename fails the build". Ask what the sentence tells the reader to do or know, then write that. If you can't restate it as a concrete instruction, fact, or number, cut it. If the sentence could appear unchanged in another project's docs, it says nothing about this one. Cut it.
+- **Generic conclusions.** "The future looks bright." State specific plans or facts.
+
+### Language
+
+- **AI vocabulary.** Additionally, crucial, delve, enduring, enhance, fostering, garner, interplay, intricate, landscape (abstract), leverage, pivotal, showcase, tapestry (abstract), testament, underscore, vibrant. Replace with plain words.
+- **Fancy ways to say "is".** "serves as", "stands as", "boasts", "features". Say "is" or "has".
+- **"Not just X, but Y."** State the point directly.
+- **Rule of three.** Don't force ideas into groups of three. Use the natural number.
+- **False ranges.** "from X to Y" where X and Y aren't on a meaningful scale. List the topics directly.
+- **Excessive hedging.** "could potentially possibly be argued that it might" becomes "may".
+- **Adverbs propping up a weak verb.** "runs quickly" becomes "is fast" or the number. "significantly improves" becomes the measured delta. Pick the stronger verb.
+- **Abstract metaphor nouns.** Substrate (base), wedge, wedge in (add), vector (way, method), locus, vantage, nexus, primitive as a noun, harness as a metaphor, surface as in "API surface", bedrock, scaffolding as a metaphor, modality, paradigm, gold-plating (more than the job needs), ratchet as a metaphor (the mechanism's real name, or a limit that only tightens), evacuate for moving code (move out), endgame (the last phase), north star, flywheel. These read as technical, but a plainer concrete word usually exists. Pick the concrete word.
+- **Mannered prose.** Metaphor or flourish where a literal phrase exists: aphorisms ("wire it or delete it"), rhetorical fragments for effect, personified code ("the plan holds it"), figurative verbs ("rides along", "stands on"), and stock framing phrases. "A dial worth turning" becomes "a parameter worth varying". Say what you mean.
+- **Over-compression.** Dropped articles, verbless fragments, symbol-speak, and abbreviations that make the reader decode instead of read. "Parser rejects bad date → exit 2, no write" becomes "The parser rejects a bad date, exits with code 2, and writes nothing." Write whole sentences with their articles and verbs, and spell out arrows and abbreviations.
+
+### Style
+
+- **Colon overuse.** A colon is fine before a list or an example. As a mid-sentence connector it adds nothing. "If you're coming from traditional automation: instead of registering event handlers, you describe conditions" leans on the colon and on comparison framing. "Describing when the scheduler should fire works best as plain English" says the same with neither.
+- **Boldface overuse.** Don't bold every proper noun or acronym.
+- **Inline-header lists.** The tell is a bold label and colon that restates the line: "**Performance:** Performance improved...". Convert those to prose. A bold lead-in that ends in a period, names the item, and is followed by new detail ("**Schema in TypeScript.** Tables live in one file.") is fine.
+- **Decorative emoji.** Remove them from headings and bullets.
+- **Curly quotes.** Use straight quotes.
+
+### Chatbot residue
+
+- **Chatbot phrases.** "I hope this helps!", "Let me know if...", "Of course!", "Certainly!", "Found the smoking gun!" Remove them.
+- **Sycophantic tone.** "Great question! You're absolutely right!" Respond directly.
+
 ## Voice and project specifics
 
-- Apply the `phx:unslop` skill to every doc this skill touches. That skill owns the slop-pattern catalogue: AI vocabulary, filler, hedging, formatting tells. Where the two disagree, this skill wins: text in parentheses that forms a full grammatical unit stays.
 - PR descriptions and commit messages are writing too. Every layer except Diátaxis applies to them. A PR body is a briefing that a reviewer can read in under a minute. Do not paste logs, SHA lists, or metric tables. Link them.
 - Product UI strings are not documentation. Use your product's copy guidelines for those.
 - Write real paths. Make every count or tree claim true at the commit that lands it, and include the command that regenerates it.

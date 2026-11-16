@@ -23,7 +23,6 @@ See [notes on specific skills](#notes-on-specific-skills) below._
 | `receiving-code-review`* | Responding to review feedback on a pull request                 |
 | `reflection`             | Reviewing a session for friction and improving ecosystem files  |
 | `technical-writing`      | Writing or reviewing prose a person reads                       |
-| `unslop`                 | Cutting AI tells from prose a person reads                      |
 | `writing-adrs`*          | Documenting significant architectural or tooling decisions      |
 | `writing-plans`*         | Writing implementation plans for multi-step tasks               |
 | `writing-release-notes`  | Generating release notes or a changelog entry for a new version |
@@ -87,13 +86,14 @@ path is reached. Where either program is missing, the skill says so and stops.
 >   (`*.lock`, `CHANGELOG.md`) or deleted. Let the commit through.
 > - **2** and **3** keep their meanings: escalate a 2, fix a 3.
 
-#### technical-writing and unslop
+#### technical-writing
 
-Vendored from [`cursor/plugins`](https://github.com/cursor/plugins/tree/bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7/pstack/skills)
-at `bf0c7cd`, under the MIT licence each skill directory carries. They are maintained
-here as our own and do not track upstream. `phx:technical-writing` applies
-`phx:unslop`, so the two ship together. Both cover prose a person reads; text only a
-model reads favours fewer tokens over the readability these rules buy.
+Vendored from `technical-writing` and `unslop` in
+[`cursor/plugins`](https://github.com/cursor/plugins/tree/bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7/pstack/skills)
+at `bf0c7cd`, under the MIT licence the skill directory carries, and merged into one
+skill. It is maintained here as our own and does not track upstream. It covers prose a
+person reads; text only a model reads favours fewer tokens over the readability these
+rules buy.
 
 #### writing-adrs
 
