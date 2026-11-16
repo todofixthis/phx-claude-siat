@@ -10,109 +10,107 @@ revisit-when: A second plugin joins the marketplace, or stable-vs-latest channel
 
 ## Context
 
-This repository is simultaneously a Claude Code marketplace (`todofixthis`) and the
-single plugin that marketplace lists (`phx`). The two are conceptually distinct
-entities with independent lifecycles: a plugin is versioned, released software; a
-marketplace is a catalogue recording where plugins live. This marketplace lists only
-this author's own plugins — it is not a general catalogue for third-party plugins.
+This repository is both a Claude Code marketplace (`todofixthis`) and the one plugin
+that marketplace lists (`phx`). The two have separate lifecycles. A plugin is versioned,
+released software. A marketplace is a catalogue of where plugins live. This marketplace
+lists only this author's own plugins, not third-party ones.
 
-Per Claude Code's documented behaviour, a plugin's version resolves in priority
+Claude Code's plugin-marketplaces documentation says a plugin's version resolves in this
 order: `plugin.json`, then the marketplace plugin entry, then the git commit SHA. An
-installed plugin updates (via `/plugin update` or startup auto-update) only when that
-resolved version string changes (per Claude Code's plugin-marketplaces documentation). When `version` is set in both `plugin.json` and the
-marketplace entry, `plugin.json` wins silently and the marketplace value is ignored.
-The marketplace file itself carries no top-level version — versioning applies only to
-plugin entries. Today both `plugin.json` and the marketplace entry declare `1.0.0`,
-conflating the two lifecycles. With the marketplace `source: "./"` and no ref pin,
-users track the repository's default branch.
+installed plugin updates, through `/plugin update` or auto-update at startup, only when
+that resolved version string changes. If both `plugin.json` and the marketplace entry set
+`version`, `plugin.json` wins and Claude Code ignores the marketplace value without a
+warning. The marketplace file has no top-level version. Only plugin entries carry one.
+Today `plugin.json` and the marketplace entry both declare `1.0.0`, which conflates the
+two lifecycles. With the marketplace `source: "./"` and no ref pin, users track the
+repository's default branch.
 
-We are about to make our first non-trivial change since `1.0.0` and need a release
-model. That forces a prior question: should two distinct entities share one
-repository, or live apart? Forces: minimise maintenance toil while there is a single
-plugin, keep version ownership unambiguous, and preserve the option to separate
-later.
+Our next change is the first non-trivial one since `1.0.0`, and it needs a release model.
+That raises a prior question: should two separate things share one repository? Three
+forces apply. Keep maintenance low while there is one plugin, keep version ownership
+unambiguous, and keep the option to split later.
 
 ## Options
 
 ### Option 1: Do nothing
 
-Leave both manifests carrying `version: 1.0.0` in one repository, lifecycles
-undistinguished.
+Leave both manifests at `version: 1.0.0` in one repository, with nothing separating the
+lifecycles.
 
 **Pros:** No work.
-**Cons:** Marketplace and plugin lifecycles stay conflated, and the duplicated
-version is a latent footgun.
-**Risks:** Bumping the marketplace entry expecting it to take effect silently does
-nothing — `plugin.json` outranks it — so a release bumped in the wrong manifest never
-reaches users.
+**Cons:** The marketplace and plugin lifecycles stay conflated, and the duplicated version
+is a latent mistake for whoever next bumps it.
+**Risks:** Bumping the marketplace entry does nothing, because `plugin.json` outranks it.
+A release bumped in the wrong manifest never reaches users, and nothing says so.
 
 ### Option 2: Co-locate, version owned by plugin.json (Accepted)
 
-Keep marketplace and plugin in this repository. `plugin.json` is the sole source of
-truth for the plugin version; the marketplace plugin entry carries no `version`. A
-marketplace change (catalogue edits, re-pointing a source) is a distinct, rare event
-from a plugin release.
+Keep the marketplace and the plugin in this repository. `plugin.json` alone sets the
+plugin version, and the marketplace plugin entry has no `version`. A marketplace change,
+such as a catalogue edit or a re-pointed source, is a separate and rare event, not a
+plugin release.
 
-**Pros:** One repository, one PR/CI/issue surface; unambiguous version ownership.
-**Cons:** Marketplace and plugin commits share one history; one catalogue serves both
+**Pros:** One repository, so one set of PRs, CI, and issues. Version ownership is
+unambiguous.
+**Cons:** Marketplace and plugin commits share one history. One catalogue serves both
 local development and published distribution.
-**Risks:** A contributor could edit the wrong lifecycle, or re-add a `version` to the
+**Risks:** A contributor could edit the wrong lifecycle, or add a `version` back to the
 marketplace entry.
 
 ### Option 3: Split into two repositories
 
-Move the marketplace catalogue to its own repository; the plugin lives alone, listed by
+Move the marketplace catalogue to its own repository. The plugin lives alone, listed by
 GitHub source and optionally pinned to a release ref.
 
-**Pros:** Fully independent lifecycles; stable-vs-latest channels via ref pinning;
-catalogue write-access decoupled from plugin-development access; a clean catalogue
-identity able to list third-party plugins; no catalogue churn from active plugin
-development.
-**Cons:** For a single first-party plugin, the marketplace repository is a near-empty
-one-file repository; if it pins per release, every release gains a cross-repo
-re-point step.
-**Risks:** Ongoing cross-repo admin outweighs the benefit until a second plugin or a
-channel requirement exists.
+**Pros:** The lifecycles are fully independent. Ref pinning gives stable and latest
+channels. Write access to the catalogue is separate from plugin-development access. The
+catalogue gets its own identity and can list third-party plugins. Active plugin
+development causes no catalogue churn.
+**Cons:** With one first-party plugin, the marketplace repository holds almost nothing
+but one file. If it pins per release, every release gains a step to re-point the ref in
+the other repository.
+**Risks:** Admin across two repositories costs more than it returns until a second plugin
+or a channel requirement exists.
 
 ## Decision
 
-Co-locate (Option 2). With a single first-party plugin and no need for stable/latest
-channels, one repository is less total toil than two: splitting pays off only when
-the marketplace lists multiple plugins or pins releases to refs. Its other benefits
-do not apply here — the catalogue lists only this author's plugins, so decoupled access
-control and a third-party identity carry no weight, and catalogue churn is negligible
-because marketplace edits are rare. The separation that matters is logical, not
-physical: `plugin.json` owns the version, the marketplace entry is a pointer, and the
-two lifecycles are documented as distinct. Revisit when a second plugin joins the
-marketplace, or stable-vs-latest channels are needed.
+Co-locate (Option 2). With one first-party plugin and no need for stable and latest
+channels, one repository costs less work than two. A split pays off only when the
+marketplace lists several plugins or pins releases to refs. Its other benefits don't
+apply here. The catalogue lists only this author's plugins, so separate access control
+and a third-party identity are worth nothing, and catalogue churn is negligible because
+marketplace edits are rare. The separation that matters is logical, not physical.
+`plugin.json` owns the version, the marketplace entry only points at the plugin, and the
+docs describe the two lifecycles as separate. Revisit when a second plugin joins the
+marketplace, or when stable and latest channels are needed.
 
 ## Consequences
 
 > **Amended by [ADR 010][]:** the entry now pins `ref: main`, so distribution no longer
-> follows the repository's default branch. The bullets below that reason from the default
-> branch — including the version→commit ambiguity — are superseded on that point only; the
-> decision above stands.
+> follows the repository's default branch. That supersedes the bullets below that reason
+> from the default branch, including the ambiguity between version and commit, on that
+> point only. The decision above stands.
 
-- `version` is removed from the marketplace plugin entry, leaving `plugin.json`
-  authoritative. This is safe for existing installs: `plugin.json` already outranks
-  the entry, so no resolved version changes and no spurious update fires. Releasing
-  becomes: bump `plugin.json` and land it on the default branch.
-- One catalogue now serves both development and published distribution, so the
-  marketplace `description` (currently "Development marketplace…") is corrected to
-  describe that published role, lest users adding it be misled.
-- Installed copies update only when `plugin.json`'s version changes, so a release
-  reaches existing users only when a bumped version lands on the default branch — the
-  batched cadence is enforced by the version field, not by every merge. But a fresh
-  install pulls default-branch HEAD, so a new installer and an existing updater can
-  both report `1.0.0` while running different commits. Tag each release commit to
-  restore a version→commit mapping for support and bisection; a tag needs no ref pin or
-  repo split.
-- The revisit trigger above is enforced rather than remembered: [ADR 012][] fails the
-  manifest check on a second catalogue entry, so a second plugin cannot join without
-  reopening this decision first.
-- The split trigger is recorded, so the bet is reversible: migration later is bounded
-  — create the new repository, move the marketplace manifest, update the install docs,
-  and users re-add the marketplace once.
+- The marketplace plugin entry loses `version`, which leaves `plugin.json` authoritative.
+  Existing installs are safe. `plugin.json` already outranks the entry, so no resolved
+  version changes and no false update fires. A release is now: bump `plugin.json` and
+  land it on the default branch.
+- One catalogue now serves both development and published distribution. The marketplace
+  `description` (currently "Development marketplace…") changes to describe the published
+  role, so that users who add the marketplace aren't misled.
+- Installed copies update only when the version in `plugin.json` changes. A release
+  therefore reaches existing users only when a bumped version lands on the default
+  branch. The version field sets the batched release cadence, not each merge. A fresh
+  install, however, pulls the default branch's HEAD. A new installer and an existing
+  updater can both report `1.0.0` while running different commits. Tag each release
+  commit, so that support and bisection can map a version to its commit. A tag needs no
+  ref pin and no repository split.
+- A check enforces the revisit trigger above, so nobody has to remember it. [ADR 012][]
+  fails the manifest check on a second catalogue entry, so a second plugin can't join
+  until this decision is reopened.
+- The split trigger is on record, so the bet is reversible and a later migration is
+  bounded. Create the new repository, move the marketplace manifest, update the install
+  docs, and users re-add the marketplace once.
 
 [ADR 010]: 010-pin-the-marketplace-entry-to-main.md
 [ADR 012]: 012-advertise-one-plugin-per-catalogue.md

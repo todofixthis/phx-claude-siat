@@ -9,81 +9,80 @@ summary: Generate each CHANGELOG entry from history at release time; do not main
 
 ## Context
 
-We are introducing a `CHANGELOG.md` as part of the release process (the `releasing`
-skill). The Keep-a-Changelog convention keeps an `[Unreleased]` section that
-contributors append to as work lands. We also have the `phx:writing-release-notes`
-skill, which generates release notes at release time from a range's commits, merged
-PRs, linked issues, and diff, with an audience-surrogate review pass.
+The release process, run by the `releasing` skill, is gaining a `CHANGELOG.md`. The
+Keep-a-Changelog convention keeps an `[Unreleased]` section that contributors add to as
+work lands. We also have the `phx:writing-release-notes` skill. At release time it
+generates notes from a range's commits, merged PRs, linked issues, and diff, and runs an
+audience-surrogate review over them.
 
-So a release's changelog entry can be produced two ways: maintained incrementally in
-`[Unreleased]`, or generated fresh at release. One force in particular shapes the
-choice: coding agents writing incremental entries tend to embed session-local,
-non-portable references (e.g. "aligns with task 1's invariant", meaningless outside
-that session).
+So there are two ways to produce a release's changelog entry: maintain it bit by bit in
+`[Unreleased]`, or generate it fresh at release. One force shapes the choice most. Coding
+agents that write entries as they go tend to embed references that mean nothing outside
+their session, such as "aligns with task 1's invariant".
 
 ## Options
 
 ### Option 1: Do nothing — maintain an `[Unreleased]` section
 
-Follow Keep-a-Changelog as usual: contributors append to `[Unreleased]` as work lands,
-and a release renames that section to the new version.
+Follow Keep-a-Changelog as usual. Contributors add to `[Unreleased]` as work lands, and a
+release renames that section to the new version.
 
-**Pros:** A human-curated place to record intent that history cannot reconstruct —
-planned deprecations, embargoed or security notes, a *why* no commit or PR captures.
-**Cons:** Incrementally hand-written entries accumulate non-portable, session-local
-references, and the draft drifts from what actually shipped.
-**Risks:** Note quality depends on every contributor writing good entries in the
-moment — exactly where the non-portable cruft enters.
+**Pros:** A human-curated place to record intent that history can't reconstruct, such as
+a planned deprecation, an embargoed or security note, or a *why* that no commit or PR
+captures.
+**Cons:** Entries written by hand as work lands collect references that only made sense
+in one session, and the draft drifts from what actually shipped.
+**Risks:** Note quality depends on every contributor writing a good entry at the time,
+which is exactly where the session-local references get in.
 
 ### Option 2: Generate each entry at release time (Accepted)
 
 `CHANGELOG.md` records released versions only. At release, `phx:writing-release-notes`
-generates the entry from the range's history, and the `releasing` skill prepends it
-under the new version and date. There is no `[Unreleased]` section.
+generates the entry from the range's history, and the `releasing` skill prepends it under
+the new version and date. There is no `[Unreleased]` section.
 
-**Pros:** One source of truth — the commit/PR/issue history; the entry is
-audience-facing.
-**Cons:** No running draft of unreleased changes between releases; the *why* must
-already live in commits/PRs/issues.
-**Risks:** Generating fresh needs that history reachable at release (e.g. `gh`
-available); offline, the notes fall back to commit messages alone.
+**Pros:** The history of commits, PRs, and issues is the one source of truth. The entry
+is written for its audience.
+**Cons:** There is no running draft of unreleased changes between releases. The *why*
+must already be in commits, PRs, or issues.
+**Risks:** Generating fresh needs that history to be reachable at release, for example
+with `gh` available. Offline, the notes fall back to commit messages alone.
 
 ### Option 3: Maintain `[Unreleased]` and also generate at release
 
-Keep the running `[Unreleased]` draft and generate notes at release, reconciling the
-two into the final entry.
+Keep the running `[Unreleased]` draft, generate notes at release, and reconcile the two
+into the final entry.
 
-**Pros:** The draft is a backstop against context lost from commits/PRs.
-**Cons:** The most work, and the releaser must reconcile two sources.
-**Risks:** Conflicting information at release time — the failure mode we most want to
+**Pros:** The draft is a backstop for context that commits and PRs lost.
+**Cons:** It is the most work, and the releaser must reconcile two sources.
+**Risks:** The two sources disagree at release time, which is the failure we most want to
 avoid.
 
 ## Decision
 
-Generate at release time (Option 2). The history is already the durable record and
+Generate at release time (Option 2). History is already the durable record, and
 `phx:writing-release-notes` exists to mine it, so a parallel `[Unreleased]` draft is
-redundant — and the two-source reconciliation it forces (Option 3) is the worst
-outcome. Generating fresh also routes every entry through the skill's
-audience-surrogate review, which strips the session-local references incremental
-entries (Option 1) accrue. Option 1's genuine upside — a place for intent not in the
-history, like a planned deprecation or an embargoed note — is better served by a
-tracking issue (which the skill already recurses into) or added by the human at
-release, than by a standing draft. We accept the dependency on commit/PR/issue
-hygiene, which we want regardless.
+redundant. Reconciling two sources, which Option 3 forces, is the worst outcome.
+Generating fresh also sends every entry through the skill's audience-surrogate review,
+which strips the session-local references that entries written as work lands (Option 1)
+collect. Option 1 does have a real upside: a place for intent that isn't in the history,
+like a planned deprecation or an embargoed note. A tracking issue, or the human at
+release, serves that better than a standing draft, because the skill already follows
+linked issues. We accept that the notes depend on good commit, PR, and issue descriptions,
+which we want anyway.
 
 ## Consequences
 
-- `CHANGELOG.md` holds released versions only; the `releasing` skill prepends each new
+- `CHANGELOG.md` holds released versions only. The `releasing` skill prepends each new
   version's generated entry. No `[Unreleased]` section exists.
-- "What is unreleased" is answered on demand by running `phx:writing-release-notes`
-  over the unreleased range (the changes since the last release), not from a maintained
-  draft.
-- The *why* must live in commit, PR, and issue descriptions — weak descriptions
-  degrade the generated notes — and generation depends on that history being reachable
-  at release (e.g. `gh` available; offline it falls back to commit messages).
-- This assumes every release runs through `releasing` + `phx:writing-release-notes`. A
-  release cut by hand (e.g. an emergency hotfix) must write its changelog entry
-  manually — there is no `[Unreleased]` draft to fall back on.
-- `phx:writing-release-notes` is unaffected: it never placed notes or chose a version
-  (the caller's job). The `releasing` skill adds the version heading and prepends the
-  generated entry.
+- To see what is unreleased, run `phx:writing-release-notes` over the unreleased range
+  (the changes since the last release). No maintained draft answers that.
+- The *why* must live in commit, PR, and issue descriptions. Weak descriptions weaken the
+  generated notes. Generation also needs that history reachable at release, for example
+  with `gh` available. Offline, it falls back to commit messages.
+- This assumes every release runs through `releasing` and `phx:writing-release-notes`. A
+  release cut by hand, such as an emergency hotfix, must have its changelog entry written
+  by hand, because there is no `[Unreleased]` draft to fall back on.
+- `phx:writing-release-notes` doesn't change. It never placed notes or chose a version,
+  which is the caller's job. The `releasing` skill adds the version heading and prepends
+  the generated entry.
