@@ -15,8 +15,9 @@
   turned up: a rewrite keeps the author's meaning, a template such as the ADR format keeps
   its form, and text that another document quotes stays word for word. The skill leaves
   conversational replies, and text only a model reads, such as a skill or prompt, alone.
-  It merges `technical-writing` and `unslop` from
-  [`cursor/plugins`](https://github.com/cursor/plugins/tree/bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7/pstack/skills)
+  It merges `technical-writing` and `unslop` from the `pstack` plugin by
+  [poteto](https://x.com/poteto), in
+  [`cursor/plugins`](https://github.com/cursor/plugins/tree/bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7/pstack/skills),
   under their MIT licence, and this plugin maintains it from here on without tracking
   upstream. See [the
   skill](https://github.com/todofixthis/phx-claude-siat/blob/9317a4c8839d408a1b78ac3617a99954ac4122c6/skills/technical-writing/SKILL.md)

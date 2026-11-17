@@ -88,7 +88,8 @@ If either program is missing, the skill says so and stops.
 
 #### technical-writing
 
-This skill merges `technical-writing` and `unslop` from
+This skill merges `technical-writing` and `unslop` from the `pstack` plugin by
+[poteto](https://x.com/poteto), in
 [`cursor/plugins`](https://github.com/cursor/plugins/tree/bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7/pstack/skills)
 at `bf0c7cd`, vendored under the MIT licence that the skill directory carries. We
 maintain it here as our own, and it does not track upstream. It covers prose a person
