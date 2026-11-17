@@ -7,11 +7,12 @@ description: "Use when writing or reviewing prose a person reads: docs, RFCs, AD
 
 Write so a tired engineer understands on the first read. Apply all four layers, then cut the AI tells.
 
-Three rules sit above the layers:
+Four rules sit above the layers and the AI tells, and win where they disagree:
 
 - **Cut every word that does no work.** If the sentence survives without a word, the word goes. "In order to" is "to". "Due to the fact that" is "because". "It is important to note that" is nothing.
 - **Use the short, everyday word.** "Use", not "utilise". "Help", not "facilitate". "Do", not "perform". "Many", not "numerous". "If", not "in the event that". A long word has to buy its length with precision.
 - **When a rule makes a sentence worse, fix the sentence another way or leave it alone.** A sentence that follows every rule and sounds like a machine wrote it has failed.
+- **Keep the meaning when you rewrite.** Don't resolve an ambiguity, name an actor, add a cause, or firm up a hedge unless the document, or the code it describes, already establishes it. For a record of a past decision, such as an ADR, only the record itself counts: today's code may have changed since. Where you can't tell what the author meant, keep their wording, even where a layer below asks for an actor, a referent, or a source. A clearer sentence that says something new, or drops something old, is a wrong sentence.
 
 The codebase is the word list. Write the real symbol, file, flag, or command name, not a synonym or a description of it.
 
@@ -49,7 +50,7 @@ Don't mix modes: no reference tables inside a tutorial, no tutorial hand-holding
 
 ## Write sentences to the reader (Google developer style)
 
-- Talk to the reader as "you", in the present tense. "Will" only for things that genuinely happen later.
+- Talk to the reader as "you", in the present tense. "Will" only for things that genuinely happen later. A record of a past decision, such as an ADR, keeps its third person and its past tense for events.
 - Say who does what: "the compiler checks", not "is checked". Catch "is", "are", "was", or "were" followed by a past participle, and name the actor. Passive is fine only when the actor is unknown or beside the point.
 - Write instructions as commands: "Click Submit." State facts plainly. Never "should be done".
 - Put the condition before the instruction: "To delete the document, click Delete."
@@ -82,7 +83,7 @@ Don't mix modes: no reference tables inside a tutorial, no tutorial hand-holding
 - Keep the small words that show structure, such as "that" in "Ensure that the switch is off". Never trade clarity for word count.
 - Repeat the article in a series when it prevents a misread: "the client and the host", not "the client and host", when they are two things.
 - Say which parts "and" or "or" joins when a sentence can group two ways. "Both...and", "either...or", and "if...then" are free disambiguators.
-- Use periods, not semicolons. Replace an em dash with a new sentence or a comma. Don't swap in an en dash or a hyphen as a dash.
+- Prefer a period to a semicolon, and a new sentence or a comma to an em dash. Keep the semicolon or em dash where it does work a split would lose, such as a deliberate inversion, and keep that sentence's wording too, whatever the mannered-prose and dropped-verb rules say. Don't swap in an en dash or a hyphen as a dash.
 - Make text in parentheses a full grammatical unit or its own sentence. Never form plurals with "(s)".
 - No slashes: write "a, b, or both" instead of "a/b" or "and/or".
 - Call each thing by one name, everywhere. A doc that says "the gate", "the ratchet", and "the budget check" for one thing teaches three things. Don't churn what didn't change.
@@ -127,6 +128,8 @@ These patterns mark text as machine-written. Scan for each one, then rewrite. Ke
 
 ## Voice and project specifics
 
+- Where a template or another skill fixes a document's form, that form wins over this skill. For an ADR, the template is the Format section of `phx:writing-adrs`, so leave every heading in the ADR as written, punctuation included, along with its **Pros:**, **Cons:**, and **Risks:** labels and its frontmatter. In any document, search the repository for a heading's anchor before you rename it, and leave the heading alone if a link targets it.
+- Leave a sentence verbatim where another document quotes it, and leave quotations inside the document verbatim too. Before you reword a sentence in a document that others cite, such as an ADR, search the repository for a short, distinctive phrase from it. Hard-wrapped files split sentences across lines, so a search for the whole sentence can miss.
 - PR descriptions and commit messages are writing too. Every layer except Diátaxis applies to them. A PR body is a briefing that a reviewer can read in under a minute. Do not paste logs, SHA lists, or metric tables. Link them.
 - Product UI strings are not documentation. Use your product's copy guidelines for those.
 - Write real paths. Make every count or tree claim true at the commit that lands it, and include the command that regenerates it.
@@ -139,4 +142,6 @@ Before:
 
 After:
 
-> `budget.mjs` reads the committed budget from `budget.json` and counts the files that import protos. If the count exceeds the budget, CI fails. Run `budget.mjs --write` only to lower the budget.
+> `budget.mjs` reads the committed budget from `budget.json` and counts the files that import protos. If the count exceeds the budget, CI fails. `budget.mjs --write` sets the committed budget to the current count. Run it only to lower the budget.
+
+The actor, the count, and the condition come from reading `budget.mjs`, not from guessing. Without the code to hand, keep the original's wording for them.
