@@ -14,47 +14,48 @@ This repository has one human with write access. That person is also the Admin w
 carries the exemption below, and the only reviewer any pull request would get.
 
 The `trunk-develop` ruleset requires every change to `develop` to arrive by pull request
-with a passing `gate` check — the aggregate job [`pr.yml`][] exposes to the ruleset. Two
-*bypass actors*, in GitHub's ruleset vocabulary, are exempt: the release GitHub App, which
-pushes the back-merge from [`release.yml`][], and the repository Admin role. Bypass actors
-are configured per ruleset, so neither exemption reaches `main` — and since [ADR 010][],
-`main` is the branch the marketplace serves.
+with a passing `gate` check, the aggregate job that [`pr.yml`][] exposes to the ruleset.
+Two *bypass actors*, in GitHub's ruleset vocabulary, are exempt. One is the release GitHub
+App, which pushes the back-merge from [`release.yml`][]. The other is the repository Admin
+role. Each ruleset configures its own bypass actors, so neither exemption reaches `main`.
+Since [ADR 010][], `main` is the branch the marketplace serves.
 
-The Admin exemption was introduced as scaffolding. [`release-automation.md`][] called it
+The Admin exemption began as a temporary measure. [`release-automation.md`][] called it
 temporary and told the maintainer to remove it once the App was installed and one release
 had run end to end. The 2.0.0 release met both conditions, so that instruction is now live.
 
-The release flow writes to `develop` before any release pull request exists: the
+The release flow writes to `develop` before any release pull request exists. The
 [`releasing`][] skill commits the CHANGELOG entry and version bump there and pushes them
-directly. 2.0.0 then took three more direct pushes — a review response, a documentation
-correction, and this decision's own paperwork — which is the point. Corrections to a release
+directly. 2.0.0 then took three more direct pushes: a review response, a documentation
+correction, and this decision's own paperwork. That is the point. Corrections to a release
 already in flight are routine, not exceptional.
 
 [ADR 005][] bears on this. It made CI the authoritative enforcement layer over local hooks
 and release-time validation, reasoning that "a check is worth most at the moment the fault is
-authored, not at the moment it ships" — the trade a bypass makes.
+authored, not at the moment it ships". A bypass gives up exactly that.
 
 ## Options
 
 ### Option 1: Do nothing — leave the runbook's removal step standing
 
-`release-automation.md` goes on instructing a removal whose conditions are now satisfied.
+`release-automation.md` goes on telling the maintainer to remove the exemption, and the
+conditions for doing so are now met.
 
-**Pros:** No decision to write down, and the eventual end state is a fully gated `develop`.
+**Pros:** There is no decision to write down, and `develop` ends up fully gated.
 **Cons:** The instruction is live guidance, so the next person to follow the runbook breaks
-the release flow; meanwhile the bypass is present but documented as going away.
+the release flow. Meanwhile the bypass stays in place but is documented as going away.
 **Risks:** The breakage surfaces mid-release, once the CHANGELOG entry is committed locally
-and cannot be pushed — the likeliest moment for the exemption to be re-granted in haste by
-someone who never reasoned about it.
+and cannot be pushed. That is the likeliest moment for someone to grant the exemption again
+in haste, without ever reasoning about it.
 
 ### Option 2: Keep the bypass permanently (Accepted)
 
 Drop the "temporary" framing and treat the Admin exemption as part of the design.
 
-**Pros:** Release preparation and mid-release corrections keep working with no per-release
-ceremony.
-**Cons:** The exemption follows the Admin *role* rather than a person, so it widens silently
-to anyone later granted Admin.
+**Pros:** Release preparation and mid-release corrections keep working with no extra steps
+per release.
+**Cons:** The exemption follows the Admin *role*, not a person, so it widens silently to
+anyone later granted Admin.
 **Risks:** A mistaken push lands as quietly as an intended one, and nothing catches it until
 the release pull request.
 
@@ -63,85 +64,86 @@ the release pull request.
 Cut a release branch from `develop`, commit the preparation there, and merge it back by
 pull request, so no *human* writes to `develop` directly.
 
-**Pros:** Every human commit reaching `develop` is gated as it is authored, and the
-mechanism holds however many people have write access.
-**Cons:** Two gated pull requests per release rather than one, plus another for every
-mid-release correction. The App's bypass stays regardless — it pushes the back-merge — so
-this removes a class of bypass, not the concept.
-**Risks:** Preparation now merges to `develop` while the release merges to `main`, giving
-the flow two merge orders to get right; reversing them strands the version bump on a branch
-`main` never sees. It also removes the human bypass that `releasing`'s recovery path
-assumes when a back-merge must be pushed by hand.
+**Pros:** The gate checks every human commit that reaches `develop` as it is written, and
+the mechanism holds however many people have write access.
+**Cons:** Each release needs two gated pull requests instead of one, plus another for every
+mid-release correction. The App's bypass stays regardless, because the App pushes the
+back-merge. So this option removes one class of bypass, not bypasses altogether.
+**Risks:** Preparation now merges to `develop` while the release merges to `main`, so the
+flow has two merge orders to get right. Reversing them strands the version bump on a
+branch `main` never sees. This option also removes the human bypass that `releasing`'s
+recovery path assumes when someone must push a back-merge by hand.
 
 ### Option 4: Move release preparation into CI
 
 Have the App commit the CHANGELOG entry and version bump from a `workflow_dispatch` job,
 so no human needs to write to `develop` at all.
 
-**Pros:** Removes the human bypass without adding pull requests, using access the App
+**Pros:** It removes the human bypass without adding pull requests, using access the App
 already holds.
-**Cons:** Preparation is not headless. `releasing` step 3 requires the maintainer to
-confirm the computed version *and* that the notes carry nothing embargoed, before anything
-is written — a job would have to either drop both confirmations or reimplement them as
-inputs guessed in advance.
-**Risks:** Automating the commit moves the human check earlier than the material it checks;
-the notes are drafted by a skill whose output the maintainer reviews.
+**Cons:** Preparation needs a human. `releasing` step 3 requires the maintainer to confirm
+the computed version *and* that the notes carry nothing embargoed, before anything is
+written. A job would have to either drop both confirmations or turn them into inputs
+guessed in advance.
+**Risks:** Automating the commit moves the human check earlier than the material it checks.
+A skill drafts the notes, and the maintainer reviews that skill's output.
 
 ## Decision
 
 `develop` is not the branch that ships. `main`'s ruleset has no bypass actor, and the release
-pull request's diff is `main..develop` — so every direct push of plugin content is checked
-before it can reach users, by the same `gate` job, over the same paths. What the bypass
-changes is *when* the check runs, not whether it runs or what it covers.
+pull request's diff is `main..develop`. So the same `gate` job checks every direct push of
+plugin content, over the same paths, before it can reach users. The bypass changes *when*
+the check runs, not whether it runs or what it covers.
 
-That is a carve-out from ADR 005. What 005 rejected was enforcement depending on someone's
-local machine — per-clone hooks, release-time prose checklists — because those fail
-invisibly. The fallback here is still CI, on a pull request, blocking a merge: the principle
-survives, and its timing preference is what bends, for one branch and one class of change.
+That is a carve-out from ADR 005. ADR 005 rejected enforcement that depends on someone's
+local machine, such as per-clone hooks and release-time prose checklists, because those fail
+invisibly. The fallback here is still CI, on a pull request, blocking a merge. The principle
+survives. Its preference for early checks bends, for one branch and one class of change.
 
-Option 3 is the correct answer for a team and the wrong one here: its enforcement is against
-unreviewed pushes, so the added pull requests would document a conversation with nobody. The
-cost is ceremony rather than latency — a correction routed normally faces the same `gate`
-run, but as a separate branch, pull request, and merge for a one-line fix. Option 4 is the
-better long-term answer, blocked on something unrelated to branch
-protection — the interactive confirmations in preparation — so it stays a revisit trigger
-rather than a rejected design.
+Option 3 is the correct answer for a team and the wrong one here. It enforces against
+unreviewed pushes, so its extra pull requests would record a review with nobody. Its cost
+is extra steps, not delay. A correction routed through Option 3 faces the same `gate` run,
+but needs its own branch, pull request, and merge for a one-line fix. Option 4 is the
+better long-term answer. Something unrelated to branch protection blocks it: the
+interactive confirmations in preparation. So Option 4 stays a revisit trigger, not a
+rejected design.
 
 **Revisit when either holds:**
 
 - A second person gains write access. Narrow the exemption to a named actor if the ruleset's
-  actor types allow one; otherwise adopt Option 3, which needs no trust in who holds a role.
-- A human stops needing to write to `develop` — most likely via Option 4, which moves the
-  writes to the App rather than ending them.
+  actor types allow one. Otherwise adopt Option 3, which needs no trust in who holds a role.
+- A human stops needing to write to `develop`. Option 4 is the likeliest route, and it moves
+  the writes to the App instead of ending them.
 
 ## Consequences
 
-**A direct push to `develop` is unchecked until a release pull request exists**, which may be
-weeks: no workflow runs on push to `develop`, since `pr.yml` triggers on `pull_request` only.
-The fault then sits unnoticed until some pull request happens to touch the same paths, and
-that pull request goes red for a fault its author did not introduce. An unrelated change
-never runs the check at all, because `pr.yml` selects jobs from the pull request's own diff.
+**Nothing checks a direct push to `develop` until a release pull request exists**, which may
+take weeks. No workflow runs on push to `develop`, because `pr.yml` triggers on
+`pull_request` only. The fault then sits unnoticed until some pull request happens to touch
+the same paths, and that pull request goes red for a fault its author did not introduce. An
+unrelated change never runs the check at all, because `pr.yml` selects jobs from the pull
+request's own diff.
 
-The ADR-index backstop goes the same way. `pr.yml` runs an `adr` job because
-[`.githooks/pre-commit`][] is not installed on clone; activating it needs the `core.hooksPath`
-setting [`AGENTS.md`][] describes. Push directly from a clone or worktree that lacks it, and a
-stale `INDEX.md` is committed with nothing to catch it until the release pull request goes
-red — mid-release, the failure mode charged against Option 1.
+The ADR-index backstop has the same gap. `pr.yml` runs an `adr` job because cloning does
+not install [`.githooks/pre-commit`][]. Activating the hook needs the `core.hooksPath`
+setting that [`AGENTS.md`][] describes. If you push directly from a clone or worktree that
+lacks it, a stale `INDEX.md` goes in, and nothing catches it until the release pull request
+goes red. That is mid-release, the failure mode charged against Option 1.
 
-The marketplace catalogue is not covered by the release pull request at all. ADR 010 records
-why: `marketplace.json` is read from the default branch, so a bypassed push that breaks it
-reaches users at their next refresh, ungated.
+The release pull request does not cover the marketplace catalogue at all. ADR 010 records
+why. The marketplace reads `marketplace.json` from the default branch, so a bypassed push
+that breaks it reaches users, ungated, at their next refresh.
 
-No bypass mode prompts before a push — they grant or withhold exemption and nothing more —
-so the discipline is entirely the maintainer's.
+No bypass mode prompts before a push. Each mode grants or withholds the exemption and does
+nothing more, so the discipline rests entirely with the maintainer.
 
-Nothing here can verify the exemption is still in force, as ADR 005 recorded of branch
-protection generally, so `release-automation.md` and the live ruleset can drift in either
+Nothing here can verify that the exemption is still in force, as ADR 005 recorded of branch
+protection generally. So `release-automation.md` and the live ruleset can drift in either
 direction. The symptom is a push refused mid-release.
 
-`release-automation.md` now describes the bypass as standing rather than pending, and carries
-Option 3 as a note for projects porting this automation where a standing exemption is
-unacceptable.
+`release-automation.md` now describes the bypass as standing, not pending. It also carries
+Option 3 as a note for projects that port this automation and cannot accept a standing
+exemption.
 
 [`.githooks/pre-commit`]: ../../.githooks/pre-commit
 [ADR 005]: 005-mirror-declared-tooling-as-pr-checks.md

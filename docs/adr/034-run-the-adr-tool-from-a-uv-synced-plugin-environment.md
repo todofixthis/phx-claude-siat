@@ -11,46 +11,50 @@ revisit-when: A consumer needs the skills without the hooks and Claude Code offe
 ## Context
 
 [ADR 022][] ships [`adr.py`][] and `hook.py` beside the `writing-adrs` skill as a
-standard-library tool, run by consumers and by every hook event as bare `python3`. Its
-parser, [`frontmatter.py`][], reads frontmatter line by line as a grammar this repository
-defines. GitHub renders the same block through a YAML parser, so `yaml_hazard()` in `adr.py`
-refuses values a YAML reader would misread, judged by a hand-written character class.
+standard-library tool. Consumers and every hook event run it as bare `python3`. Its
+parser, [`frontmatter.py`][], reads frontmatter line by line, as a grammar this repository
+defines. GitHub renders the same block through a YAML parser. So `yaml_hazard()` in
+`adr.py` refuses values that a YAML reader would misread, judged by a hand-written
+character class.
 
-[ADR 007][]'s Revisit watch predicted on 2026-09-03 that this class would be "wrong on
+On 2026-09-03 the Revisit watch of [ADR 007][] predicted that this class would be "wrong on
 exactly the inputs nobody tried". On 2026-10-07 the two cookiecutter template repositories
-tried one. Their ADRs scope paths under a directory literally named
-`{{ cookiecutter.github_project_name }}/`, which YAML needs quoted in a flow sequence:
-unquoted, `{` opens a mapping. [PyYAML][] reads the quoted form as intended; `yaml_hazard()`
-refuses any entry opening with a quote, and refuses the unquoted form too. No spelling of a
-path under the templated tree passes, so `check`, `index` and every writing command refuse
-in both repositories, and `for` skips those ADRs, injecting nothing for the files they
-govern. `frontmatter.py` also keeps the quotes when it splits a list, so a matcher would
-miss the path even if the refusal were lifted. The same module parses skill frontmatter for
-[`validate_manifests.py`][], through the symlink [ADR 023][] chose.
+tried one. Their ADRs scope paths under a directory named, literally,
+`{{ cookiecutter.github_project_name }}/`. YAML needs that name quoted in a flow sequence,
+because an unquoted `{` opens a mapping. [PyYAML][] reads the quoted form as intended.
+`yaml_hazard()` refuses any entry that opens with a quote, and refuses the unquoted form
+too. No spelling of a path under the templated tree passes. So in both repositories
+`check`, `index`, and every writing command refuse, and `for` skips those ADRs and injects
+nothing for the files they govern. `frontmatter.py` also keeps the quotes when it splits a
+list, so a matcher would miss the path even if the refusal were lifted. The same module
+parses skill frontmatter for [`validate_manifests.py`][], through the symlink that
+[ADR 023][] chose.
 
-On 2026-10-08 the maintainer accepted `uv` on `PATH` as a consumer requirement, which ADR
-022 named as a revisit condition: a hook needing more than a POSIX shell and `python3`.
-Claude Code's plugin documentation, checked the same day, gives each plugin
-`${CLAUDE_PLUGIN_DATA}`, a directory that survives plugin updates and is meant for virtual
-environments, substituted in hook commands and skill content, and shows a `SessionStart`
-hook installing dependencies into it. Claude Code installs a plugin's Node dependencies
-itself, but not its Python ones. `${CLAUDE_PLUGIN_ROOT}` is a directory per plugin version,
-and an old version's stays for 14 days so a session already running it keeps working.
+On 2026-10-08 the maintainer accepted `uv` on `PATH` as a consumer requirement. ADR 022
+named this as a revisit condition: a hook that needs more than a POSIX shell and
+`python3`. Claude Code's plugin documentation, checked the same day, gives each plugin
+`${CLAUDE_PLUGIN_DATA}`. That directory survives plugin updates, is meant for virtual
+environments, and is substituted in hook commands and skill content. The documentation
+shows a `SessionStart` hook installing dependencies into it. Claude Code installs a
+plugin's Node dependencies itself, but not its Python ones. `${CLAUDE_PLUGIN_ROOT}` is a
+directory per plugin version. An old version's directory stays for 14 days, so a session
+already running that version keeps working.
 
-Cost bounds every option. ADR 022 measured a hook event's median at 74 ms against a budget
-it stated as "100 ms on this repository's corpus", per event, with no rationale. A research
-note the maintainer commissioned traced the figure: 100 ms is the "feels
+Cost limits every option. ADR 022 measured a hook event's median at 74 ms, against a
+per-event budget it stated as "100 ms on this repository's corpus", with no rationale. A
+research note the maintainer commissioned traced the figure. 100 ms is the "feels
 instantaneous" limit in [Nielsen's response-time limits][Nielsen] and the input-response
-goal in [RAIL][], both timing a user's action to visible feedback, where a `PreToolUse` hook
-answers a model's tool call and no user action at all. Nielsen treats a delay of 0.1–1 s as
-noticed but tolerable and 1 s as the limit for an uninterrupted flow of thought. Per-event
-cost also compounds over a session, and one tool-calling turn fires several events: a
-`PreToolUse` per matched call and a `PostToolBatch` for the batch. A turn — model response
-plus tools, from one tool-calling message to the next in a transcript, parallel calls
-counted once — was measured over 53 consecutive turns in the subagent transcripts of one
-working session in this repository on 2026-10-08: median 7.0 s, mean 10.2 s, 25th
-percentile 2.1 s. Over 71 such turns those subagents fired a mean of 1.69 hook events a
-turn; none issued parallel calls, which would raise it. One model, one container.
+goal in [RAIL][]. Both time a user's action to visible feedback. A `PreToolUse` hook
+answers a model's tool call, with no user action at all. Nielsen treats a delay of 0.1–1 s
+as noticed but tolerable, and 1 s as the limit for an unbroken flow of thought. Per-event
+cost also adds up over a session, and one tool-calling turn fires several events: a
+`PreToolUse` for each matched call and a `PostToolBatch` for the batch. A turn here is a
+model response plus its tools, from one tool-calling message to the next in a transcript,
+with parallel calls counted once. On 2026-10-08, 53 consecutive turns were measured in the
+subagent transcripts of one working session in this repository. They gave a median of
+7.0 s, a mean of 10.2 s, and a 25th percentile of 2.1 s. Over 71 such turns, those
+subagents fired a mean of 1.69 hook events a turn. None issued parallel calls, which would
+raise the figure. The data covers one model in one container.
 
 Measured on this container on 2026-10-08:
 
@@ -60,219 +64,233 @@ Measured on this container on 2026-10-08:
 | `import yaml` | 15–17 ms |
 | All 35 ADRs, libyaml `CBaseLoader` / pure-Python `BaseLoader` | 1.5 / 20 ms |
 
-A first `uv sync` of the skill's environment took 1.9 s, a no-op one about 20 ms. Two
-concurrent syncs into one environment both succeeded, serialised by the lock file `uv`
-keeps in it. A shell step hashing `uv.lock` to name a venv cost 6 ms.
+A first `uv sync` of the skill's environment took 1.9 s, and a no-op sync took about
+20 ms. Two concurrent syncs into one environment both succeeded, because the lock file
+`uv` keeps in the environment made them take turns. A shell step that hashes `uv.lock` to
+name a venv cost 6 ms.
 
-This ADR restates ADR 022 with its standard-library and `python3`-only claims replaced, and
-supersedes it.
+This ADR restates ADR 022 with its claims about the standard library and `python3` alone
+replaced, and supersedes it.
 
 ## Options
 
-Every option keeps the line-level pass `frontmatter.py` runs now — one field per line, no
-block scalar, no duplicate key — because those are this repository's own rules, stricter
-than YAML's: PyYAML accepts a wrapped value and keeps the *last* of two duplicate keys. All
-keep writing line-based too, since ADR 023 forbids the tool rewriting a sentence the agent
-wrote. What ranks the options is who decides what a *value* means, and what that costs a
-hook event.
+Every option keeps the line-level pass that `frontmatter.py` runs now: one field per line,
+no block scalar, and no duplicate key. These are this repository's own rules, and they are
+stricter than YAML's. PyYAML accepts a wrapped value and keeps the *last* of two duplicate
+keys. Every option also keeps writing line by line, because ADR 023 forbids the tool to
+rewrite a sentence the agent wrote. The options differ in what decides what a *value*
+means, and in what that costs a hook event.
 
 ### Option 1: Do nothing
 
-Keep the hand-written value grammar and extend it per case. At its strongest: accept a
-list entry quoted end to end with no escapes, strip the quotes, and refuse the rest as
-`yaml_hazard()` does now.
+Keep the hand-written value grammar and extend it case by case. At its strongest, this
+means accepting a list entry quoted from end to end with no escapes, stripping the
+quotes, and refusing everything else as `yaml_hazard()` does now.
 
-**Pros:** About twenty lines of standard library, no dependency, no cost added.
-**Cons:** Splitting a list on commas breaks a quoted entry holding `, `, so the narrow fix
-needs a flow-sequence tokeniser as well. Anything outside the subset is refused although
-it is valid YAML.
-**Risks:** Each refusal is found by a consumer, as this one was, and each costs a plugin
-release to lift.
+**Pros:** About twenty lines of standard library, no dependency, and no added cost.
+**Cons:** Splitting a list on commas breaks a quoted entry that contains `, `, so the
+narrow fix also needs a tokeniser for flow sequences. The tool refuses anything outside
+the subset, even when it is valid YAML.
+**Risks:** A consumer finds each refusal, as with this one, and lifting each costs a
+plugin release.
 
 ### Option 2: Declare PyYAML, sync a venv at session start (Accepted)
 
-`skills/writing-adrs/pyproject.toml` declares PyYAML, locked by the root `uv.lock`. The
-`SessionStart` hook syncs the skill's dependencies — `uv sync --frozen`, the skill's package
-alone, no dev group, the project itself not installed — into a venv under
-`${CLAUDE_PLUGIN_DATA}` named for the plugin version, on every run, and marks the venv
-complete only once the sync succeeds. Every other hook runs that venv's `python` on the
-tool's files in place. The skill's own commands go through a launcher shipped beside the
-tool, which syncs the same venv first wherever it is not marked complete, so a repository
-adopting the tool — whose hooks stay off until `adr.py` writes its first index — can
-bootstrap. `frontmatter.py` loads every block with `CBaseLoader`.
+`skills/writing-adrs/pyproject.toml` declares PyYAML, and the root `uv.lock` locks it. On
+every run, the `SessionStart` hook runs `uv sync --frozen` for the skill's dependencies
+alone: the skill's package only, no dev group, and the project itself not installed. It
+syncs them into a venv under `${CLAUDE_PLUGIN_DATA}` named for the plugin version, and
+marks the venv complete only after the sync succeeds. Every other hook runs that venv's
+`python` on the tool's files in place. The skill's own commands go through a launcher
+shipped beside the tool. Wherever the venv is not marked complete, the launcher syncs it
+first. That lets a repository that is adopting the tool bootstrap, because its hooks stay
+off until `adr.py` writes its first index. `frontmatter.py` loads every block with
+`CBaseLoader`.
 
-**Pros:** YAML decides every value, at 1.5 ms for the corpus, so no hand-written grammar
-remains. `BaseLoader` resolves no types, so `yes`, `34` and an ISO date stay strings.
-Renovate's `pep621` manager tracks PyYAML, and no third-party code enters the tree. `uv`
-provides an interpreter matching the skill's `requires-python`, so `python3` on `PATH`
-stops being required.
+**Pros:** YAML decides every value, in 1.5 ms for the whole corpus, so no hand-written
+grammar remains. `BaseLoader` resolves no types, so `yes`, `34`, and an ISO date stay
+strings. Renovate's `pep621` manager tracks PyYAML, and no third-party code enters the
+tree. `uv` provides an interpreter that matches the skill's `requires-python`, so
+`python3` on `PATH` is no longer required.
 **Cons:** Every consumer needs `uv`. Every hook event pays the venv's slower start and the
-import, about 21 ms over ADR 022's figures: a median near 95 ms on every corpus. The first
-session after each plugin update waits on a resolve, about 2 s here; longer on a slow
-network, and far longer where `uv` must first download an interpreter matching the skill's
-`requires-python`.
+import, about 21 ms over ADR 022's figures, for a median near 95 ms on every corpus. The
+first session after each plugin update waits about 2 s here for a resolve. It waits longer
+on a slow network, and far longer where `uv` must first download an interpreter that
+matches the skill's `requires-python`.
 **Risks:** An offline first session gets no venv, and its hooks stay off for that session.
 
 #### Sub-question: how a hook reaches the venv
 
-`uv run` per event costs 36–38 ms to start where the venv's own `python` costs 21 ms,
-which with the import puts a median near 107 ms. Both sit inside the bounds the Decision
-sets, so the 100 ms aspiration ranks them: per-event hooks never call `uv`, and build the
-venv's path by shell parameter expansion from the plugin version, the last component of
-`${CLAUDE_PLUGIN_ROOT}` under the plugin cache, rather than spend 6 ms hashing `uv.lock`
-to name it. A plugin loaded in place from a checkout, as this
-repository dogfoods itself, has no version in its path. There the hooks, the `SessionStart`
-sync and the launcher all use the checkout's own workspace venv instead, telling the two
-cases apart by whether the tool sits under the plugin cache. The sync into it adds the
-skill's dependencies with `--inexact`, removing nothing the developer's own `uv sync`
-installed, and marks it complete the same way, creating it where none exists yet.
+`uv run` costs 36–38 ms to start for each event, where the venv's own `python` costs
+21 ms. With the import, `uv run` puts the median near 107 ms. Both fit the bounds the
+Decision sets, so the 100 ms aspiration ranks them. Per-event hooks never call `uv`. They
+build the venv's path by shell parameter expansion from the plugin version, which is the
+last component of `${CLAUDE_PLUGIN_ROOT}` under the plugin cache. They do not spend 6 ms
+hashing `uv.lock` to name the venv. A plugin loaded in place from a checkout, as this
+repository loads itself for dogfooding, has no version in its path. In that case the
+hooks, the `SessionStart` sync, and the launcher all use the checkout's own workspace venv
+instead. They tell the two cases apart by whether the tool sits under the plugin cache.
+The sync into the workspace venv adds the skill's dependencies with `--inexact`, so it
+removes nothing that the developer's own `uv sync` installed. It marks the venv complete
+the same way, and creates it if none exists yet.
 
-A venv per version, not one shared, because sessions on two versions coexist for up to 14
-days and `uv sync` is exact: with one venv, each version's `SessionStart` — on every
-startup, resume, clear, compact or fork — would strip what the other added.
+Each version gets its own venv, not one shared venv. Sessions on two versions can run side
+by side for up to 14 days, and `uv sync` is exact. With one venv, each version's
+`SessionStart` would remove what the other version added, and `SessionStart` runs on every
+startup, resume, clear, compact, or fork.
 
 ### Option 3: Vendor pure-Python PyYAML beside the skill
 
-Copy PyYAML's pure-Python package (6.0.3, MIT-licensed, 252 KB) into the skill, keeping
+Copy PyYAML's pure-Python package (6.0.3, MIT-licensed, 252 KB) into the skill, and keep
 bare `python3`.
 
-**Pros:** No install step and no new requirement on consumers.
-**Cons:** The pure-Python import and loader add 28–38 ms an event, a median of about 102–112 ms:
-inside the bounds the Decision sets, but at or over the 100 ms aspiration. Getting under it
-means deferring to PyYAML only values a hand-written allowlist cannot prove plain, guarded by a
-test over generated cases; a corpus of plain values then never imports PyYAML and stays near ADR
-022's 74 ms, as fast as Option 1. Third-party code sits in the tree, out of this repository's
-lint, format and spelling checks, with a CI check tying it to a pinned release.
-**Risks:** A vendored copy goes stale between re-vendorings, security fixes included, and an
-allowlist wrong in the permissive direction is the original bug back.
+**Pros:** No install step, and no new requirement on consumers.
+**Cons:** The pure-Python import and loader add 28–38 ms to each event, for a median of
+about 102–112 ms. That fits the bounds the Decision sets, but meets or exceeds the 100 ms
+aspiration. To get under it, the tool would hand to PyYAML only the values that a
+hand-written allowlist cannot prove plain, with a test over generated cases to guard the
+allowlist. A corpus of plain values would then never import PyYAML and would stay near
+ADR 022's 74 ms, as fast as Option 1. Third-party code sits in the tree, outside this
+repository's lint, format, and spelling checks, with a CI check to tie it to a pinned
+release.
+**Risks:** A vendored copy goes stale between re-vendorings, security fixes included. An
+allowlist that is wrong in the permissive direction brings back the original bug.
 
 ### Option 4: Import PyYAML when installed, else fall back
 
-Try `import yaml`; where it fails, use the hand-written grammar.
+Try `import yaml`. If it fails, use the hand-written grammar.
 
-**Pros:** No vendored code, no install step.
+**Pros:** No vendored code, and no install step.
 **Cons:** Which grammar decides a value depends on the environment.
-**Risks:** A consumer without PyYAML keeps today's bug, and a corpus can pass in CI, where
+**Risks:** A consumer without PyYAML keeps today's bug. A corpus can pass in CI, where
 PyYAML is installed, and fail in a session, or the reverse.
 
 ## Decision
 
 Option 2. The value grammar is YAML's, so YAML's parser should decide every value.
-Option 1 keeps refusing valid YAML, a consumer at a time, and Option 4 keeps the bug for
+Option 1 keeps refusing valid YAML, one consumer at a time. Option 4 keeps the bug for
 exactly the consumers who would hit it.
 
-With `uv` accepted, Option 3's advantage is the requirement it avoids. Both options fit the
-bounds, so the aspiration and upkeep decide between them. Option 2 sits under the aspiration and
-Option 3 without the allowlist at or over it. With the allowlist Option 3 matches Option 1's
-speed, and is rejected anyway: its speed comes from a grammar approximated in-house, which is
-what this decision exists to remove, and either form keeps third-party code in step by hand.
-libyaml reads the whole corpus in 1.5 ms, and Renovate keeps a declared dependency current.
+With `uv` accepted, Option 3's advantage is only the requirement it avoids. Both options
+fit the bounds, so the aspiration and the upkeep decide between them. Option 2 sits under
+the aspiration. Option 3 without the allowlist meets or exceeds it. With the allowlist,
+Option 3 matches the speed of Option 1, and is rejected anyway. Its speed comes from a
+grammar that this repository approximates itself, and removing that is the point of this
+decision. In either form, someone must keep third-party code in step by hand. libyaml
+reads the whole corpus in 1.5 ms, and Renovate keeps a declared dependency current.
 
-[ADR 017][]'s no-install clause holds in its own terms. It asks that a skill work on first
-invocation with no per-repository setup, and treats `python3` as a machine prerequisite.
-The hooks build the venv themselves, once per plugin version on each machine, and `uv` is a
-machine prerequisite — a less common one than `python3`, which is the cost accepted here.
-The trigger naming a consumer without `uv` is how that cost would surface.
+The no-install clause of [ADR 017][] still holds on its own terms. It asks that a skill
+work on first invocation with no setup per repository, and it treats `python3` as a
+machine prerequisite. The hooks build the venv themselves, once per plugin version on each
+machine, and `uv` is a machine prerequisite. It is less common than `python3`, and that
+is the cost this decision accepts. The trigger that names a consumer without `uv` is how
+that cost would show up.
 
 #### Sub-question: the hook budget
 
-ADR 022's per-event 100 ms answers the wrong question, so it becomes an aspiration: a median
-worth aiming at by analogy with Nielsen and RAIL, which ranks options that both fit the
-bounds below. Two bounds replace it, neither counting the first sync after an update.
+ADR 022's per-event 100 ms answers the wrong question, so it becomes an aspiration. It is
+a median worth aiming at, by analogy with Nielsen and RAIL, and it ranks options that
+both fit the bounds below. Two bounds replace it. Neither counts the first sync after an
+update.
 
-- **The session budget, which the trigger watches:** the mean hook cost a tool-calling turn
-  incurs — events a turn times mean cost an event — stays within 5% of the median turn,
-  about 350 ms against today's 7.0 s. The literature gives no aggregate figure, so 5% is a
-  judgement, and these are its terms. At 1.69 events a turn today's hooks cost about 1.8%
-  and this decision's about 2.3%, medians standing in for the means until implementation
-  measures them, so 2% would fire on the status quo. 5% leaves this
-  decision about twice its cost in headroom, and fires on a model about twice as fast, or
-  at about 3.7 events a turn. Higher would let hook cost grow unwatched into the turn's
-  own spread. The median turn is the denominator, stricter than the 10.2 s mean, so a
-  skewed tail of long turns cannot hide hook cost; and the share is relative, so faster
-  models raise it and fire the trigger without anyone re-deriving a number.
-- **The per-event ceiling:** p95 within 1 s, Nielsen's flow-of-thought limit, enforced by a
-  `pr.yml` check timing at least 20 `hook.py` events over this repository's corpus. It
-  holds `SessionStart` too, no-op sync included, the one hook a person waits on. It
-  catches only a gross regression, which is its job: the turn cannot be measured in CI, so
-  the ceiling is the one bound a build can hold.
+- **The session budget, which the trigger watches.** The mean hook cost of a tool-calling
+  turn stays within 5% of the median turn. That cost is the events in a turn times the
+  mean cost of an event. Against today's 7.0 s median turn, 5% is about 350 ms. The
+  literature gives no aggregate figure, so 5% is a judgement, made on these terms. At 1.69
+  events a turn, today's hooks cost about 1.8% and this decision's about 2.3%. Medians
+  stand in for the means until the implementation measures them. So a 2% bound would fire
+  on the status quo. 5% leaves this decision about twice its own cost in headroom. It
+  fires on a model about twice as fast, or at about 3.7 events a turn. A higher bound
+  would let hook cost grow unwatched into the normal spread of turn times. The median
+  turn is the denominator, which is stricter than the 10.2 s mean, so a long tail of slow
+  turns cannot hide hook cost. And the share is relative, so faster models raise it and
+  fire the trigger without anyone working out a new number.
+- **The per-event ceiling.** p95 stays within 1 s, Nielsen's limit for a flow of thought.
+  A `pr.yml` check enforces it by timing at least 20 `hook.py` events over this
+  repository's corpus. The ceiling applies to `SessionStart` too, including a no-op sync,
+  because it is the one hook a person waits on. The ceiling catches only a gross
+  regression, and that is its job. CI cannot measure a turn, so the ceiling is the one
+  bound a build can enforce.
 
-Should the trigger fire, the first lever is to cache the parsed corpus by file modification
-time, so most events skip the import; that is decided then, not here.
+If the trigger fires, the first fix to try is to cache the parsed corpus by file
+modification time, so that most events skip the import. That choice is made then, not
+here.
 
-Everything else ADR 022 decided stands, for the reasons it gives: the tool sits beside the
-skill, the plugin's `hooks/hooks.json` declares the hooks, neither a standalone plugin
-([ADR 012][]) nor hooks declared in the skill's frontmatter alone replace that, and the
-hooks remain POSIX-only, Windows without Git Bash out of scope.
+Everything else ADR 022 decided stands, for the reasons it gives. The tool sits beside the
+skill. The plugin's `hooks/hooks.json` declares the hooks. Neither a standalone plugin
+([ADR 012][]) nor hooks declared only in the skill's frontmatter replace that. The hooks
+stay POSIX-only, and Windows without Git Bash is out of scope.
 
 ## Consequences
 
-- `hooks/hooks.json`'s gate checks for `uv` where it checked for `python3`, and the
-  `SessionStart` line says so in context where `uv` or the sync fails. Its timeout rises to
-  cover a cold resolve. Every other hook exits silently until the venv is marked complete,
-  so a sync interrupted after creating `python` but before installing PyYAML stays quiet
-  rather than failing every event. The venv layout assumed is POSIX's `bin/python`.
-- `SessionStart` prunes a version's venv only once that version's directory has left the
-  plugin cache, so no session still running it can lose it.
-- `frontmatter.py` imports PyYAML and parses with `CBaseLoader`, falling back to the
-  pure-Python `BaseLoader` where a platform's wheel lacks libyaml; that fallback misses the
-  aspiration on those platforms, still inside both bounds.
-  `yaml_hazard()`'s character class goes, and a value PyYAML refuses is reported as any
-  other malformed field. A regression test covers the templated-path case above.
-- The skill passes the substituted `${CLAUDE_PLUGIN_DATA}` to its launcher rather than
+- The gate in `hooks/hooks.json` checks for `uv` where it checked for `python3`. Where
+  `uv` or the sync fails, the `SessionStart` line says so in context. Its timeout rises to
+  cover a cold resolve. Every other hook exits silently until the venv is marked complete.
+  So a sync interrupted after it creates `python` but before it installs PyYAML stays
+  quiet instead of failing every event. The venv layout assumed is POSIX's `bin/python`.
+- `SessionStart` deletes a version's venv only after that version's directory has left
+  the plugin cache, so no session still running that version can lose its venv.
+- `frontmatter.py` imports PyYAML and parses with `CBaseLoader`. Where a platform's wheel
+  lacks libyaml, it falls back to the pure-Python `BaseLoader`. On those platforms the
+  fallback misses the aspiration but stays within both bounds. The character class in
+  `yaml_hazard()` goes, and the tool reports a value PyYAML refuses like any other
+  malformed field. A regression test covers the templated-path case above.
+- The skill passes the substituted `${CLAUDE_PLUGIN_DATA}` to its launcher instead of
   calling `uv run`, which would build a second environment inside the per-version plugin
-  cache. ADR 022's `uvx` recipe for consumer CI is unchanged and now installs PyYAML with
+  cache. ADR 022's `uvx` recipe for consumer CI is unchanged, and now installs PyYAML with
   the tool.
-- This repository's own callers of `adr.py` — `pr.yml`'s `adr` job and
-  `.githooks/pre-commit` — run it under `uv run` from the workspace, so `pr.yml` sets up
+- This repository's own callers of `adr.py`, the `adr` job in `pr.yml` and
+  `.githooks/pre-commit`, run it under `uv run` from the workspace. So `pr.yml` sets up
   `uv` before that step.
-- `scripts/frontmatter.py` reaches the same parser through the symlink, so `scripts/` gains
-  a dependency; [ADR 035][] restates how `scripts/` runs.
-- The hook's mean cost per turn and p95 per event are measured at implementation on this
-  repository's corpus, and the turn and events a turn are re-measured, over more than one
-  session and from main and subagent transcripts alike, whenever the trigger is checked;
-  each finding goes in a `## Revisit watch` section here.
-- [ADR 025][]'s cost condition cited ADR 022's 100 ms per event and now cites these bounds,
-  which loosen it.
-- The skill's frontmatter rules and command forms, the standard-library claims in
-  `adr.py`'s and `frontmatter.py`'s docstrings and the skill's `pyproject.toml`, and the
-  README are corrected in the implementing change, which the [backlog item][] tracked.
+- `scripts/frontmatter.py` reaches the same parser through the symlink, so `scripts/`
+  gains a dependency. [ADR 035][] restates how `scripts/` runs.
+- The implementation measures the hook's mean cost per turn and its p95 per event on this
+  repository's corpus. Whenever someone checks the trigger, they measure the turn and the
+  events per turn again, over more than one session and from both main and subagent
+  transcripts. Each finding goes in a `## Revisit watch` section here.
+- The cost condition of [ADR 025][] cited ADR 022's 100 ms per event. It now cites these
+  bounds, which loosen it.
+- The implementing change corrects the skill's frontmatter rules and command forms, the
+  standard-library claims in the docstrings of `adr.py` and `frontmatter.py` and in the
+  skill's `pyproject.toml`, and the README. The [backlog item][] tracked that change.
 
 ## Revisit watch
 
 - **2026-10-13, at implementation: no trigger has fired.**
 
-  *The turn.* Across three sessions in this repository's transcripts — 3 main and 39
-  subagent transcripts, 700 tool-calling messages — 593 turns gave a median of 8.8 s, a
-  mean of 15.7 s and a 25th percentile of 4.9 s. Main transcripts alone gave a median of
-  9.4 s over 140 turns; subagents gave 8.7 s over 453. One session supplied 634 of the 700
-  messages. A turn runs as defined above, within one transcript. Four turns over 900 s were
-  dropped as waits on a person, such as a permission prompt.
+  *The turn.* The data covers three sessions in this repository's transcripts: 3 main and
+  39 subagent transcripts, with 700 tool-calling messages. 593 turns gave a median of
+  8.8 s, a mean of 15.7 s, and a 25th percentile of 4.9 s. Main transcripts alone gave a
+  median of 9.4 s over 140 turns, and subagents gave 8.7 s over 453. One session supplied
+  634 of the 700 messages. A turn is as defined above, within one transcript. Four turns
+  over 900 s were dropped as waits on a person, such as a permission prompt.
 
-  *Events a turn.* One `PreToolUse` per `Read`, `Edit`, `Write`, `NotebookEdit` or `Bash`
-  call plus one `PostToolBatch` gave a mean of 2.05 over all 700 messages (1.05
-  `PreToolUse`). That is up from 2026-10-08's 1.69, which counted subagents alone and no
-  parallel calls; here 100 messages (14%) issued them. The events are averaged over every
-  tool-calling message, untimed turns included, hence 700 messages against 593 turns.
+  *Events a turn.* Counting one `PreToolUse` per `Read`, `Edit`, `Write`, `NotebookEdit`,
+  or `Bash` call plus one `PostToolBatch` gave a mean of 2.05 over all 700 messages, of
+  which 1.05 were `PreToolUse`. That is up from 1.69 on 2026-10-08, which counted
+  subagents alone and no parallel calls. Here, 100 messages (14%) issued parallel calls.
+  The events are averaged over every tool-calling message, untimed turns included, which
+  is why the count is 700 messages against 593 turns.
 
   *To repeat it.* Read each `.jsonl` transcript under
-  `~/.claude/projects/-Users-phx-Documents-phx-claude-siat/`, with a session's subagents at
-  `<session>/subagents/*.jsonl`. One tool-calling message spans several records sharing a
-  `message.id`, so group by that id; parallel calls are one message. A human prompt is a
-  user record that is neither `isMeta` nor a `tool_result`. It breaks a turn, as do a
-  compaction boundary, an `end_turn` and a subagent's handback. Drop turns over 900 s.
+  `~/.claude/projects/-Users-phx-Documents-phx-claude-siat/`. A session's subagents are at
+  `<session>/subagents/*.jsonl`. One tool-calling message spans several records that share
+  a `message.id`, so group by that id. Parallel calls are one message. A human prompt is a
+  user record that is neither `isMeta` nor a `tool_result`. A human prompt ends a turn, and
+  so do a compaction boundary, an `end_turn`, and a subagent's handback. Drop turns over
+  900 s.
 
   *Cost an event.* Three runs of `uv run python -m scripts.ci.time_hooks` on this tree, on
   one linux/aarch64 container, gave means of 0.039–0.044 s for `PreToolUse` and
   0.040–0.041 s for `PostToolBatch`, and an overall p95 of 0.048–0.063 s. The highest p95
-  of any one event type was `SessionStart`'s 0.072 s. Every timed `PreToolUse` was a first
-  touch injecting its full rows, so these overstate a typical one.
+  of any single event type was 0.072 s, for `SessionStart`. Every timed `PreToolUse` was a
+  first touch that injected its full rows, so these figures overstate a typical one.
 
   *Against the bounds.* At the highest means, 1.05 × 0.044 s + 1 × 0.041 s ≈ 0.087 s a
-  turn: 1.0% of the 8.8 s median turn, against 5% (0.44 s). The worst p95, 0.072 s, is
-  under the 1 s ceiling. No consumer has been found needing the skills without the hooks or
-  running without `uv`. Whether Claude Code now installs a plugin's Python dependencies was
-  not re-checked.
+  turn. That is 1.0% of the 8.8 s median turn, against the 5% bound (0.44 s). The worst
+  p95, 0.072 s, is under the 1 s ceiling. Nobody has found a consumer who needs the
+  skills without the hooks, or who runs without `uv`. Nobody re-checked whether Claude
+  Code now installs a plugin's Python dependencies.
 
 [ADR 007]: 007-keep-repo-scripts-stdlib-only.md
 [ADR 012]: 012-advertise-one-plugin-per-catalogue.md

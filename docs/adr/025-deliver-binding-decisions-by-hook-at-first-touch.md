@@ -10,105 +10,112 @@ revisit-when: A proposed ADR relitigates an indexed decision that was not among 
 
 ## Context
 
-[ADR 013][] keyed ADRs to the paths they bind so the decisions governing a file could reach
-whoever edits it, and delivered that from the pre-commit hook: after the work is authored,
-and only in clones that installed the hook. [ADR 019][] declined to generate path-scoped
-rules from that frontmatter, on two grounds: a rule keyed to the file in hand answers a
-narrower question than the corpus read `AGENTS.md` mandates, and an agent holding the
-narrow answer has reason to treat the broad instruction as discharged — displacement, whose
-danger is that the two failure modes do not overlap, a reader who skips the index knowing
-they skipped it where one served rows cannot tell they were served less than everything;
-and the generated files would sit half-authored in `.agents/rules/`. It set two triggers: a
-harness that loads a rule on file creation or on a shell read, or a measurement showing the
-mandated index read is not happening.
+[ADR 013][] keyed ADRs to the paths they bind, so that the decisions governing a file could
+reach whoever edits it. ADR 013 delivered them from the pre-commit hook, which runs after
+the work is written, and only in clones that installed the hook.
 
-Neither has fired. 019 was decided for this repository, where its do-nothing had a
-counterpart: `AGENTS.md` mandating the index read, and the pre-commit lookup. [ADR 022][]
-ships the skill to consumers, where that counterpart is nothing. The maintainer has asked
-for delivery: an agent working on a bound file should receive the decisions without going
-looking.
+[ADR 019][] declined to generate path-scoped rules from that frontmatter, on two grounds.
+The first ground is displacement. A rule keyed to the file in hand answers a narrower
+question than the corpus read that `AGENTS.md` mandates, and an agent that holds the narrow
+answer has reason to treat the broad instruction as done. The danger is that the two
+failure modes do not overlap. A reader who skips the index knows they skipped it. A reader
+served rows cannot tell they were served less than everything. The second ground is that
+the generated files would sit half-authored in `.agents/rules/`. ADR 019 set two triggers:
+a harness that loads a rule on file creation or on a shell read, or a measurement showing
+that agents are not doing the mandated index read.
 
-A `PreToolUse` hook runs before the tool and its `additionalContext` reaches the agent
-alongside the tool's result, on the next model request; it fires for `Bash` as for the file
-tools, with the command string in its input. Files referenced with `@` in a prompt fire no
-tool call and so no hook. Verified against the [hooks reference][hooks] on 2026-09-02.
+Neither trigger has fired. ADR 019 was decided for this repository, where its do-nothing
+option had a counterpart: `AGENTS.md` mandating the index read, and the pre-commit lookup.
+[ADR 022][] ships the skill to consumers, where that counterpart is nothing. The maintainer
+has asked for delivery: an agent working on a bound file should receive the decisions
+without going looking.
+
+A `PreToolUse` hook runs before the tool. Its `additionalContext` reaches the agent with
+the tool's result, on the next model request. The hook fires for `Bash` as it does for the
+file tools, with the command string in its input. A file referenced with `@` in a prompt
+fires no tool call, so it fires no hook. These facts were verified against the
+[hooks reference][hooks] on 2026-09-02.
 
 ## Options
 
 ### Option 1: Do nothing
 
-`INDEX.md` read as `AGENTS.md` requires here, and the pre-commit lookup over staged paths.
+Keep the `INDEX.md` read that `AGENTS.md` requires here, and the pre-commit lookup over
+staged paths.
 
 **Pros:** ADR 019's reasoning stands untouched.
-**Cons:** Delivery arrives after the work, in clones that installed the hook, and on no
-consumer at all.
-**Risks:** The reader who does not know a decision exists stays unreached, which is the
+**Cons:** Delivery arrives after the work, only in clones that installed the hook, and on
+no consumer at all.
+**Risks:** The reader who does not know a decision exists stays unreached, and that is the
 reader ADR 013 was for.
 
 ### Option 2: Inject by hook at first touch (Accepted)
 
 A `PreToolUse` hook on `Read`, `Edit`, `Write`, `NotebookEdit` and `Bash` injects each
-binding decision not yet injected this session: number, status, title, summary, live
-`revisit-when`, path. For `Bash`, the command string is tokenised and every token resolving
-to a path under a managed root is looked up. Each injection is labelled as the decisions
-binding those paths, not the corpus, and ends with the instruction to read `INDEX.md`
-before proposing an architectural or tooling change; a `SessionStart` and `SubagentStart`
-note carries the same instruction.
+binding decision not yet injected this session. Each row gives the number, status, title,
+summary, live `revisit-when`, and path. For `Bash`, the hook splits the command string into
+tokens and looks up every token that resolves to a path under a managed root. Each
+injection is labelled as the decisions that bind those paths, not the corpus. It ends with
+the instruction to read `INDEX.md` before proposing an architectural or tooling change. A
+`SessionStart` and `SubagentStart` note carries the same instruction.
 
-**Pros:** Fires on `Write` and on a shell read, the two routes ADR 019 itself identified as
-the ones a rule misses. Nothing is generated into the repository. Each row lands once per
+**Pros:** The hook fires on `Write` and on a shell read, the two routes that ADR 019 itself
+found a rule misses. Nothing is generated into the repository. Each row lands once per
 session, per subagent.
-**Cons:** The rows arrive with the tool's result, so a first-touch `Write` has landed before
-the agent reads them; what they precede is the next action, not the first. Delivery
+**Cons:** The rows arrive with the tool's result, so a first-touch `Write` has landed
+before the agent reads them. The rows precede the next action, not the first. Delivery
 reaches only a path under a managed root, as [ADR 024][] gates it.
-**Risks:** That the label answers displacement is a claim, and unmeasured; the revisit
-condition is what measures it. Context cost — up to ten rows per event, per subagent —
-and one Python start per touched path. The tokeniser misses a path behind a shell
-variable or a glob and can match a path quoted inside an `echo`.
+**Risks:** The claim that the label answers displacement is unmeasured, and the revisit
+condition is what measures it. Each event costs context, up to ten rows per event per
+subagent, and one Python start per touched path. The tokeniser misses a path behind a
+shell variable or a glob, and can match a path quoted inside an `echo`.
 
 ### Option 3: Generate path-scoped rules
 
-ADR 019's Option 2.
+This is ADR 019's Option 2.
 
-**Pros:** Loads with no plugin code at all.
-**Cons:** Rejected by 019 on grounds this ADR does not dispute, and a rule never fires on
-`Write` or a shell read.
-**Risks:** As 019 recorded.
+**Pros:** The rules load with no plugin code at all.
+**Cons:** ADR 019 rejected this option on grounds this ADR does not dispute, and a rule
+never fires on `Write` or a shell read.
+**Risks:** As ADR 019 recorded.
 
 ## Decision
 
-Option 2. This supersedes ADR 019 by the maintainer's judgement, not because its trigger
-fired, and that is said plainly so a later reader does not go looking for the measurement.
-What tips it: for a consumer 019's do-nothing delivers nothing, and a hook reaches the two
-routes 019 named as the ones a rule misses. 019's displacement ground is met with the label
-on every injection: a reader served rows labelled as binding this path knows they were
-served less than everything, which restores the overlap of failure modes 019 found
-missing, and a rule could not carry the label; its second
-ground, generated files in `.agents/rules/`, does not arise, and generating them stays
-forbidden. 019's row-free variant — a note saying only to run the lookup and read the
-index — is what the `SessionStart` note is, and it ships beside the rows rather than
-instead of them.
+Option 2. This ADR supersedes ADR 019 by the maintainer's judgement, not because 019's
+trigger fired. It says so plainly, so that a later reader does not go looking for the
+measurement.
 
-Whether hook delivery qualifies as an archival defence is not decided here: [ADR 018][]'s
-terms stand, and an `Archived` row injected at first touch reaches only a reader whose
-harness runs the plugin.
+Two things tip the decision. For a consumer, 019's do-nothing option delivers nothing. A
+hook also reaches the two routes that 019 named as the ones a rule misses.
+
+The label on every injection meets 019's displacement ground. A reader served rows
+labelled as binding this path knows they were served less than everything. That restores
+the overlap of failure modes that 019 found missing, and a rule could not carry the label.
+019's second ground, generated files in `.agents/rules/`, does not arise, and generating
+them stays forbidden. 019's row-free variant, a note saying only to run the lookup and read
+the index, is what the `SessionStart` note is. It ships beside the rows, not instead of
+them.
+
+This ADR does not decide whether hook delivery qualifies as an archival defence.
+[ADR 018][]'s terms stand, and an `Archived` row injected at first touch reaches only a
+reader whose harness runs the plugin.
 
 ## Consequences
 
-- ADR 019 is marked `Superseded` by this ADR. Its measurements of rule loading stand and
-  are still cited by ADR 018.
-- `.agents/rules/` stays hand-authored; this ADR keeps that path in scope because
+- ADR 019 is marked `Superseded` by this ADR. Its measurements of rule loading stand, and
+  ADR 018 still cites them.
+- `.agents/rules/` stays hand-authored. This ADR keeps that path in scope because
   generating into it is still the breach.
-- An injection stays under the harness's 10,000-character cap, past which the text is
-  swapped for a file path: at most ten rows per event, and the rest named by number and
-  path.
-- `Grep`, `Glob`, MCP file readers and `@`-referenced files deliver nothing; the first two
-  return matches rather than a file, the rest fire no matched tool call.
-- Root resolution follows ADR 024; what is reported after a change, and how often,
-  follows [ADR 026][].
+- An injection stays under the harness's 10,000-character cap, past which the harness
+  replaces the text with a file path. Each event carries at most ten rows and names the
+  rest by number and path.
+- `Grep`, `Glob`, MCP file readers and `@`-referenced files deliver nothing. `Grep` and
+  `Glob` return matches rather than a file, and the others fire no matched tool call.
+- Root resolution follows ADR 024. What is reported after a change, and how often, follows
+  [ADR 026][].
 - The cost condition in `revisit-when` first cited ADR 022's 100 ms per event. [ADR 034][]
   replaced that budget with one per tool-calling turn and a 1 s per-event ceiling, which
-  loosens the condition; it now cites those.
+  loosens the condition. The condition now cites those.
 
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 018]: 018-admit-a-path-scoped-rule-as-an-archival-defence.md

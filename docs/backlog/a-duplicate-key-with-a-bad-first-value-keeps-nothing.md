@@ -6,7 +6,7 @@
 ## What
 
 `parse_fields()` in [`frontmatter.py`] keeps the first line for a key and reports any later
-one as "sets field scope twice; the first value stands". Where that first value then fails
+line as "sets field scope twice; the first value stands". If that first value then fails
 to load, nothing stands:
 
 ```text
@@ -14,34 +14,36 @@ scope: [{{x}}/]
 scope: [a/]
 ```
 
-reports both "sets field scope twice; the first value stands" and "field scope is not valid
-YAML", and the valid second line is discarded unread. The duplicate message predates 9.0.0,
-but the YAML loader in 9.0.0 makes a bad first value much easier to hit.
+For this input the tool reports both "sets field scope twice; the first value stands" and
+"field scope is not valid YAML", and discards the valid second line unread. The duplicate
+message predates 9.0.0, but the YAML loader in 9.0.0 makes a bad first value much easier
+to hit.
 
 ## Why it is still worth doing
 
-The reader is told a value stands that the tool threw away. A writer fixing the YAML error
-by deleting the first line ends up fine, but one who trusts "the first value stands" and
-deletes the second loses the only valid line.
+The tool tells the reader that a value stands after throwing it away. A writer who fixes
+the YAML error by deleting the first line ends up fine. A writer who trusts "the first
+value stands" and deletes the second line loses the only valid line.
 
-The duplicate message is appended during the line scan, before `_load_field` runs, so any
-fix has to hold it until the first value's load result is known. A precedent exists: a
-block-scalar first line is never stored, so a valid later line for the same key is used and
-no duplicate is reported. Falling back to the second line here would match it, but the
-duplicate branch currently `continue`s before setting `sequence_key`, so a second line that
-opens a block sequence (`scope:` then indented `- item` lines) would lose its items, each
-reported as "continued onto another line". A fallback has to keep them.
+The duplicate message is appended during the line scan, before `_load_field` runs, so a fix
+has to hold the message until the first value's load result is known. A precedent exists.
+The parser never stores a block-scalar first line, so it uses a valid later line for the
+same key and reports no duplicate. Falling back to the second line here would match that
+precedent. But the duplicate branch currently `continue`s before it sets `sequence_key`.
+A second line that opens a block sequence (`scope:` then indented `- item` lines) would
+therefore lose its items, each reported as "continued onto another line". A fallback has
+to keep them.
 
 ## Acceptance
 
-- Where the first value for a key fails to load, no message says that value stands. Using
-  the second line, naming it as discarded, or reporting the duplicate with no verdict on
-  which stands all count.
-- A test in [`test_frontmatter.py`] covers a duplicate key whose first value fails to load,
-  asserting `parse_fields()`'s whole result — fields, problems and rejected keys. `parse_adr()`
-  in [`adr.py`] reads the rejected keys, so a fix that changes them changes its verdicts too.
-  Where the fix falls back to the second line, a second case covers a second line opening a
-  block sequence.
+- If the first value for a key fails to load, no message says that value stands. Any of
+  these counts: using the second line, saying which value was discarded, or reporting
+  the duplicate with no verdict on which value stands.
+- A test in [`test_frontmatter.py`] covers a duplicate key whose first value fails to load.
+  It asserts the whole result of `parse_fields()`: fields, problems, and rejected keys.
+  `parse_adr()` in [`adr.py`] reads the rejected keys, so a fix that changes them also
+  changes its verdicts. If the fix falls back to the second line, a second case covers a
+  second line that opens a block sequence.
 
 [`adr.py`]: ../../skills/writing-adrs/adr.py
 

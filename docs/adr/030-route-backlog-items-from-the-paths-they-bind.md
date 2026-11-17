@@ -10,117 +10,116 @@ revisit-when: This lookup runs only in the opt-in pre-commit hook, with no pr.ym
 
 ## Context
 
-[ADR 020][] gave deferred work a file home, one item per file under `docs/backlog/`, and
-named its own gap in Consequences: "Nothing routes a reader to `docs/backlog/` the way
-`scope` routes them to an ADR... a directory of files is better [than the issue tracker]
-only because `rg` reaches it — which works only while every item names the paths it
-binds in its prose, itself a convention nothing checks. Closing this properly means
-giving an item a scope the pre-commit report can read." That is the gap [ADR 013][]
-closed for decisions and [ADR 014][] closed for the sites they bind; deferred work is the
-one category ADR 020 left it standing in.
+[ADR 020][] gave deferred work a home in the repository, one file per item under
+`docs/backlog/`. Its Consequences named the gap it left open: "Nothing routes a reader to
+`docs/backlog/` the way `scope` routes them to an ADR... a directory of files is better
+[than the issue tracker] only because `rg` reaches it — which works only while every item
+names the paths it binds in its prose, itself a convention nothing checks. Closing this
+properly means giving an item a scope the pre-commit report can read." [ADR 013][] closed
+the same gap for decisions, and [ADR 014][] closed it for the code sites they bind.
+Deferred work is the one category ADR 020 left open.
 
-`docs/backlog/README.md` already asks for the fix's raw material: "name the paths an
-item binds in its prose." Read against the twelve items on disk, that instruction is
-already followed almost everywhere, in one specific shape — every item but one ends with
-a block of Markdown reference-style link definitions naming the files it discusses, the
-same convention [`writing-adrs`][]'s own **Linking references** section requires of an
-ADR. The one exception,
-[`validate-the-plugin-hook-configuration-in-ci.md`][], names three paths in code spans
-with no link definitions at all, so it would derive an empty scope and stay as
-unreachable as it is today; fixing that item's own prose is outside this decision.
+`docs/backlog/README.md` already asks authors for what a fix would need: "name the paths
+an item binds in its prose." The twelve items on disk almost all follow that instruction
+in the same way. Every item but one ends with a block of Markdown reference-style link
+definitions that name the files it discusses. [`writing-adrs`][] requires the same block
+of an ADR in its **Linking references** section. The one exception,
+[`validate-the-plugin-hook-configuration-in-ci.md`][], names three paths in code spans and
+has no link definitions. It would derive an empty scope and stay as unreachable as it is
+today. Fixing that item's prose is outside this decision.
 
 ## Options
 
 ### Option 1: Do nothing
 
-**Pros:** No migration, and no code to maintain. `docs/backlog/README.md`'s instruction
-stands as it is.
-**Cons:** Leaving the gap open repeats the "documented and unchecked" failure ADR 013
-measured in `tags`.
-**Risks:** The gap widens silently, since nothing about a growing `docs/backlog/`
-signals that retrieval never improved.
+**Pros:** No migration, and no code to maintain. The instruction in
+`docs/backlog/README.md` stays as it is.
+**Cons:** Leaving the gap open repeats the failure ADR 013 measured in `tags`: a
+convention that is documented and never checked.
+**Risks:** The gap widens unnoticed. Nothing about a growing `docs/backlog/` shows that
+nobody can find its items any more easily.
 
 ### Option 2: Derive scope from each item's own reference links (Accepted)
 
 Add no frontmatter and no `scope:` field. A sibling module, `backlog.py`, parses each
-item's reference-style link definitions, resolves each target from the item's own file —
-the way `writing-adrs`'s **Linking references** already resolves an ADR's — and keeps a
-target as scope unless it is an external URL or resolves into `docs/adr/` or
-`docs/backlog/` itself: those name a decision or a sibling item for context, not a site
-the item's own work would touch. `.githooks/pre-commit` runs `backlog.py for` over every
-staged path alongside `adr.py for`, reporting any item whose derived scope covers one, by
-path rather than by number since a backlog item has none.
+item's reference-style link definitions and resolves each target relative to the item's
+own file, as the **Linking references** section of `writing-adrs` already resolves an
+ADR's. A target becomes scope unless it is an external URL or resolves into `docs/adr/`
+or `docs/backlog/`. Those targets name a decision or a sibling item for context, not a
+site the item's work would change. `.githooks/pre-commit` runs `backlog.py for` over
+every staged path alongside `adr.py for`. It reports each item whose derived scope covers
+a staged path, by file path, because a backlog item has no number.
 
-**Pros:** No second scoping syntax beside ADR's `scope:` frontmatter — the exact
-accidental complexity ADR 013 and [ADR 019][] already pushed back on, and one the
-Context measurement earns rather than assumes.
-**Cons:** Scope is only as complete as an item's own links; an item that names a path in
-prose without linking it, or omits the block entirely, derives an incomplete or empty
-scope and stays exactly as unreachable as it is today — this closes "does something find
-the paths an item names", not "does an item name the right paths", which is
-`docs/backlog/README.md`'s instruction to the author and stays one.
-**Risks:** The `docs/adr/`/`docs/backlog/` exclusion is a judgement call: an item that
-cites an ADR for context (most links into `docs/adr/` in the corpus today) derives no
-scope from that citation, so editing the cited ADR will not surface the item. Accepted
-because `adr.py for` already reports that ADR's own bound decisions, and because a
-backlog item citing an ADR is normally deleted by the same branch that would go on to
-edit it, leaving little window for the omission to matter.
+**Pros:** No second scoping syntax beside the `scope:` frontmatter of an ADR. ADR 013 and
+[ADR 019][] both already pushed back on that kind of accidental complexity, and the
+Context measurement earns this option rather than assumes it.
+**Cons:** Scope is only as complete as an item's links. An item that names a path in
+prose without linking it, or that has no link block, derives an incomplete or empty
+scope and stays as unreachable as it is today. This option makes sure something finds
+the paths an item names. It does not check that an item names the right paths. That
+stays an instruction to the author in `docs/backlog/README.md`.
+**Risks:** Excluding `docs/adr/` and `docs/backlog/` is a judgement call. An item that
+cites an ADR for context derives no scope from that citation, so editing the cited ADR
+does not report the item. Most links into `docs/adr/` in the corpus today are citations
+of this kind. The risk is accepted for two reasons. `adr.py for` already reports the
+decisions that bind that ADR. And the branch that would edit the cited ADR normally
+deletes the item too, which leaves little time for the omission to matter.
 
 ### Option 3: An explicit `## Scope` list, kept beside the links
 
-Each item states its scope as its own bullet list, independent of what it links.
+Each item states its scope as its own bullet list, separate from what it links.
 
-**Pros:** Explicit rather than inferred, so an unlinked path can still be named, and nothing
-about the derivation's exclusions is a judgement call.
-**Cons:** A second scoping syntax next to ADR's `scope:` frontmatter, for a directory
-ADR 020 deliberately keeps as plain Markdown with no frontmatter. Two lists per item —
-the links and the scope bullets — is two places to keep in sync, which is exactly how
-`tags` decayed against a corpus nobody was checking (ADR 013).
-**Risks:** A scope list nobody is required to update the way a link is naturally added
-when a file is first discussed drifts from what the item actually concerns faster than
-the links would, buying explicitness at the cost of a field only as good as its own
-maintenance.
+**Pros:** Scope is stated, not inferred. An item can name a path it does not link, and no
+exclusion rule needs judgement.
+**Cons:** A second scoping syntax next to the `scope:` frontmatter of an ADR, for a
+directory that ADR 020 keeps as plain Markdown with no frontmatter on purpose. Each item
+would carry two lists, the links and the scope bullets, to keep in step. That is how
+`tags` decayed in a corpus nobody checked (ADR 013).
+**Risks:** An author adds a link when they first discuss a file, but nothing requires
+them to update a scope list. The list would drift from what the item concerns faster
+than the links would. It buys explicitness with a field that is only as good as its
+upkeep.
 
 ## Decision
 
-Option 2. Deferred work stays exactly where ADR 020 put it — one plain Markdown file
-per item under `docs/backlog/`, the issue tracker still unused for it — and gains a
-derived scope and a reverse lookup, `backlog.py`'s `for`, that `.githooks/pre-commit` runs
-as a sibling of `adr.py`'s own. The corpus measurement is what settles it over Option 3:
-eleven of twelve items already write the reference-link block this reads, so the
-mechanism costs no new authoring habit, where an explicit scope list would be a second
-habit next to one already followed.
+Option 2. Deferred work stays where ADR 020 put it: one plain Markdown file per item under
+`docs/backlog/`, with the issue tracker still unused for it. Each item gains a derived
+scope, and `backlog.py` gains a reverse lookup, `for`, that `.githooks/pre-commit` runs
+beside `adr.py`'s own. The corpus count settles it over Option 3. Eleven of twelve items
+already write the reference-link block that `backlog.py` reads, so the mechanism asks for
+no new authoring habit. An explicit scope list would add a second habit next to one
+authors already follow.
 
-Two departures from `adr.py`'s own `binding()` follow from what a backlog item is, not
-from a shortcut:
+`backlog.py` departs from `adr.py`'s `binding()` in two ways. Both follow from what a
+backlog item is, and neither is a shortcut:
 
 - **A dangling scope entry is never reported, and never fails a build.** ADR 013's
-  `scope_problems()` is right to fail `check` on a decision's `scope` naming nothing —
-  a decision is still binding and its target moved or was deleted under it. A finished
-  backlog item naming a path that is now gone is the ordinary case, not rot: the work is
-  most likely done, and the item should already have been deleted with it. Failing a
-  build over that would turn finishing work into a chore, so `backlog.py` carries no
-  `scope_problems()` equivalent and no `check` command at all — there is nothing here
-  for `pr.yml` to gate on.
+  `scope_problems()` is right to fail `check` when a decision's `scope` names nothing. The
+  decision still binds, and its target moved or was deleted under it. A finished backlog
+  item that names a deleted path is the ordinary case, not decay. The work is most likely
+  done, and the branch that did it should already have deleted the item. Failing a build
+  over that would make finishing work a chore. So `backlog.py` has no `scope_problems()`
+  equivalent and no `check` command, and `pr.yml` has nothing to gate on.
 - **Items are read fresh from `docs/backlog/*.md` on every lookup, and reported by
-  path.** An item is deleted, not archived — nothing should keep pointing at one the way
-  `INDEX.md` keeps every ADR number forever — so `backlog.py` keeps no identity across
-  commits for a deleted item to leave behind, and names each match by its own file path,
-  having no number to report instead.
+  path.** An item is deleted, not archived. Nothing should keep pointing at a deleted
+  item the way `INDEX.md` keeps every ADR number forever. So `backlog.py` keeps no
+  identity across commits that a deleted item could leave behind. It names each match by
+  file path, because an item has no number.
 
 ## Consequences
 
 - `.githooks/pre-commit` prints a second advisory block, `Backlog items concerning these
-  paths:`, beneath the existing `Decisions binding these paths:` one, over the same
-  staged-path list — silent, as that one is, when nothing matches.
-- Supersedes ADR 020, whose Consequences state the routing gap above as standing;
-  editing that sentence in place would breach `writing-adrs`'s "supersede, don't edit".
-  Its convention survives unchanged; only the named gap closes.
-- `validate-the-plugin-hook-configuration-in-ci.md` derives no scope today, having no
-  link-definitions block to derive one from — a live demonstration of the Option 2 Cons
-  above, left as it is rather than fixed here.
-- No CI job runs `backlog.py`, matching `adr.py for`'s own advisory-only reach: both run
-  only in a clone that has set `core.hooksPath` per ADR 013's own Consequences.
+  paths:`, below the existing `Decisions binding these paths:` block, over the same list
+  of staged paths. Like that block, it prints nothing when nothing matches.
+- Supersedes ADR 020, whose Consequences describe the routing gap above as open. Editing
+  that sentence in place would break the "supersede, don't edit" rule in `writing-adrs`.
+  ADR 020's convention stays unchanged. Only the gap it named closes.
+- `validate-the-plugin-hook-configuration-in-ci.md` derives no scope today, because it
+  has no link-definition block. It shows the Cons of Option 2 in practice, and this
+  decision leaves it as it is.
+- No CI job runs `backlog.py`. This matches `adr.py for`, which is also advisory only.
+  Both run only in a clone that has set `core.hooksPath`, as ADR 013's own
+  Consequences describe.
 
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: 014-cite-adrs-from-code-comments.md
