@@ -1,5 +1,53 @@
 # Changelog
 
+## 9.1.0 - 2026-11-17
+
+### For phx plugin users
+
+#### Added
+
+- **`phx:technical-writing`**, a writing standard for prose a person reads: docs, ADRs,
+  READMEs, pull-request descriptions, issue bodies, and long commit messages. It needs no
+  setup: once you update the plugin, your agent loads it whenever it writes or reviews
+  prose like that, in any of your projects. It layers Diátaxis structure, Google developer
+  style, Simplified Technical English instruction rules, and Global English syntax, then
+  lists AI tells to cut. Its rules guard against the failures a trial on phx's own ADRs
+  turned up: a rewrite keeps the author's meaning, a template such as the ADR format keeps
+  its form, and text that another document quotes stays word for word. The skill leaves
+  conversational replies, and text only a model reads, such as a skill or prompt, alone.
+  It merges `technical-writing` and `unslop` from
+  [`cursor/plugins`](https://github.com/cursor/plugins/tree/bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7/pstack/skills)
+  under their MIT licence, and this plugin maintains it from here on without tracking
+  upstream. See [the
+  skill](https://github.com/todofixthis/phx-claude-siat/blob/9317a4c8839d408a1b78ac3617a99954ac4122c6/skills/technical-writing/SKILL.md)
+  for the full rules.
+
+#### Changed
+
+- The README section on the Superpowers wrappers is now titled "Superpowers wrapper
+  skills", so its anchor changed from `#superpowers-wrapper-scripts` to
+  `#superpowers-wrapper-skills`. Update any link you keep to it.
+
+### For contributors
+
+#### Changed
+
+- The ADRs, `README.md`, `docs/release-automation.md`, `docs/writing-adrs-hooks.md`, and
+  the backlog items now follow the new `phx:technical-writing` skill. Every decision, ADR
+  frontmatter, ADR headings, link definitions, and the paths each backlog item names are
+  as they were, so `docs/adr/INDEX.md`, the hooks, and the pre-commit hook's backlog
+  lookup behave the same. Expect a large diff, and a `git blame` that points at the
+  rewrite, across those files.
+  [#107](https://github.com/todofixthis/phx-claude-siat/pull/107) has the method and the
+  checks.
+- The README's contributor guidance, covering the branch policy, the `scripts/` test
+  command, and the CI gates, moved out of "Git hooks" into its own "Contributing" section.
+- Three headings in `docs/release-automation.md` now name tasks, so two section anchors
+  changed. `#rollout-order` is now `#add-both-secrets-before-the-workflow-reaches-main`,
+  and `#porting-this-to-a-project-that-cant-keep-a-bypass` is now
+  `#port-this-to-a-project-that-cant-keep-a-bypass`. Nothing in this repository linked to
+  them. Update any link you keep elsewhere.
+
 ## 9.0.1 - 2026-11-16
 
 ### For phx plugin users
