@@ -10,196 +10,195 @@ revisit-when: An ADR here is archived on a rule, making a coverage check specifi
 
 ## Context
 
-[`writing-adrs`][] archives a decision — keeps it in force while dropping it from the index
-agents load — only where a defence exists that a breacher meets while the work is still
-being planned. It named two: a comment wherever a breach would be authored, and a breach so
-large it needs its own ADR. Both were written before an agent could load instructions scoped
-to file globs.
+[`writing-adrs`][] archives a decision, keeping it in force while dropping it from the index
+that agents load, only where a defence exists that a breacher meets while the work is still
+being planned. The skill named two such defences: a comment wherever a breach would be
+authored, and a breach so large it needs its own ADR. Both were written before an agent
+could load instructions scoped to file globs.
 
-A sibling repository has since archived on a third. [filters-pydantic ADR 004][] holds a
-docstring-per-test-function convention in force and out of its index, defended by a rule
-file — `.agents/rules/testing.md`, reached through a `.claude/rules` symlink — whose `paths`
-frontmatter loads the convention whenever an agent reads a matching test file. It reached
-that defence through the skill's own escape hatch, "unless another meets that same timing
-test", and the kind of defence holds up. Its coverage does not: the rule matches
-`**/test_*.py` alone against a scope of `test/` and `scripts/`, so most of what the decision
-binds meets nothing, and the rule's own path is absent from that scope. A defence admitted
-on judgement alone was judged generously the first time it was used.
+A sibling repository has since archived a decision on a third defence.
+[filters-pydantic ADR 004][] keeps a docstring-per-test-function convention in force and out of its index. A
+rule file defends it: `.agents/rules/testing.md`, reached through a `.claude/rules` symlink,
+whose `paths` frontmatter loads the convention whenever an agent reads a matching test file.
+That ADR reached the defence through the skill's own escape hatch, "unless another meets
+that same timing test", and the kind of defence holds up. Its coverage does not. The rule
+matches only `**/test_*.py` against a scope of `test/` and `scripts/`, so most of what the
+decision binds meets nothing, and the rule's own path is absent from that scope. The first
+time anyone used a defence admitted on judgement alone, they judged it generously.
 
-The load semantics are the other half. That ADR records one gap — a rule does not load on
-the `Write` creating a matching file ([anthropics/claude-code#23478][], closed as not
-planned) — and the rest went unmeasured. Measured here against
-this repository's [`testing.md`][], by reading a matching file with the read tool and then
-with `sed`: a rule loads on the read tool, in a subagent as much as a main session, and not
-on a shell read at all. The session that measured it ran
-under a harness mode whose standing instruction was to read files with `sed` in preference
-to the read tool, which would have switched the defence off for every file it touched.
+The load semantics are the other half of the problem. That ADR records one gap: a rule does
+not load on the `Write` that creates a matching file ([anthropics/claude-code#23478][],
+closed as not planned). It measured nothing else. This repository measured the rest against
+its own [`testing.md`][], by reading a matching file first with the read tool and then with
+`sed`. A rule loads on the read tool, in a subagent as well as in a main session. It does
+not load on a shell read at all. The session that took the measurement ran under a harness
+mode whose standing instruction was to prefer `sed` over the read tool. Under that mode the
+defence would have been off for every file the session touched.
 
-None of it was discoverable from a repository before this ADR: no `rg` answered "what
+None of this was discoverable from a repository before this ADR. No `rg` answered "what
 loads a rule", so an author who took the mechanism at its name archived a decision that
-reads as defended and is not — and reads that way indefinitely, an archived ADR being
+reads as defended and is not. It reads that way indefinitely, because an archived ADR is
 invisible by design.
 
 ## Options
 
-Options 2, 3 and 4 all put a decision's constraint into a second file that can drift from
-the ADR, and all rest on a harness feature this repository does not control. Neither cost
-ranks them. What separates them is how much machinery stands behind the admission.
+Options 2, 3, and 4 all put a decision's constraint into a second file that can drift from
+the ADR, and all three rest on a harness feature this repository does not control. Neither
+cost ranks them. What separates them is how much machinery stands behind the admission.
 
 ### Option 1: Do nothing — leave it to the escape hatch
 
-The skill keeps two named defences and admits others meeting the timing test, as it already
-does.
+The skill keeps its two named defences and, as now, admits any other that meets the timing
+test.
 
-**Pros:** The hatch already carried an archival whose choice of defence was right.
-**Cons:** Each author re-derives the load semantics; the honest ones spend a probe, the rest
-guess.
-**Risks:** The generous reading is the natural one, and the sibling ADR is the evidence — a
+**Pros:** The hatch has already carried one archival, and its choice of defence was right.
+**Cons:** Each author re-derives the load semantics. The honest ones spend a probe, and the
+rest guess.
+**Risks:** The generous reading is the natural one, and the sibling ADR is the evidence. A
 partial rule looks total, and the shortfall surfaces only when someone relitigates the
 decision.
 
 ### Option 2: Admit it as an author-judged defence (Accepted)
 
-`writing-adrs` names the rule beside the comment and states what a qualifying one must do:
-have every path in `scope` bar its own entry reached by its globs or by another named
-defence, name the ADR
-and state the constraint, be written in the same change as the archival, live in the
-repository, be named in `archived-because`, and have its own path listed in `scope`. The
-load semantics go in dated, with the probe that produced them. Nothing checks any of it.
+`writing-adrs` names the rule beside the comment and states what a qualifying rule must do.
+Its globs, or another named defence, must reach every path in `scope` except the rule's own
+entry. The rule must name the ADR and state the constraint, be written in the same change as
+the archival, live in the repository, and be named in `archived-because`. Its own path must
+be listed in `scope`. The load semantics go in with a date and the probe that produced them.
+Nothing checks any of it.
 
-**Cons:** Rests on the same author judgement that read the first rule generously.
-**Risks:** The dated semantics go stale on somebody else's release schedule, and a reader
-who trusts them archives on a rule the harness has stopped loading.
+**Cons:** It rests on the same author judgement that read the first rule generously.
+**Risks:** The dated semantics go stale on somebody else's release schedule. A reader who
+trusts them then archives on a rule the harness has stopped loading.
 
 ### Option 3: Admit it and check glob coverage in the generator
 
-[`adr.py`][] gains a check: for an `Archived` ADR naming a rule, every path under every
+[`adr.py`][] gains a check. For an `Archived` ADR that names a rule, every path under every
 `scope` prefix must match some glob in that rule.
 
-**Pros:** Catches the one failure Context names as the natural mistake, and needs no new
-grammar, `scope` rejecting globs.
-**Cons:** A check sees globs and prefixes, never comments — so it fails every archival that
-legitimately composes a rule with comments in the files a rule cannot reach, which is the
-shape the skill recommends.
-**Risks:** What it should do about a composed defence has to be decided against a real
-archival, and there is none here; a check specified without one is believed anyway.
+**Pros:** It catches the one failure that Context names as the natural mistake. It needs no
+new grammar, because `scope` rejects globs.
+**Cons:** A check sees globs and prefixes, never comments. It therefore fails every archival
+that legitimately composes a rule with comments in the files the rule cannot reach, and that
+is the shape the skill recommends.
+**Risks:** What the check should do about a composed defence has to be decided against a
+real archival, and there is none here. A check specified without one is believed anyway.
 
 ### Option 4: Generate the rule from the ADR's frontmatter
 
 A generator writes `.agents/rules/adr-NNN.md` from each decision's `scope` and `summary`, so
 coverage holds by construction.
 
-**Pros:** Coverage cannot drift from `scope`, one being derived from the other, and no
-author translates prefixes into globs by hand.
+**Pros:** Coverage cannot drift from `scope`, because the generator derives one from the
+other, and no author translates prefixes into globs by hand.
 **Cons:** `summary` says what was decided, not what to do, so the generated rule spends a
 reader's context on an index row rather than an instruction.
 **Risks:** ~~Every matching read pulls in prose nobody wrote, which is how a mechanism
 meant to cheapen context makes it dearer.~~ Measured after this ADR and found to be once
-per rule per session, not once per read — see ADR 019.
+per rule per session, not once per read. See ADR 019.
 
 ## Decision
 
 Adopt Option 2, and treat the rule as a peer of the comment rather than its replacement.
 
-Option 4 loses on the half no generator supplies. A rule earns its place by telling an
-author what to do at the moment they would do otherwise, and that sentence has to be
-written. [ADR 014][] made the same call against a checked citation schema: a mechanism that
-buys the cheap half and reports a defended corpus is worse than none, because it is
-believed.
+Option 4 loses on the half that no generator supplies. A rule earns its place by telling an
+author what to do at the moment they would do otherwise, and someone has to write that
+sentence. [ADR 014][] made the same call against a checked citation schema: a mechanism that
+buys the cheap half and reports a defended corpus is worse than none, because people
+believe it.
 
-Option 3 is postponed rather than rejected, and for 014's reason rather than that one. Glob
-coverage is mechanically decidable, and saying otherwise would be wrong — but coverage is
-not the whole bar, because defences compose, and the half a check cannot see is the same
-half 014 could not check: where a comment sits, and whether it reaches. What such a check
-should do with a rule that legitimately stops short has to be settled against a real
-archival, and there is none here, so `revisit-when` carries it.
+Option 3 is postponed rather than rejected, and for 014's reason rather than Option 4's.
+Glob coverage is mechanically decidable, and saying otherwise would be wrong. But coverage
+is not the whole bar, because defences compose. The half a check cannot see is the half 014
+could not check: where a comment sits, and whether it reaches. What such a check should do
+with a rule that legitimately stops short has to be settled against a real archival, and
+there is none here, so `revisit-when` carries it.
 
 Listing the rule's own path in `scope` follows [ADR 013][], which puts [`pr.yml`][] in its
-own scope because narrowing that filter is how the decision gets breached. Narrowing a
-rule is how an archival gets breached, and the pre-commit lookup reports the ADR to
-whoever stages that edit. A deletion escapes that lookup, and is caught later and
-elsewhere.
+own scope because narrowing that filter is how someone breaches that decision. Narrowing a
+rule is how someone breaches an archival, and the pre-commit lookup reports the ADR to
+whoever stages that edit. A deletion escapes that lookup, and is caught later and elsewhere.
 
 ## Consequences
 
-- Archiving on a rule costs more than archiving on a comment: prefixes translated into
-  globs, coverage checked against the file the globs least obviously reach, the rule named
-  in `scope`, and the rule watched as it loads.
-- No archival meets the bar this sets, the precedent included. The sibling ADR's coverage
-  falls short, and [ADR 016][] cannot archive on this repository's `testing.md` for the same
-  reason — that rule matches `**/test_*.py` and `**/*_test.py`, while 016 scopes `scripts/`,
-  where ten modules are neither.
-- `scope` now carries entries naming where a defence lives, not only where a breach is
-authored — an extension of ADR 013's field for one case, leaving its test intact for every
-other entry, so 013 is neither superseded nor discharged. `generate_index` validates such
-an entry for `Archived` decisions as well as `Accepted` ones, so a deleted rule fails the
-build — on whichever later change runs the generator, since deleting the rule alone
-triggers neither the hook nor the `adr` job. It cannot tell that the entry names a rule,
-that its globs cover anything, or that a symlinked form of the path reaches the file the
-lookup will match.
-- `docs/adr/` and `skills/writing-adrs/` in scope means an ADR commit now reports three
-  decisions rather than two. ADR 013 answers that per-ADR: a scope wider than the decision
+- Archiving on a rule costs more than archiving on a comment. The author translates prefixes
+  into globs, checks coverage against the file the globs least obviously reach, names the
+  rule in `scope`, and watches the rule load.
+- No archival meets the bar this ADR sets, the precedent included. The sibling ADR's
+  coverage falls short, and [ADR 016][] cannot archive on this repository's `testing.md` for
+  the same reason. That rule matches `**/test_*.py` and `**/*_test.py`, while 016 scopes
+  `scripts/`, where ten modules match neither.
+- `scope` now carries entries that name where a defence lives, not only where a breach is
+  authored. This extends ADR 013's field for one case and leaves its test intact for every
+  other entry, so 013 is neither superseded nor discharged. `generate_index` validates such
+  an entry for `Archived` decisions as well as `Accepted` ones, so a deleted rule fails the
+  build. It fails on whichever later change runs the generator, since deleting the rule
+  alone triggers neither the hook nor the `adr` job. The generator cannot tell that the
+  entry names a rule, that its globs cover anything, or that a symlinked form of the path
+  reaches the file the lookup will match.
+- With `docs/adr/` and `skills/writing-adrs/` in scope, an ADR commit now reports three
+  decisions rather than two. ADR 013 answers that per ADR: a scope wider than the decision
   is that ADR's to narrow, and this one is as wide as the decision.
 - The skill ships to repositories whose agents load no rules at all. There the section
   qualifies nothing, which is the intended reading, and the dated semantics are theirs to
-  re-measure with the probe it names.
+  re-measure with the probe the section names.
 - ADR 014's deferred liveness check now has two defence shapes to specify for rather than
-  one. Its trigger — an ADR archived on a defence resting on a comment in code — is
-  untouched: this decision neither meets it nor closes a way it could arrive.
-- The `.claude/rules` symlink is load-bearing here rather than tidying: Claude Code scans
-  that path alone, so removing it stops every rule loading, and says nothing. Measured by
-  parking the symlink and re-reading a matching test file, which injected nothing.
-- Option 4's risk overstated the cost, measured later: a rule loads once per session at
-  the first matching read, not once per matching read. [ADR 019][] carries the measurement
-  and the decision it settled; this one's reasoning is unchanged, Option 4 having lost on
-  the judgement a generator cannot make.
+  one. Its trigger, an ADR archived on a defence that rests on a comment in code, is
+  untouched. This decision neither meets that trigger nor closes a way it could arrive.
+- The `.claude/rules` symlink is required here, not tidying. Claude Code scans only that
+  path, so removing the symlink stops every rule loading, and nothing reports it. Measured
+  by parking the symlink and re-reading a matching test file, which injected nothing.
+- A later measurement showed that Option 4's risk overstated the cost: a rule loads once
+  per session, at the first matching read, not once per matching read. [ADR 019][] carries
+  the measurement and the decision it settled. This ADR's reasoning is unchanged, because
+  Option 4 lost on the judgement a generator cannot make.
 
 ## Revisit watch
 
 Re-measured 2026-09-01 against `testing.md`, whose globs are `**/test_*.py` and
-`**/*_test.py`. The matching file was `scripts/adr/test_generate_index.py`, the
-non-matching one `scripts/adr/generate_index.py` beside it; each reader then reported what
-had arrived unasked, without opening anything under `.agents/`. Each was also asked for a
-Python line-length rule this repo does not have and said it had none, so the "yes" rows are
-not readers agreeing with the question:
+`**/*_test.py`. The matching file was `scripts/adr/test_generate_index.py`, and the
+non-matching one was `scripts/adr/generate_index.py` beside it. Each reader then reported
+what had arrived unasked, without opening anything under `.agents/`. Each reader was also
+asked for a Python line-length rule this repository does not have, and said it had none, so
+the "yes" rows are not readers agreeing with the question. Each arm gave this result:
 
 | Reader, tool, file | Rule loaded |
 |---|---|
-| Subagent, read tool, matching | yes — nine headings quoted correctly |
+| Subagent, read tool, matching | yes, nine headings quoted correctly |
 | Subagent, read tool, non-matching | no |
 | Subagent, `sed -n '1,60p'`, matching | no |
 | Main session, read tool, matching | yes |
 
-Re-running this needs **one fresh context per arm**: a rule loads once per session at the
-first matching read (ADR 019), so arms sharing a context return a spurious yes for whatever
-follows the first.
+Re-running this needs **one fresh context per arm**. A rule loads once per session, at the
+first matching read (ADR 019), so arms that share a context return a spurious yes for every
+arm after the first.
 
-**Limb 1 — an archival on a rule — is the limb the reader of this section is standing on.**
-It has not fired: nothing here is `Archived` on a rule yet. When yours does, it fires, and
-what it unlocks is Option 3, which the Decision parks precisely because what a coverage
-check "should do with a rule that legitimately stops short has to be settled against a real
-archival, and there is none here". Yours is that case, so settle it rather than only
-re-running the probe.
+**Limb 1, an archival on a rule, is the limb the reader of this section stands on.** It
+has not fired, because nothing here is `Archived` on a rule yet. When your archival is on
+a rule, the limb fires, and it unlocks Option 3. The Decision parks Option 3 because what
+a coverage check "should do with a rule that legitimately stops short has to be settled
+against a real archival, and there is none here". Your archival is that case, so settle it
+rather than only re-running the probe.
 
-**Limb 2's first clause — rules ceasing to load in a subagent — has not fired.** The
-subagent arm still loads, and the main-session arm is measured here rather than carried
-over from Context.
+**Limb 2's first clause, rules ceasing to load in a subagent, has not fired.** The subagent
+arm still loads the rule, and this section measures the main-session arm rather than
+carrying it over from Context.
 
-**Limb 2's second clause — shell-first reading becoming the default — is live and
+**Limb 2's second clause, shell-first reading becoming the default, is live and
 unsettled.** This session ran under a standing instruction, which the harness itself calls
-auto mode, to prefer `cat`, `head` and `sed -n` over the read tool wherever they would do;
-it is the same mode the original measurement ran under, and the second session known to
-run under it. That is enough to say the mode is not a one-off and not enough to call it a
-default: two observations by one author in one repository under one harness configuration
-are not independent samples, and counting further ones the same way never settles it. What
-would: the mode documented as a harness default, or it arriving in a session that did not
-opt into it.
+auto mode, to prefer `cat`, `head`, and `sed -n` over the read tool wherever they would do.
+It is the same mode the original measurement ran under, and this is the second session
+known to run under it. That is enough to say the mode is not a one-off, and not enough to
+call it a default. Two observations by one author in one repository under one harness
+configuration are not independent samples, and counting more of them the same way never
+settles the question. Two things would settle it: the harness documenting the mode as a
+default, or the mode arriving in a session that did not opt into it.
 
-Until then the hazard is per-session rather than global, and it bites at a bar of one.
-**Before you rely on a rule as a defence, check whether your own session is shell-first**
-— under it you read a matching file with `sed`, meet nothing, and the decision you archived
-is undefended for that whole session with nothing reporting it. The third arm above is that
-case exactly.
+Until then the hazard is per session rather than global, and a single session is enough
+for it to bite. **Before you rely on a rule as a defence, check whether your own session is
+shell-first.** In a shell-first session you read a matching file with `sed` and meet
+nothing. The decision you archived is then undefended for the whole session, and nothing
+reports it. The third arm above is exactly that case.
 
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md
 [ADR 014]: 014-cite-adrs-from-code-comments.md

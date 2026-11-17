@@ -13,101 +13,102 @@ revisit-when: A script must deliberately act on whichever checkout the caller is
 
 Every script under `scripts/` resolves its paths relative to the working directory:
 `Path("docs/adr")`, `Path(".claude-plugin/plugin.json")`, `Path(".github/workflows/pr.yml")`.
-Running them is documented as `python3 -m scripts.<area>.<name>` from the repo root
-([ADR 011][]), and `-m` puts the working directory on `sys.path`, so a wrong directory
-usually fails at import rather than silently.
+The documented way to run them is `python3 -m scripts.<area>.<name>` from the repository
+root ([ADR 011][]). `-m` puts the working directory on `sys.path`, so a wrong directory
+usually fails at import instead of failing silently.
 
-Usually, not always. With the repo root on `PYTHONPATH`, the import succeeds from anywhere
-and the paths then name whatever sits under the caller's working directory. [ADR 013][]
-raised the stakes: `generate_index` gained a `repo_root` used to check that every `scope`
-entry still names something on disk, so a wrong working directory no longer produces a
-missing-file error but a *plausible* one — entries reported as rotten against a tree that
-was never theirs.
+Usually, not always. With the repository root on `PYTHONPATH`, the import succeeds from
+anywhere, and the paths then name whatever sits under the caller's working directory.
+[ADR 013][] raised the stakes. `generate_index` gained a `repo_root`, which it uses to
+check that every `scope` entry still names something on disk. A wrong working directory
+therefore no longer produces a missing-file error. It produces a *plausible* error:
+entries reported as rotten against a tree that was never theirs.
 
-The two modules that resolve paths do it differently enough that one rule cannot obviously
-cover both. [`adr.py`][] takes its directories as parameters, defaulting them so
-callers need no arguments. [`validate_manifests.py`][] holds five module-level constants and
-reads them directly, and [its tests][] `chdir` into a fixture repo rather than patching all
-five — a stance its module docstring already records, along with the warning that anchoring
-one of them to `__file__` would break that silently.
+The two modules that resolve paths do so differently enough that one rule cannot obviously
+cover both. [`adr.py`][] takes its directories as parameters, with defaults so that callers
+need no arguments. [`validate_manifests.py`][] holds five module-level constants and reads
+them directly, and [its tests][] `chdir` into a fixture repository instead of patching all
+five. The module docstring already records that stance, along with a warning that
+anchoring one of the constants to `__file__` would silently break it.
 
 ## Options
 
-Options 2, 3 and 4 all make a script act on the tree it ships inside rather than on whatever
-the caller is standing in, which is the whole point and ranks none of them. They differ only
-in what that costs the tests, so that is what the comparison rests on.
+Options 2, 3, and 4 all make a script act on the tree it ships inside, not on whatever tree
+the caller is standing in. That is the whole point, so it ranks none of them. They differ
+only in what they cost the tests, and the comparison rests on that cost.
 
 ### Option 1: Do nothing — every path stays relative to the working directory
 
-**Pros:** One rule across `scripts/`, and every test keeps the `chdir`-into-a-fixture
-technique available.
-**Cons:** The invocation contract is documented but unenforced, so the one case that
-escapes it — the repo root on `PYTHONPATH` — is silent.
-**Risks:** A scope check run from the wrong tree reports entries as rotten and invites
-someone to "fix" the ADRs by deleting entries that were correct.
+**Pros:** One rule across `scripts/`, and every test can still `chdir` into a fixture.
+**Cons:** The invocation contract is documented but not enforced, so the one case that
+escapes it, the repository root on `PYTHONPATH`, fails silently.
+**Risks:** A scope check run from the wrong tree reports entries as rotten. That report
+invites someone to "fix" the ADRs by deleting entries that were correct.
 
 ### Option 2: Anchor defaults to `__file__`, keep injectable constants relative (Accepted)
 
 Where paths are parameters, their defaults resolve from the module. Where they are
-module-level constants a test redirects by `chdir`, they stay relative.
+module-level constants that a test redirects by `chdir`, they stay relative.
 
-**Pros:** Each module keeps the property its tests depend on, and neither has to be
+**Pros:** Each module keeps the property its tests depend on, and neither module has to be
 rewritten to gain it.
-**Cons:** Two forms in one directory, so the rule has to be read before a new script
-picks one.
-**Risks:** The distinction is invisible in a diff — a later edit turning a parameter into
-a module constant, or the reverse, silently moves a module to the wrong side.
+**Cons:** Two forms in one directory, so an author has to read the rule before a new
+script picks one.
+**Risks:** A diff does not show the distinction. A later edit that turns a parameter into a
+module constant, or the reverse, silently moves a module to the wrong side.
 
 ### Option 3: Anchor every path to `__file__`
 
-**Pros:** One form everywhere, and no module can be run against the wrong tree.
-**Cons:** `validate_manifests`'s tests redirect five constants with a single `chdir`;
-anchoring them means injecting all five per test, or patching them, which its docstring
-already rejects as a half-applied-patch risk.
+**Pros:** One form everywhere, and no module can run against the wrong tree.
+**Cons:** `validate_manifests`'s tests redirect five constants with a single `chdir`.
+Anchoring the constants means injecting all five per test, or patching them, and the
+module's docstring already rejects patching as a risk of a half-applied patch.
 **Risks:** Those tests would keep passing while silently reading the real repository
-instead of the fixture — the failure their current stance exists to prevent.
+instead of the fixture. That is the failure their current stance exists to prevent.
 
 ### Option 4: Require an explicit root argument on every script
 
 Each script takes `--repo-root`, with no default.
 
-**Pros:** Nothing is implicit, and a caller in the wrong tree is told so immediately.
-**Cons:** Every call site changes — the hook, two CI jobs, the release skill — to pass a
-value that is the same in all of them.
-**Risks:** The obvious way to supply it is `$(pwd)`, which reintroduces exactly the
-working-directory dependence this decision removes, now spelled out and looking deliberate.
+**Pros:** Nothing is implicit, and a caller in the wrong tree finds out at once.
+**Cons:** Every call site changes to pass a value that is the same in all of them: the
+hook, two CI jobs, and the release skill.
+**Risks:** The obvious way to supply the value is `$(pwd)`. That reintroduces the
+working-directory dependence this decision removes, now spelled out and looking
+deliberate.
 
 ## Decision
 
-Anchor a default; leave a constant alone. The discriminator is not which form reads better
-but **whether a test can inject a fixture path**: where it can, the default is free to name
-this repository, because no test relies on it; where it cannot, the path must stay relative
-or the tests lose the only redirection they have.
+Anchor a default, and leave a constant alone. The discriminator is not which form reads
+better, but **whether a test can inject a fixture path**. Where a test can, the default is
+free to name this repository, because no test relies on it. Where a test cannot, the path
+must stay relative, or the tests lose the only redirection they have.
 
-That makes `generate_index` the module to change and `validate_manifests` the module to
-leave, and it explains why the two now look different without either being wrong. It also
-predicts what a new script should do: take its paths as parameters and anchor the defaults,
-which is the better shape anyway, and keeps the exception from spreading.
+So `generate_index` is the module to change, and `validate_manifests` is the module to
+leave. The rule also explains why the two modules now look different without either being
+wrong. It predicts what a new script should do, too: take its paths as parameters and
+anchor the defaults. That is the better shape anyway, and it keeps the exception from
+spreading.
 
-`Path(__file__).resolve()` rather than `Path(__file__)`, so a symlinked checkout resolves to
-the real tree; this repository symlinks `CLAUDE.md` and `.claude`, so that case is not
+Use `Path(__file__).resolve()`, not `Path(__file__)`, so a symlinked checkout resolves to
+the real tree. This repository symlinks `CLAUDE.md` and `.claude`, so that case is not
 hypothetical.
 
 ## Consequences
 
 - A test that calls `generate()` with no arguments now rewrites this repository's real
-  index whatever the working directory is, where previously a `chdir` redirected it. The
-  test module says so, and its default-resolution tests assert the paths rather than
-  calling the function.
-- `.agents/rules/testing.md` gains the third stance: a module whose paths are parameters
-  is tested by injection, and the only test that changes directory is the one asserting a
-  `chdir` *cannot* redirect the defaults.
-- The two forms coexist in `scripts/`, so the rule has to be read rather than inferred
-  from a neighbouring file. That is the cost of Option 2 and it is paid every time someone
+  index whatever the working directory is. Before, a `chdir` redirected it. The test
+  module says so, and its tests of default resolution assert the paths instead of calling
+  the function.
+- `.agents/rules/testing.md` gains a third stance. A module whose paths are parameters is
+  tested by injection, and the only test that changes directory is the one asserting that
+  a `chdir` *cannot* redirect the defaults.
+- The two forms coexist in `scripts/`, so an author has to read the rule, not infer it from
+  a neighbouring file. That is the cost of Option 2, and the cost recurs every time someone
   adds a script.
 - Nothing enforces the distinction. A parameter demoted to a module constant keeps its
-  `__file__` anchor and quietly breaks the `chdir` its new tests would expect — the ADR is
-  the only thing standing where a check would go.
+  `__file__` anchor and quietly breaks the `chdir` that its new tests would expect. This
+  ADR is the only thing in the place where a check would go.
 
 [ADR 011]: 011-make-scripts-a-package.md
 [ADR 013]: 013-scope-adrs-by-the-paths-they-bind.md

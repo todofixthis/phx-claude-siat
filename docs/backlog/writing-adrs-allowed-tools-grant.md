@@ -6,24 +6,24 @@
 ## What
 
 Give [`skills/writing-adrs/SKILL.md`][] frontmatter that pre-approves
-`sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}"`, so the commands the skill
-tells the agent to run cost no permission prompt, and restore the assertion in
+`sh "${CLAUDE_SKILL_DIR}/adr.sh" "${CLAUDE_PLUGIN_DATA}"`, so the commands the skill tells
+the agent to run cost no permission prompt. Then restore the assertion in
 [`skills/writing-adrs/tests/test_skill_drift.py`][] that couples the grant to those
 command lines.
 
-The grant was removed 2026-09-03, measured not to work. In nested `claude -p` sessions
-launched with `--plugin-dir`, a skill carrying
-`allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/adr.py:*)` was permission-denied at
-invocation — the `Skill` tool itself — so the skill never loaded. With the invocation
-pre-approved the skill loaded, and the `adr.py` command was still denied under both the
+The grant was removed on 2026-09-03, because measurement showed it did not work. In nested
+`claude -p` sessions launched with `--plugin-dir`, a skill carrying
+`allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/adr.py:*)` was denied permission at
+invocation, on the `Skill` tool itself, so the skill never loaded. With the invocation
+pre-approved, the skill loaded, but the `adr.py` command was still denied under both the
 `:*` and the ` *` rule forms. So the grant cost a prompt and bought nothing.
 
 ## Why it is still worth doing
 
-Every `adr.sh` command the skill gives now prompts, as `nz-english`'s `scan.py` does: one
-per scaffold, per check, per lookup, in a skill whose point is that the mechanics are cheap.
-The block is the harness's, not the skill's, so this waits on a harness that honours a
-skill's `allowed-tools` for a bundled tool.
+Every `adr.sh` command the skill gives now prompts, as `nz-english`'s `scan.py` does. That
+is one prompt per scaffold, per check, and per lookup, in a skill whose point is that the
+mechanics are cheap. The harness, not the skill, causes the block, so this item waits on a
+harness that honours a skill's `allowed-tools` for a bundled tool.
 
 ## Acceptance
 
