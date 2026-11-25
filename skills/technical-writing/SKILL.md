@@ -126,13 +126,31 @@ These patterns mark text as machine-written. Scan for each one, then rewrite. Ke
 - **Chatbot phrases.** "I hope this helps!", "Let me know if...", "Of course!", "Certainly!", "Found the smoking gun!" Remove them.
 - **Sycophantic tone.** "Great question! You're absolutely right!" Respond directly.
 
+## Question each number before you check it
+
+A count or measurement of something that changes goes stale when its source moves, and a reader who counts under a slightly different question gets a different answer. Checking that a number is true does not show that the prose needs it. Before you check a number, ask how important it is to the message:
+
+1. If the number can be left out and the remaining prose loses no clarity, drop it. A command that lists the things counted, or the names of the things themselves, usually carries the point.
+2. If not, look for a more durable way to say it: "an overwhelming majority", not "20" or "75%".
+3. If the number itself is what conveys the message, keep it and hedge it: "48 violations as of this writing". A hedge says when the number was true, and covers only the figure it is attached to. The exception is a block that opens by stating when and with what it was measured: it hedges every number in it, parts and remainders included, so leave that block whole.
+
+Where no durable wording keeps what the reader needs, go to step 3. Where "Cut the AI tells" asks for a number, it means one that reaches step 3. A commit message, a PR description, or a release-notes entry under its version is dated by its commit or release, so a number kept there needs no hedge.
+
+Outside such a block, a number repeated from it or derived from another, such as a part, a remainder, "the other 8", or "its ninth", is a separate number. Ask again. So is a count of what one change added or fixed ("gains 11 suppressions"): a reader recounts the tree as it stands.
+
+Leave these numbers alone. An identifier does not go stale: an issue or ADR number, a version, a date, a commit hash. A number that is itself the rule is the message: a line-length limit, a threshold, a default, a value an instruction tells the reader to use, the output a tutorial tells the reader to expect.
+
+A count that restates a list the text then gives ("three rules", then their names) falls under step 1 only where the list can grow: the count goes stale when the list gains an item. A count of a fixed list, such as the terms of a recorded decision, stays.
+
+Apply these steps to prose you draft. In prose someone else wrote, report the number and whether it still holds, and leave it as written.
+
 ## Voice and project specifics
 
 - Where a template or another skill fixes a document's form, that form wins over this skill. For an ADR, the template is the Format section of `phx:writing-adrs`, so leave every heading in the ADR as written, punctuation included, along with its **Pros:**, **Cons:**, and **Risks:** labels and its frontmatter. In any document, search the repository for a heading's anchor before you rename it, and leave the heading alone if a link targets it.
 - Leave a sentence verbatim where another document quotes it, and leave quotations inside the document verbatim too. Before you reword a sentence in a document that others cite, such as an ADR, search the repository for a short, distinctive phrase from it. Hard-wrapped files split sentences across lines, so a search for the whole sentence can miss.
 - PR descriptions and commit messages are writing too. Every layer except Diátaxis applies to them. A PR body is a briefing that a reviewer can read in under a minute. Do not paste logs, SHA lists, or metric tables. Link them.
 - Product UI strings are not documentation. Use your product's copy guidelines for those.
-- Write real paths. Make every count or tree claim true at the commit that lands it, and include the command that regenerates it.
+- Write real paths. Make every tree claim, and every count or measurement that survives "Question each number before you check it", true at the commit that lands it. Include the command that regenerates it, or where no command does, say when and how it was measured.
 
 ## Worked example
 
