@@ -1,5 +1,40 @@
 # Changelog
 
+## 9.2.0 - 2026-11-26
+
+### For phx plugin users
+
+#### Changed
+
+- **`phx:technical-writing` now questions each number before it checks it.** When your
+  agent drafts prose with this skill, it asks whether each count or measurement needs to
+  be there, and only then checks that the number is true. The agent drops a number that
+  the prose does not need. Where durable wording carries the point, such as "more than
+  half", it uses that wording. It keeps a number that is itself the message, and says
+  when the number was true. A commit message, a PR description, or a release-notes
+  entry is dated by its commit or release, so a number kept there gets no such note. It
+  leaves identifiers, limits, defaults, and the output that
+  a tutorial tells the reader to expect alone. In prose that you or someone else wrote,
+  the agent reports a number and whether it still holds, and does not cut it. Expect
+  fewer counts in the docs, pull-request descriptions, and issue bodies that your agent
+  writes. See [the new
+  section](https://github.com/todofixthis/phx-claude-siat/blob/df0f014bf89fcbe827eeabcffcdfd156c1ef47ae/skills/technical-writing/SKILL.md#question-each-number-before-you-check-it)
+  for the rule, and
+  [#113](https://github.com/todofixthis/phx-claude-siat/pull/113) for the tests and the
+  cases it does not settle.
+- **Dependencies:** the bundled tooling now runs on PyYAML 6.0.4 for `phx:writing-adrs`
+  and `regex` 2026.11.19 for `phx:creative-commits`. You have nothing to do. Each tool
+  rebuilds its environment with uv on its first session or run after the update, which
+  needs network access once.
+
+### For contributors
+
+#### Changed
+
+- Dev tooling refreshed: `ruff` 0.17.6, and `astral-sh/setup-uv` v10.4.0 and
+  `actions/create-github-app-token` v3.4.0 in CI. Run `uv sync --locked` at the repo root
+  to match.
+
 ## 9.1.0 - 2026-11-17
 
 ### For phx plugin users
