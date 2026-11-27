@@ -1,9 +1,10 @@
 ---
-status: Accepted
+status: Superseded
 date: 2026-09-02
 scope: [.agents/skills/, scripts/frontmatter.py, skills/]
 summary: A tool shipped with a skill may write what it wholly owns — a generated index, a field with one right value given the command, a filename or heading number, its own fixed template, and text the agent passed to it verbatim — and never rewrite a sentence the agent wrote; the repository reaches the ADR frontmatter parser through a symlink into the skill rather than a copy.
 revisit-when: A shipped tool needs to rewrite a sentence the agent wrote, or validate_manifests.py stops needing the parser.
+superseded-by: 36
 ---
 
 # 023: Let a shipped tool write what it wholly owns

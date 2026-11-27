@@ -46,11 +46,11 @@ The work has failed, even if every test passes, where any of these is true:
   same change. `validate_manifests.py` fails the build otherwise.
 - **ADR 017.** The tool needs no install step, and a test fails when `SKILL.md` and the
   code drift apart.
-- **ADR 017 and ADR 023 do not admit what this tool does.** ADR 017 says a shipped tool
+- **ADR 017 and ADR 023 did not admit what this tool does, so ADR 036 does.** ADR 017 says a shipped tool
   "reports rather than edits". ADR 023 lets one write what it wholly owns, which includes
   text the agent passed to it verbatim. The `--with` value is such text, but the tool
   writes it into a consumer's source file, which the tool does not own, and then restores
-  the file. See "A new ADR comes first".
+  the file. See "ADR 036 comes first".
 - **ADR 027.** The target file comes from `--file`, and the test command runs in the
   working directory. Neither changes.
 - **ADR 014.** Comments under `skills/` ship to users who have no `docs/adr/`. Name the
@@ -71,16 +71,18 @@ run one tool and nothing else.
 
 Phoenix chose A.
 
-## A new ADR comes first
+## ADR 036 comes first
 
-Before any code moves, record a decision with `phx:writing-adrs`. The proposal is to
-admit one more class of write for a shipped tool: an edit the agent specified verbatim,
-which the tool reverses before it exits. The ADR must say what makes that safe (the
-byte-exact restore, the `finally`, the signal handlers) and what it cannot cover (a hard
-kill). Scope it to `skills/mutation-testing/`. Follow `phx:writing-adrs` for how the
-new ADR relates to ADR 017 and ADR 023, including whether either gains a
-`## Revisit watch` entry. ADR 017's `revisit-when` names another skill shipping tooling,
-which this is. Phoenix approves the ADR before implementation starts.
+ADR 036 records the decision that lets this tool ship. It supersedes ADR 023, restates
+ADR 023's four kinds of write, and admits a fifth: an edit to a consumer's file that the
+agent specified verbatim and the tool reverses before it exits. It was superseded, not
+amended, because ADR 023 says "never" and `phx:writing-adrs` treats a contradiction of
+such a claim as a partial supersession. Phoenix approves ADR 036 before implementation
+starts.
+
+ADR 036 sets conditions the tool must meet. Two of them are new work, listed under
+"Changes to the tool": the copy of the original bytes, and a test for the restore on
+`SIGTERM` and `SIGHUP`.
 
 ## Design
 
@@ -96,8 +98,16 @@ The tool stays standard library only.
 - the command, as `python3 ${CLAUDE_SKILL_DIR}/mutate.py --file … --anchor … --with …
   -- <test command>`;
 - how to pick a mutation that still parses, such as `if False:` in place of a condition;
+- passing the narrowest test command that covers the check, usually one test module,
+  because the tool runs the command twice;
+- re-running with the whole suite after a MISSED from a narrow command, because that
+  MISSED says only that the narrow command does not cover the check. CAUGHT needs no
+  second run;
 - what to do on each verdict, moved from `.agents/rules/testing.md`;
-- recovery after a hard kill, with `git status` and `git restore`;
+- recovery after a hard kill, from the copy the tool kept, and not with `git restore`;
+- giving the command more time than two runs of the suite can take, because a harness
+  that stops a long command may send a signal the tool cannot catch. The tool's own
+  bound is 300 seconds for each run;
 - the limits: unittest output only, POSIX only. With any other runner, the agent says so
   and stops, because a real catch would report UNKNOWN;
 - reporting which checks were mutated and what caught each.
@@ -127,11 +137,22 @@ Everything not listed here moves unchanged.
   and it printed CAUGHT and exited 0 on a pytest usage error. That breaks the second
   anti-goal. Report CAUGHT only where the output also carries the `Ran N tests` line
   that `unittest` prints. Otherwise report UNKNOWN. Claude's call.
-- **The tool runs the suite once before it mutates anything (proposed, Phoenix to
-  confirm).** A suite that already fails reports CAUGHT for a check that no test covers.
-  The baseline run uses the same command, timeout, and memory cap. Where it does not
-  pass, the tool mutates nothing, says the suite must pass first, and exits non-zero.
-  The cost is that every mutation runs the suite twice.
+- **The tool runs the command once before it mutates anything.** A suite that already
+  fails reports CAUGHT for a check that no test covers. The baseline run uses the same
+  command, timeout, and memory cap. Where it does not pass, the tool mutates nothing,
+  says the suite must pass first, and exits non-zero. Phoenix agreed to this. Every
+  mutation therefore runs the command twice, and a narrow command keeps both runs
+  short (see "The skill"). On this container, the whole `writing-adrs` suite ran in
+  about 6 seconds and one of its test modules in about 0.1 seconds.
+- **The tool keeps a copy of the original bytes until the restore succeeds.** ADR 036
+  requires it. The copy goes in a file outside the consumer's tree, and the tool deletes
+  it after the restore. A kill the tool cannot catch leaves the copy behind. A later run
+  on the same file finds the copy, mutates nothing, and prints how to put the original
+  back. The mutation runs before the new check is committed, so `git restore` would
+  discard the check as well. Where the copy lives and how a run finds it are the
+  builder's call.
+- **A test covers the restore on `SIGTERM` and `SIGHUP`.** No test sends either signal
+  today, and ADR 036 rests on those handlers.
 - **The timeout and the memory cap stay fixed.** Both suit the suites in this repository.
   `SKILL.md` states them as limits, and the backlog item records them. Reword the
   comment that justifies the cap as "enough for any suite here".
@@ -151,8 +172,11 @@ Everything not listed here moves unchanged.
   `uv lock`. Update the comments in those two files that count the tool-shipping skills.
 - Add `skills/mutation-testing/` to the `scope` of ADR 031, which lists each workspace
   member by path. Leave its summary and body as written. Claude's call.
-- Repoint the `mutate.py` link definitions in ADR 016 and ADR 027. Change no sentence
-  in either.
+- Repoint the `mutate.py` link definitions in ADR 016, ADR 027, and ADR 036. Change no
+  sentence in any of them.
+- Add a `## Revisit watch` entry to ADR 017 once the coupling test exists. Its trigger
+  names another skill shipping tooling. Say what the new test couples and whether the
+  per-skill tests now share a shape worth generalising.
 - Add the skill to the README table, with a note on its prerequisites: `python3` 3.10 or
   newer, `git`, a POSIX system, and a `unittest` suite. CI tests the tool on Python 3.12
   only, as it does `scan.py`.
@@ -204,7 +228,13 @@ the tool working on another stack or platform. These are known now:
 - the tool is POSIX-only;
 - the 300-second timeout is fixed;
 - the 2 GiB cap limits address space, not resident memory, so a suite that starts a JVM
-  or Node may fail under it.
+  or Node may fail under it;
+- each invocation runs its own baseline. A batch mode that takes several mutations and
+  runs one baseline would cut the runs from 2N to N+1 where a suite is slow.
+
+One finding is about this repository, not the tool. `python -m unittest discover -s tests
+-t .` fails in `skills/creative-commits` before any test runs, because its `tests/` has
+no `__init__.py`. Decide during the build whether to fix that here or record it.
 
 Add to the item as you build. The pull request description summarises it.
 

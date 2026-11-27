@@ -205,6 +205,8 @@ the matrix satisfies it.
   it wholly owns: a generated index, a field with one right value given the command, its
   own template, and text the agent passed it. It never writes a sentence the agent wrote.
   The other two clauses stand as written.
+- [ADR 036][] supersedes ADR 023 and admits one more kind of write: an edit to a
+  consumer's file that the agent specified verbatim and the tool reverses before it exits.
 - **A sweep is slower than nine `rg` processes**, at about 28,000 lines a second in pure
   Python. That is seconds for an ordinary repository and minutes for a very large
   monorepo. The tool caps the report per row, so the report's size stays bounded whatever
@@ -224,6 +226,7 @@ the matrix satisfies it.
 [ADR 006]: 006-validate-the-declaration-to-catch-mirror-drift.md
 [ADR 022]: 022-ship-the-adr-tooling-and-hooks-with-the-skill.md
 [ADR 023]: 023-let-a-shipped-tool-write-what-it-wholly-owns.md
+[ADR 036]: 036-let-a-shipped-tool-make-an-edit-it-reverses.md
 [`nz-english`]: ../../skills/nz-english/SKILL.md
 [`pr.yml`]: ../../.github/workflows/pr.yml
 [`scan.py`]: ../../skills/nz-english/scan.py
