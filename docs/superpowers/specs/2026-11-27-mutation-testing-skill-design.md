@@ -80,9 +80,8 @@ amended, because ADR 023 says "never" and `phx:writing-adrs` treats a contradict
 such a claim as a partial supersession. Phoenix approves ADR 036 before implementation
 starts.
 
-ADR 036 sets conditions the tool must meet. Two of them are new work, listed under
-"Changes to the tool": the copy of the original bytes, and a test for the restore on
-`SIGTERM` and `SIGHUP`.
+ADR 036 sets conditions that the tool in `scripts/dev/` does not meet. Each is new work,
+listed under "Changes to the tool".
 
 ## Design
 
@@ -144,15 +143,30 @@ Everything not listed here moves unchanged.
   mutation therefore runs the command twice, and a narrow command keeps both runs
   short (see "The skill"). On this container, the whole `writing-adrs` suite ran in
   about 6 seconds and one of its test modules in about 0.1 seconds.
-- **The tool keeps a copy of the original bytes until the restore succeeds.** ADR 036
-  requires it. The copy goes in a file outside the consumer's tree, and the tool deletes
-  it after the restore. A kill the tool cannot catch leaves the copy behind. A later run
-  on the same file finds the copy, mutates nothing, and prints how to put the original
-  back. The mutation runs before the new check is committed, so `git restore` would
-  discard the check as well. Where the copy lives and how a run finds it are the
-  builder's call.
+- **The tool saves a copy of the original bytes before it edits.** ADR 036 requires it.
+  The copy goes in a file outside the consumer's tree. The tool prints where the copy is
+  before it writes the mutation, and deletes the copy only after the restore succeeds. A
+  kill the tool cannot catch leaves the copy behind. A run on a file that already has a
+  copy mutates nothing and prints how to put the original back. That refusal also stops
+  a second run from reading mutated bytes as the original. The mutation runs before the
+  new check is committed, so `git restore` would discard an unstaged check as well.
+  Where the copy lives and how a run finds it are the builder's call.
+- **The tool can restore from the moment it writes.** Today `mutate()` writes the
+  mutated file and then installs the signal handlers, so a signal between the two leaves
+  the file mutated. Install the handlers and open the `try` before the write.
 - **A test covers the restore on `SIGTERM` and `SIGHUP`.** No test sends either signal
   today, and ADR 036 rests on those handlers.
+- **No bytecode from the mutated source stays valid.** CPython accepts a cached `.pyc`
+  where the source has the same size and the same modification time in whole seconds.
+  The ADR's reviewer reproduced the fault on Python 3.13: a same-length mutation,
+  restored within one second, left the mutated bytecode in `__pycache__`, and the next
+  run executed it. A narrow command makes that timing likely. The tool must make sure
+  that the mutated run compiles the mutated source and that every later run compiles
+  the original. One way is to control the file's modification time: give the mutated
+  file a time whose whole second differs from the original's, and restore the original
+  time with the bytes. The mechanism is the builder's call. An end-to-end test proves
+  it: a same-length mutation, a suite that runs in well under a second, then a second
+  run of the suite that must pass.
 - **The timeout and the memory cap stay fixed.** Both suit the suites in this repository.
   `SKILL.md` states them as limits, and the backlog item records them. Reword the
   comment that justifies the cap as "enough for any suite here".
@@ -229,6 +243,9 @@ the tool working on another stack or platform. These are known now:
 - the 300-second timeout is fixed;
 - the 2 GiB cap limits address space, not resident memory, so a suite that starts a JVM
   or Node may fail under it;
+- the bytecode fix is specific to CPython. Another stack has its own build cache;
+- one mutation of a file can run at a time, and the restore overwrites anything else
+  written to the file during the run;
 - each invocation runs its own baseline. A batch mode that takes several mutations and
   runs one baseline would cut the runs from 2N to N+1 where a suite is slow.
 
