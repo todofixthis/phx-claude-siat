@@ -2,8 +2,8 @@
 status: Accepted
 date: 2026-11-27
 scope: [.agents/skills/, hooks/, scripts/frontmatter.py, skills/]
-summary: A tool shipped with a skill may write what it wholly owns — a generated index, a field with one right value given the command, a filename or heading number, its own fixed template, and text the agent passed to it verbatim — and may make one edit to a consumer's file that the agent specified verbatim, provided it first saves the original outside the consumer's tree, writes nothing else there, and puts the file back byte for byte before it exits; it never leaves any other text in a consumer's file changed, and the repository reaches the ADR frontmatter parser through a symlink into the skill, not a copy or an import by path.
-revisit-when: A shipped tool needs to leave text it does not own changed after it exits; a file a shipped tool edited and should have put back reaches a commit or a later command still changed; a shipped tool needs to make such edits concurrently or several in one run; another tool claims the reversed edit; or nothing under scripts/ imports the frontmatter parser any longer.
+summary: A tool shipped with a skill may write what it wholly owns — a generated index, a field with one right value given the command, a filename or heading number, its own fixed template, and text the agent passed to it verbatim — and the mutation tool may make an edit to a consumer's file that the agent specified verbatim, provided it first saves the original to a copy outside the consumer's tree, refuses a file that already has a copy, writes nothing else in that tree, and puts the file back byte for byte, before it exits or afterwards from the copy, so that no later run executes the edited code; no shipped tool leaves any other text in a consumer's file changed, a second tool making such an edit needs its own ADR, and the repository reaches the ADR frontmatter parser through a symlink into the skill, not a copy or an import by path.
+revisit-when: A shipped tool needs to leave text outside the kinds listed here changed after it exits; a file a shipped tool edited and should have put back reaches a commit still changed; a shipped tool needs more than one such edit to a file in progress at once; a tool that makes such an edit must support a stack whose caches of the edited code it cannot clear; another tool needs to make such an edit; or nothing under scripts/ imports the frontmatter parser any longer.
 ---
 
 # 036: Let a shipped tool write what it owns, or what it reverses
@@ -56,26 +56,33 @@ ships as a reporter that prints the steps for the agent to carry out.
 file.
 **Cons:** A consumer's agent makes the edit and the restore by hand, which is the failure
 the tool was written to remove.
-**Risks:** An agent forgets the restore, or restores with `git restore` and loses
-uncommitted work.
+**Risks:** An agent forgets the restore.
 
 ### Option 2: Admit an edit the tool reverses (Accepted)
 
-A fifth kind of write joins ADR 023's four. A shipped tool may edit a consumer's file
+A fifth kind of write joins ADR 023's four. The mutation tool may edit a consumer's file
 where all of these hold:
 
 - The agent passes the file, the text to replace, and the replacement, and the tool
   writes the replacement verbatim. The text to replace must match exactly once, and the
   tool refuses where it does not.
 - Before the edit, the tool saves the original bytes to a copy outside the consumer's
-  tree and says where the copy is. The tool refuses to edit a file that already has a
-  copy, and says how to put the original back.
-- The tool can put the file back from the moment the edit is written. It does so before
-  it exits, on every exit it can catch: a return, an exception, an interrupt, and the
-  termination signals a shell or a timeout sends. It deletes the copy only after that
-  write succeeds.
-- The tool writes nothing else in the consumer's tree, and nothing that a command it ran
-  derived from the edited bytes stays valid after the file is put back.
+  tree, in a place that a restart of the machine does not clear, and says where the copy
+  is. The tool refuses to edit a file that already has a copy.
+- The tool puts the file back, and nothing else does. It can do so from the moment the
+  edit is written, and it does so before it exits on every exit it can catch: a return,
+  an exception, and the signals `SIGINT`, `SIGTERM`, and `SIGHUP`. After any other exit,
+  the tool puts the file back from the copy when asked. The refusal above says how to
+  ask, how to tell whether the file still holds the edit, and how to discard a copy that
+  is no longer wanted.
+- Once the tool has put the file back, by either route, no later run executes the edited
+  code. The tool handles every cache from which a later run would, on the stack it
+  supports, and names those caches. It deletes the copy last.
+- The tool itself writes nothing else in the consumer's tree, except to remove a cache
+  file that holds the edited code. What the command it runs writes there is the
+  command's, as it would be in a run without the tool.
+
+A run may make several such edits one after another. Each meets the conditions in turn.
 
 **Pros:** The agent's judgement stays where it was, in choosing the check and the
 replacement. The edit a consumer can lose work to is made by code with tests, not typed.
@@ -83,16 +90,19 @@ replacement. The edit a consumer can lose work to is made by code with tests, no
 run, the working tree holds a change nobody asked to keep. Only one such edit to a file
 can be in progress, and putting the file back overwrites anything an editor, a formatter,
 or another agent wrote to it during the run.
-**Risks:** A kill the tool cannot catch leaves the file edited until somebody notices. A
-later tool cites this kind for an edit it only mostly reverses.
+**Risks:** A kill the tool cannot catch leaves the file edited until somebody notices. An
+output that no later run executes, such as coverage data or a snapshot file, keeps what
+the test command derived from the edited code. A later tool cites this kind for an edit
+it only mostly reverses.
 
 ### Option 3: Mutate a copy of the tree
 
 Copy the consumer's tree to a temporary directory, mutate the copy, and run the test
 command there. The tool never touches the consumer's file.
 
-**Pros:** ADR 023 stands as written. No kill can leave the consumer's file mutated, and
-runs do not block each other.
+**Pros:** ADR 023 stands as written. No kill can leave the consumer's file mutated. The
+copy is discarded, so no cache in the consumer's tree holds the mutated code, nothing
+written to the file during the run is overwritten, and runs do not block each other.
 **Cons:** The check under test is uncommitted, so a `git worktree` would not hold it, and
 the copy must take the working tree as it stands. A suite also needs what Git ignores,
 such as a virtual environment or installed packages, and the tool must either copy that
@@ -108,18 +118,22 @@ single right answer stops". A reversed edit leaves one right answer behind, the 
 file held before, and the tool holds them. What ADR 023 protected was the content of a
 consumer's file after the tool exits, and that protection stands.
 
-Option 3 removes the risk that Option 2 only bounds. It lost on scope: the skill's first
-version runs one mutation on one file at a time, for Python with `unittest`, and at that
-size the copy of a tree buys nothing the copy of one file does not. The copy of the file
-makes an edit that outlives the tool recoverable. It does not stop the edited file being
-committed first, and noticing depends on the agent seeing the kill or on a later run on
-the same file. The revisit conditions name the arrivals that would move this decision to
-Option 3.
+Option 3 removes the risks that Option 2 only bounds, and it costs more than it buys at
+this size. The skill's first version runs one mutation on one file at a time, for Python
+with `unittest`. There the tool handles the one cache that matters, CPython's bytecode,
+and a copy of one file covers what a copy of the tree would. That copy lets the tool
+undo an edit that outlived it. It does not stop the edited file being committed first,
+and noticing depends on the agent seeing the kill or on a later run on the same file.
+The revisit conditions about a commit, about edits in progress at once, and about
+another stack name the arrivals that would move this decision to Option 3.
+
+The fifth kind is admitted for the mutation tool. A second tool that needs to make such
+an edit records that in its own ADR, which says whether these conditions fit it.
 
 This ADR supersedes ADR 023 rather than sitting beside it. ADR 023 said "never", and a
 second decision in force that says "except" would leave a reader of either with half the
-rule. "A sentence the agent wrote" is read here as any text in a consumer's file that the
-tool did not generate. ADR 023's four kinds carry forward unchanged:
+rule. "A sentence the agent wrote" is read here as any text in a consumer's file outside
+the kinds listed. ADR 023's four kinds carry forward unchanged:
 
 - A file generated from other files, such as the index.
 - A field with one right value given the command: `status`, `superseded-by`,
@@ -131,8 +145,8 @@ tool did not generate. ADR 023's four kinds carry forward unchanged:
 Striking through a spent condition, moving the `(Accepted)` marker, and writing citations
 stay with the agent. So do ADR 023's rules for the tools it covered:
 
-- Every subcommand of a shipped tool documents its write set, and the skill's tests
-  assert that a subcommand documented as writing nothing writes nothing.
+- Every subcommand of the ADR tool documents its write set, and the skill's tests assert
+  that `check` and `for` write nothing.
 - The ADR tool regenerates the index behind the agent only after the agent's own edit
   under `docs/adr/`, or from a command the agent ran. A hook that checks after a shell
   command reports and does not write.
@@ -144,29 +158,33 @@ stay with the agent. So do ADR 023's rules for the tools it covered:
   breach.
 
 Two assumptions sit under the fifth kind. The tool is the only writer of the file for the
-length of the run. And the tool runs on a POSIX system, where the signals named above
-exist.
+length of the run. And the tool runs on a POSIX system, where the signals the conditions
+name exist.
 
 ## Consequences
 
 - ADR 023 is `Superseded` by this ADR. ADR 017 gains a Consequences bullet that points
   here, and its other two clauses stand as written.
 - Citations of ADR 023 in ADR 022, ADR 034, ADR 035, and one backlog item resolve through
-  its `superseded-by`. None of them concerns the rule this ADR changes.
+  its `superseded-by`. ADR 034 cites the prohibition, which still holds for the ADR tool
+  under this ADR. The others cite rules carried forward unchanged.
 - The mutation tool changes when it moves into the skill, because the tool in
   `scripts/dev/` does not meet the conditions. It saves the copy before the edit, refuses
-  a file that already has one, installs its handlers before it writes, and leaves no
-  valid bytecode from the mutated source.
+  a file that already has one, installs its handlers before it writes, gains a command
+  that puts a file back from its copy, and keeps a later run from executing bytecode
+  compiled from the mutated source.
 - The tool's tests must cover each of those, and the restore on each exit the tool can
   catch. When this ADR was written, no test sent `SIGTERM` or `SIGHUP`.
 - The skill and `.agents/rules/testing.md` tell the agent to recover after a kill the
-  tool cannot catch from the copy, and not with `git restore`.
+  tool cannot catch by asking the tool, and not with `git restore` or by moving the copy
+  into place. A review of this ADR moved a copy into place by hand, and the next run
+  executed the mutated bytecode. The by-hand mutation that
+  `testing.md` keeps for checks inside the tool itself stops prescribing `git restore`
+  too.
 - Which signal a harness sends when it stops a long command was not established. One
   observation in Claude Code on 2026-11-27 saw `SIGTERM` on an explicit stop, which the
   tool catches. The skill tells the agent to give the command more time than the tool's
   own bounds allow, so that the tool's timeout fires first.
-- A later tool that claims the fifth kind fires this ADR's revisit condition, and the
-  ADR that answers it says whether the conditions above fit a second case.
 
 [ADR 011]: 011-make-scripts-a-package.md
 [ADR 017]: 017-move-a-skills-deterministic-steps-into-shipped-code.md

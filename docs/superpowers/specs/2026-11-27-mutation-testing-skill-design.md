@@ -103,7 +103,8 @@ The tool stays standard library only.
   MISSED says only that the narrow command does not cover the check. CAUGHT needs no
   second run;
 - what to do on each verdict, moved from `.agents/rules/testing.md`;
-- recovery after a hard kill, from the copy the tool kept, and not with `git restore`;
+- recovery after a hard kill, by asking the tool to put the file back from its copy, and
+  not with `git restore` or by moving the copy into place;
 - giving the command more time than two runs of the suite can take, because a harness
   that stops a long command may send a signal the tool cannot catch. The tool's own
   bound is 300 seconds for each run;
@@ -156,6 +157,18 @@ Everything not listed here moves unchanged.
   the file mutated. Install the handlers and open the `try` before the write.
 - **A test covers the restore on `SIGTERM` and `SIGHUP`.** No test sends either signal
   today, and ADR 036 rests on those handlers.
+- **A caught signal stops the suite as well.** The suite runs in its own session, so
+  when a handler restores the file and the tool exits, the suite carries on with the
+  mutated code loaded and with no timeout over it. Kill the suite's process group in the
+  handler, before the restore.
+- **The copy survives a restart, and the tool does the recovery.** ADR 036 requires both.
+  The tool gains a command that puts a file back from its copy, with the same bytecode
+  handling as the restore at exit, and a way to discard a copy that is no longer wanted.
+  The refusal names both, and says how to tell whether the file still holds the
+  mutation. The ADR's reviewer moved a copy into place by hand, and the next run
+  executed the mutated bytecode, so no document tells the agent to do that. The tool
+  deletes the copy last, after the bytecode is dealt with. The flag names are the
+  builder's call.
 - **No bytecode from the mutated source stays valid.** CPython accepts a cached `.pyc`
   where the source has the same size and the same modification time in whole seconds.
   The ADR's reviewer reproduced the fault on Python 3.13: a same-length mutation,
@@ -164,7 +177,10 @@ Everything not listed here moves unchanged.
   that the mutated run compiles the mutated source and that every later run compiles
   the original. One way is to control the file's modification time: give the mutated
   file a time whose whole second differs from the original's, and restore the original
-  time with the bytes. The mechanism is the builder's call. An end-to-end test proves
+  time with the bytes. That suits CPython and is wrong for a build cache that compares
+  times, which is one more reason the fix stays specific to this stack. The mechanism is
+  the builder's call. `SKILL.md` names bytecode as the one cache the tool handles, as
+  ADR 036 requires. An end-to-end test proves
   it: a same-length mutation, a suite that runs in well under a second, then a second
   run of the suite that must pass.
 - **The timeout and the memory cap stay fixed.** Both suit the suites in this repository.
@@ -176,6 +192,8 @@ Everything not listed here moves unchanged.
 ### Changes to this repository
 
 - Delete `scripts/dev/`.
+- The by-hand mutation that `.agents/rules/testing.md` keeps for the masking exception
+  stops prescribing `git restore`. It says to undo the one edit instead.
 - `.agents/rules/testing.md` keeps the rule "mutation-test each check you add" and
   points at the shipped tool, run here as `uv run python skills/mutation-testing/mutate.py`.
   It keeps the masking exception, which applies only to checks inside `mutate.py`, and
