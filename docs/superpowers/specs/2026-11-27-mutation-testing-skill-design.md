@@ -46,10 +46,11 @@ The work has failed, even if every test passes, where any of these is true:
   same change. `validate_manifests.py` fails the build otherwise.
 - **ADR 017.** The tool needs no install step, and a test fails when `SKILL.md` and the
   code drift apart.
-- **ADR 017 and ADR 023 forbid what this tool does.** ADR 017 says a shipped tool
-  "reports rather than edits". ADR 023 lets one write only what it wholly owns. The
-  mutation tool rewrites a consumer's source file, then restores it. See "A new ADR
-  comes first".
+- **ADR 017 and ADR 023 do not admit what this tool does.** ADR 017 says a shipped tool
+  "reports rather than edits". ADR 023 lets one write what it wholly owns, which includes
+  text the agent passed to it verbatim. The `--with` value is such text, but the tool
+  writes it into a consumer's source file, which the tool does not own, and then restores
+  the file. See "A new ADR comes first".
 - **ADR 027.** The target file comes from `--file`, and the test command runs in the
   working directory. Neither changes.
 - **ADR 014.** Comments under `skills/` ship to users who have no `docs/adr/`. Name the
@@ -76,8 +77,10 @@ Before any code moves, record a decision with `phx:writing-adrs`. The proposal i
 admit one more class of write for a shipped tool: an edit the agent specified verbatim,
 which the tool reverses before it exits. The ADR must say what makes that safe (the
 byte-exact restore, the `finally`, the signal handlers) and what it cannot cover (a hard
-kill). Scope it to `skills/mutation-testing/`. Phoenix approves the ADR before
-implementation starts.
+kill). Scope it to `skills/mutation-testing/`. Follow `phx:writing-adrs` for how the
+new ADR relates to ADR 017 and ADR 023, including whether either gains a
+`## Revisit watch` entry. ADR 017's `revisit-when` names another skill shipping tooling,
+which this is. Phoenix approves the ADR before implementation starts.
 
 ## Design
 
@@ -113,6 +116,25 @@ Everything not listed here moves unchanged.
   of the run in progress, and a nested run refuses a command identical to it. A
   different command still runs, which the tool's own tests rely on. This is Claude's
   call, not Phoenix's.
+- **The tool refuses to run on a Python older than 3.10.** `mutate()` writes the mutated
+  file before it defines the restore handler, and that handler's `FrameType | None`
+  annotation raises `TypeError` on Python 3.9. The source would stay mutated, which is
+  the first anti-goal. The reviewer reasoned this from the code, because the container
+  has no Python 3.9 to run. Check the version before anything is written, as
+  `MINIMUM_PYTHON` does in `skills/nz-english/scan.py`. Claude's call.
+- **CAUGHT requires proof that `unittest` ran.** `RE_FAILING_TEST` matches any line that
+  starts with `ERROR: `. The reviewer ran the tool with `-- uv run pytest nonexistent_dir`,
+  and it printed CAUGHT and exited 0 on a pytest usage error. That breaks the second
+  anti-goal. Report CAUGHT only where the output also carries the `Ran N tests` line
+  that `unittest` prints. Otherwise report UNKNOWN. Claude's call.
+- **The tool runs the suite once before it mutates anything (proposed, Phoenix to
+  confirm).** A suite that already fails reports CAUGHT for a check that no test covers.
+  The baseline run uses the same command, timeout, and memory cap. Where it does not
+  pass, the tool mutates nothing, says the suite must pass first, and exits non-zero.
+  The cost is that every mutation runs the suite twice.
+- **The timeout and the memory cap stay fixed.** Both suit the suites in this repository.
+  `SKILL.md` states them as limits, and the backlog item records them. Reword the
+  comment that justifies the cap as "enough for any suite here".
 - **Docstrings and comments** drop the ADR numbers and the `scripts.dev` invocation, and
   describe the tool as a consumer meets it.
 
@@ -126,11 +148,14 @@ Everything not listed here moves unchanged.
   it and does not repeat it.
 - Add `skills/mutation-testing` to the workspace members in the root `pyproject.toml`,
   to the `python` matrix in `pr.yml`, and to the path filter above the matrix. Run
-  `uv lock`.
+  `uv lock`. Update the comments in those two files that count the tool-shipping skills.
+- Add `skills/mutation-testing/` to the `scope` of ADR 031, which lists each workspace
+  member by path. Leave its summary and body as written. Claude's call.
 - Repoint the `mutate.py` link definitions in ADR 016 and ADR 027. Change no sentence
   in either.
-- Add the skill to the README table, with a note on its prerequisites: `python3` 3.12 or
-  newer, `git`, a POSIX system, and a `unittest` suite.
+- Add the skill to the README table, with a note on its prerequisites: `python3` 3.10 or
+  newer, `git`, a POSIX system, and a `unittest` suite. CI tests the tool on Python 3.12
+  only, as it does `scan.py`.
 - Leave `CHANGELOG.md` alone. The release generates it (ADR 002).
 
 ## Testing
@@ -155,9 +180,10 @@ US$0.32 for a three-turn run.
 
 1. Build a fixture project in a scratchpad directory: a module with one check a test
    covers and one check no test covers, in a Git repository.
-2. Control: run headless Claude in the fixture with the cached plugin, which lacks the
-   skill. Ask whether the tests cover each check. Confirm the answer falls short, for
-   example by reasoning from the test file without running a mutation.
+2. Control: run headless Claude in the fixture without `--plugin-dir`. First confirm
+   that this run has no `phx:mutation-testing` skill. Ask whether the tests cover each
+   check. Confirm the answer falls short, for example by reasoning from the test file
+   without running a mutation.
 3. Run the same prompt with `--plugin-dir` pointing at the working tree. Confirm the
    agent invokes `phx:mutation-testing`, runs the tool, reports CAUGHT for one check and
    MISSED for the other, and leaves `git status` clean.
@@ -168,10 +194,19 @@ Tell the subagent that the uncovered check is intentional, as `AGENTS.md` asks.
 
 ## Record what you find
 
-Keep a list, in the pull request description, of each thing that would stop the tool
-working on another stack or platform. Three are known now: the verdicts parse `unittest`
-output only, the tool is POSIX-only, and INVALID relies on the wording `unittest` uses
-for an import failure. The list is the input to the later work on generalising the tool.
+Generalising the tool is deferred work, so it goes in one backlog item,
+`docs/backlog/generalise-the-mutation-tool.md`, in the shape `docs/backlog/README.md`
+fixes. The item names `skills/mutation-testing/`, and lists each thing that would stop
+the tool working on another stack or platform. These are known now:
+
+- the verdicts parse `unittest` output only;
+- INVALID relies on the wording `unittest` uses for an import failure;
+- the tool is POSIX-only;
+- the 300-second timeout is fixed;
+- the 2 GiB cap limits address space, not resident memory, so a suite that starts a JVM
+  or Node may fail under it.
+
+Add to the item as you build. The pull request description summarises it.
 
 ## Left to the builder
 
